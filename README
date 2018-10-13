@@ -1,0 +1,6 @@
+# Laser - Data-parallel primitives for high performance tensor and image processing
+
+Carefully-tuned primitives for running tensor and image-processing code
+on CPU, GPUs and accelerators.
+
+This will be the low-level backend of [Arraymancer](https://github.com/mratsim/Arraymancer).
