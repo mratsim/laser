@@ -31,7 +31,7 @@
 # Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
 # This file may not be copied, modified, or distributed except according to those terms.
 
-import strutils
+from strutils import split, rsplit
 from os import DirSep
 
 const
@@ -39,21 +39,24 @@ const
                   "third_party" & DirSep & "cpuinfo" & DirSep
   headerPath = cpuinfoPath & DirSep & "include" & DirSep & "cpuinfo.h"
 
+###########################################
+############### Public API ################
+
 {.pragma:cpuinfo_type, header: headerPath, bycopy.}
 
-# Check compiler defined const in:
+# Check compiler defined consts in:
 #   - https://github.com/nim-lang/Nim/blob/devel/compiler/platform.nim
 
 type
   CPUInfo_cache* {.importc: "cpuinfo_cache", cpuinfo_type.} = object
-    size {.importc.}: uint32
-    associativity {.importc.}: uint32
-    sets {.importc.}: uint32
-    partitions {.importc.}: uint32
-    line_size {.importc.}: uint32
-    flags {.importc.}: uint32
-    processor_start {.importc.}: uint32
-    processor_count {.importc.}: uint32
+    size* {.importc.}: uint32
+    associativity* {.importc.}: uint32
+    sets* {.importc.}: uint32
+    partitions* {.importc.}: uint32
+    line_size* {.importc.}: uint32
+    flags* {.importc.}: uint32
+    processor_start* {.importc.}: uint32
+    processor_count* {.importc.}: uint32
 
   ProcCache* {.bycopy.} = object
     l1i*: ptr CPUInfo_cache
@@ -228,3 +231,122 @@ type
     cpuinfo_uarch_brahma_b15 = 0x00A00100, ## Broadcom Brahma B15.
     cpuinfo_uarch_brahma_b53 = 0x00A00101, ## Broadcom Brahma B53.
     cpuinfo_uarch_xgene = 0x00B00100 ## Applied Micro X-Gene.
+
+{.pragma: cpuinfo_proc, importc, header: headerPath, cdecl.}
+
+proc cpuinfo_initialize(): bool {.cpuinfo_proc.}
+proc cpuinfo_deinitialize() {.cpuinfo_proc, noconv.} # noconv for addQuitProc
+
+proc cpuinfo_get_processors*(): ptr CPUInfo_processor {.cpuinfo_proc.}
+proc cpuinfo_get_cores*(): ptr CPUInfo_core {.cpuinfo_proc.}
+proc cpuinfo_get_clusters*(): ptr CPUInfo_cluster {.cpuinfo_proc.}
+proc cpuinfo_get_packages*(): ptr CPUInfo_package {.cpuinfo_proc.}
+proc cpuinfo_get_l1i_caches*(): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_l1d_caches*(): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_l2_caches*(): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_l3_caches*(): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_l4_caches*(): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_processor*(index: uint32): ptr CPUInfo_processor {.cpuinfo_proc.}
+proc cpuinfo_get_core*(index: uint32): ptr CPUInfo_core {.cpuinfo_proc.}
+proc cpuinfo_get_cluster*(index: uint32): ptr CPUInfo_cluster {.cpuinfo_proc.}
+proc cpuinfo_get_package*(index: uint32): ptr CPUInfo_package {.cpuinfo_proc.}
+proc cpuinfo_get_l1i_cache*(index: uint32): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_l1d_cache*(index: uint32): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_l2_cache*(index: uint32): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_l3_cache*(index: uint32): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_l4_cache*(index: uint32): ptr CPUInfo_cache {.cpuinfo_proc.}
+proc cpuinfo_get_processors_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_cores_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_clusters_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_packages_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_l1i_caches_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_l1d_caches_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_l2_caches_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_l3_caches_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_l4_caches_count*(): uint32 {.cpuinfo_proc.}
+proc cpuinfo_get_current_processor*(): ptr CPUInfo_processor {.cpuinfo_proc.}
+proc cpuinfo_get_current_core*(): ptr CPUInfo_core {.cpuinfo_proc.}
+
+###########################################
+################# C files #################
+
+# clog dependency
+{.passC: "-I" & cpuinfoPath & "deps/clog/include".}
+{.compile: cpuinfoPath & "deps/clog/src/clog.c".}
+
+# Headers
+{.passC: "-I" & cpuinfoPath & "include".}
+{.passC: "-I" & cpuinfoPath & "src".}
+
+template compile(path: static string): untyped =
+  # Path: the path from cpuinfo/src folder
+  const compiled_object = block:
+    var obj_name = "cpuinfo"
+    for subPath in path.split(DirSep):
+      obj_name &= "_" & subPath
+    obj_name &= ".o"
+    obj_name
+  # we need to use relative paths https://github.com/nim-lang/Nim/issues/9370
+  {.compile:("./third_party/cpuinfo/src/" & path, compiled_object).}
+
+when defined(arm) or defined(arm64):
+  when defined(android):
+    compile"arm/android/gpu.c"
+    compile"arm/android/properties.c"
+  elif defined(linux):
+    compile"arm/linux/aarch32-isa.c"
+    compile"arm/linux/aarch64-isa.c"
+    compile"arm/linux/chipset.c"
+    compile"arm/linux/clusters.c"
+    compile"arm/linux/cpuinfo.c"
+    compile"arm/linux/hwcap.c"
+    compile"arm/linux/init.c"
+    compile"arm/linux/midr.c"
+  elif defined(iOS): # we don't support GNU Hurd ¯\_(ツ)_/¯
+    compile"arm/mach/init.c"
+    # iOS GPU
+    # compile"gpu/gles-ios.m" # TODO: Obj-C compilation
+  compile"arm/cache.c"
+  compile"arm/tlb.c"
+  compile"arm/uarch.c"
+  # ARM GPU
+  compile"gpu/gles2.c"
+
+when defined(linux):
+  compile"linux/cpulist.c"
+  compile"linux/current.c"
+  compile"linux/gpu.c"
+  compile"linux/multiline.c"
+  compile"linux/processors.c"
+  compile"linux/smallfile.c"
+
+when defined(iOS) or defined(macos) or defined(macosx): # # we don't support GNU Hurd ¯\_(ツ)_/¯
+  compile"mach/topology.c"
+
+when defined(i386) or defined(amd64):
+  compile"x86/cache/descriptor.c"
+  compile"x86/cache/deterministic.c"
+  compile"x86/cache/init.c"
+  when defined(linux):
+    compile"x86/linux/cpuinfo.c"
+    compile"x86/linux/init.c"
+  elif defined(iOS) or defined(macos) or defined(macosx):
+    compile"x86/mach/init.c"
+  # compile"src/x86/nacl/isa.c" # TODO: NaCl support
+  compile"x86/info.c"
+  compile"x86/init.c"
+  compile"x86/isa.c"
+  compile"x86/name.c"
+  compile"x86/topology.c"
+  compile"x86/uarch.c"
+  compile"x86/vendor.c"
+
+compile"api.c"
+compile"init.c"
+
+###########################################
+################# Runtime #################
+
+if not cpuinfo_initialize():
+  raise newException(LibraryError, "Could not initialize the cpuinfo module")
+addQuitProc(cpuinfo_deinitialize)
