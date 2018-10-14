@@ -1,0 +1,3 @@
+[submodule "laser/third_party/cpuinfo"]
+	path = laser/third_party/cpuinfo
+	url = https://github.com/pytorch/cpuinfo
