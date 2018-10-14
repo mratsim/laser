@@ -6,17 +6,17 @@ import ./omp_tuning, ./omp_mangling
 
 template omp_parallel_for*[T](
       index: untyped,
-      data: openarray[T],
+      length: Natural,
       omp_threshold: static Natural,
       use_simd: static bool = true,
       body: untyped
       ) =
   when omp_threshold == 0:
     when use_simd:
-      for index in `||`(0, data.len - 1, "simd"):
+      for index in `||`(0, length - 1, "simd"):
         body
     else:
-      for index in 0||(data.len-1):
+      for index in 0||(length-1):
         body
   else:
     const ompsize_Csymbol = "ompsize_" & omp_suffix(genNew = true)
@@ -25,5 +25,5 @@ template omp_parallel_for*[T](
       const omp_annotation = "simd if(" & $ompthreshold & " < " & ompsize_Csymbol & ")"
     else:
       const omp_annotation = "if(" & $ompthreshold & " < " & ompsize_Csymbol & ")"
-    for index in `||`(0, data.len - 1, omp_annotation):
+    for index in `||`(0, length - 1, omp_annotation):
       body
