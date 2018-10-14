@@ -12,12 +12,12 @@ echo "cpuinfo_get_l3_caches - ", cpuinfo_get_l3_caches()[]
 when false:
   echo "cpuinfo_get_get_processor0 - ", cpuinfo_get_processor(index = 0)[]
   echo "cpuinfo_get_get_core0 - ", cpuinfo_get_core(index = 0)[]
-  echo "cpuinfo_get_get_core0 - ", cpuinfo_get_core(index = 0)[]
+  echo "cpuinfo_get_get_cluster0 - ", cpuinfo_get_cluster(index = 0)[]
   echo "cpuinfo_get_get_package0 - ", cpuinfo_get_package(index = 0)[]
   echo "cpuinfo_get_l1i_cache0 - ", cpuinfo_get_l1i_cache(index = 0)[]
   echo "cpuinfo_get_l1d_cache0 - ", cpuinfo_get_l1d_cache(index = 0)[]
   echo "cpuinfo_get_l2_cache0 - ", cpuinfo_get_l2_cache(index = 0)[]
-  echo "cpuinfo_get_l3_cache - ", cpuinfo_get_l3_cache(index = 0)[]
+  echo "cpuinfo_get_l3_cache0 - ", cpuinfo_get_l3_cache(index = 0)[]
   # echo "cpuinfo_get_l4_cache - ", cpuinfo_get_l4_cache(index = 0)[]
 echo "cpuinfo_get_processors_count - ", cpuinfo_get_processors_count()
 echo "cpuinfo_get_cores_count - ", cpuinfo_get_cores_count()
