@@ -35,9 +35,12 @@ from strutils import split, rsplit
 from os import DirSep
 
 const
-  cpuinfoPath = currentSourcePath.rsplit(DirSep, 1)[0] & DirSep &
-                  "third_party" & DirSep & "cpuinfo" & DirSep
-  headerPath = cpuinfoPath & DirSep & "include" & DirSep & "cpuinfo.h"
+  curSrcFolder = currentSourcePath.rsplit(DirSep, 1)[0]
+  cpuinfoPath = curSrcFolder & DirSep & "third_party" & DirSep & "cpuinfo" & DirSep
+  # We use a patched header as the original one doesn't typedef its struct
+  # which lead to "error: must use 'struct' tag to refer to type 'cpuinfo_processor'"
+  # headerPath = cpuinfoPath & DirSep & "include" & DirSep & "cpuinfo.h"
+  headerPath = curSrcFolder & DirSep & "cpuinfo.h"
 
 ###########################################
 ############### Public API ################
@@ -48,7 +51,7 @@ const
 #   - https://github.com/nim-lang/Nim/blob/devel/compiler/platform.nim
 
 type
-  CPUInfo_cache* {.importc: "cpuinfo_cache", cpuinfo_type.} = object
+  CPUInfo_cache* {.importc: "cpuinfo_cache_exported", cpuinfo_type.} = object
     size* {.importc.}: uint32
     associativity* {.importc.}: uint32
     sets* {.importc.}: uint32
@@ -65,14 +68,14 @@ type
     l3*: ptr CPUInfo_cache
     l4*: ptr CPUInfo_cache
 
-  CPUInfo_processor* {.importc: "cpuinfo_processor", cpuinfo_type.} = object
+  CPUInfo_processor* {.importc: "cpuinfo_processor_exported", cpuinfo_type.} = object
     smt_id* {.importc.}: uint32
     core* {.importc.}: ptr CPUInfo_core
     cluster* {.importc.}: ptr CPUInfo_cluster
     package* {.importc.}: ptr CPUInfo_package
     cache* {.importc.}: ptr ProcCache
 
-  CPUInfo_core* {.importc: "cpuinfo_core", cpuinfo_type.} = object
+  CPUInfo_core* {.importc: "cpuinfo_core_exported", cpuinfo_type.} = object
     processor_start* {.importc.}: uint32
     processor_count* {.importc.}: uint32
     core_id* {.importc.}: uint32
@@ -86,7 +89,7 @@ type
       midr* {.importc.}: uint32
     frequency* {.importc.}: uint64
 
-  CPUInfo_cluster* {.importc: "cpuinfo_cluster", cpuinfo_type.} = object
+  CPUInfo_cluster* {.importc: "cpuinfo_cluster_exported", cpuinfo_type.} = object
     processor_start* {.importc.}: uint32
     processor_count* {.importc.}: uint32
     core_start* {.importc.}: uint32
@@ -101,7 +104,7 @@ type
       midr* {.importc.}: uint32
     frequency* {.importc.}: uint64
 
-  CPUInfo_package* {.importc: "cpuinfo_cluster", cpuinfo_type.} = object
+  CPUInfo_package* {.importc: "cpuinfo_package_exported", cpuinfo_type.} = object
     name* {.importc.}: array[48, char]
     when defined(android) or defined(ios):
       # Make sure iOS is defined - https://github.com/nim-lang/Nim/issues/9369
@@ -274,9 +277,10 @@ proc cpuinfo_get_current_core*(): ptr CPUInfo_core {.cpuinfo_proc.}
 {.passC: "-I" & cpuinfoPath & "deps/clog/include".}
 {.compile: cpuinfoPath & "deps/clog/src/clog.c".}
 
-# Headers
-{.passC: "-I" & cpuinfoPath & "include".}
-{.passC: "-I" & cpuinfoPath & "src".}
+# Headers - use the patched header with typedefs
+# Also for some reason we need to passC in the same line
+# Otherwise "curSrcFolder" is ignored
+{.passC: "-I" & cpuinfoPath & "src -I" & curSrcFolder.}
 
 template compile(path: static string): untyped =
   # Path: the path from cpuinfo/src folder
