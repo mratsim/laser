@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-const MAXRANK = 7
+const MAXRANK* = 7
 
 type DynamicStackArray*[T] = object
     ## Custom stack allocated array that behaves like seq.
@@ -22,24 +22,26 @@ type DynamicStackArray*[T] = object
     len*: int
 
 # On x86-64, a cache line can contain 8 int64. Hence for best performance
-# MetadataArray should be an array of 7 elements + 1 int for length
+# Metadata should be an array of 7 elements + 1 int for length
 
 # TODO ensure cache line alignment: pending https://github.com/nim-lang/Nim/issues/5315
 
 type
-  MetadataArray* = DynamicStackArray[int]
+  Metadata* = DynamicStackArray[int]
     ## Custom stack allocated array that holds tensors metadata
 
-func initMetadataArray*(len: int): MetadataArray {.inline.} =
+func initMetadata*(len: int): Metadata {.inline.} =
   result.len = len
 
-func toMetadataArray*(s: varargs[int]): MetadataArray {.inline.} =
+func toMetadata*(s: varargs[int]): Metadata {.inline.} =
   # boundsChecks automatically done for array indexing
   # when compileOption("boundChecks"):
   #   assert s.len <= MAXRANK
   result.len = s.len
   for i in 0..<s.len:
     result.data[i] = s[i]
+
+template toMetadata*(m: Metadata): Metadata = m
 
 proc copyFrom*(a: var DynamicStackArray, s: varargs[int]) {.inline.} =
   # boundsChecks automatically done for array indexing
@@ -104,17 +106,21 @@ proc `[]`*[T](a: DynamicStackArray[T], slice: Slice[int]): DynamicStackArray[T] 
     for i in 0..<result.len:
       result[i] = a[bgn_slice+i]
 
-iterator items*[T](a: DynamicStackArray[T]): T {.inline.} =
-  for i in 0..<a.len:
+iterator items*[T](a: DynamicStackArray[T]): T =
+  for i in 0 ..< a.len:
     yield a.data[i]
 
-iterator mitems*[T](a: var DynamicStackArray[T]): var T {.inline.} =
-  for i in 0..<a.len:
+iterator mitems*[T](a: var DynamicStackArray[T]): var T =
+  for i in 0 ..< a.len:
     yield a.data[i]
 
-iterator pairs*[T](a: DynamicStackArray[T]): (int, T) {.inline.} =
-  for i in 0..<a.len:
+iterator pairs*[T](a: DynamicStackArray[T]): (int, T) =
+  for i in 0 ..< a.len:
     yield (i,a.data[i])
+
+iterator mpairs*[T](a: var DynamicStackArray[T]): (int, var T) =
+  for i in 0 ..< a.len:
+    yield (i, a.data[i])
 
 proc `@`*[T](a: DynamicStackArray[T]): seq[T] {.inline.} =
   result = newSeq[int](a.len)

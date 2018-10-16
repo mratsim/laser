@@ -3,7 +3,7 @@
 
 import macros
 
-func product*(x: varargs[int]): int =
+func product*(x: varargs[int]): int {.inline.}=
   result = 1
   for val in x: result *= val
 
