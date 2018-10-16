@@ -80,3 +80,22 @@ func `[]`*[T: SomeNumber](x: T, idx: varargs[int]): T {.inline.}=
 
 func shape*(x: SomeNumber): array[1, int] {.inline.} =
   [1]
+
+func dataPtr*[T](t: Tensor[T]): ptr UncheckedArray[T] {.inline.}=
+  ## Input:
+  ##     - A tensor
+  ## Returns:
+  ##     - A pointer to the offset start of the data.
+  ##       Return value supports array indexing.
+  cast[ptr UncheckedArray[T]](t.storage.data[t.offset].unsafeAddr)
+
+func is_C_contiguous*(t: Tensor): bool {.inline.}=
+  ## Check if the tensor follows C convention / is row major
+  var z = 1
+  for i in countdown(t.shape.high,0):
+    # 1. We should ignore strides on dimensions of size 1
+    # 2. Strides always must have the size equal to the product of the next dimensions
+    if t.shape[i] != 1 and t.strides[i] != z:
+        return false
+    z *= t.shape[i]
+  return true
