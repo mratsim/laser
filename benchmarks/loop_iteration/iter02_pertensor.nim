@@ -4,10 +4,6 @@
 # Current iteration scheme in Arraymancer. Each tensor manages it's own loop
 import ./tensor, ./mem_optim_hints, ./metadata
 
-type
-  IterKind = enum
-    Values, Iter_Values, Offset_Values
-
 template initStridedIteration(coord, backstrides, iter_pos: untyped, t: Tensor): untyped =
   ## Iterator init
   var iter_pos = 0
@@ -29,13 +25,7 @@ template advanceStridedIteration(coord, backstrides, iter_pos: untyped, t: Tenso
       coord[k] = 0
       iter_pos -= backstrides[k]
 
-template stridedIterationYield*(strider: IterKind, data, i, iter_pos: typed) =
-  ## Iterator the return value
-  when strider == IterKind.Values: yield data[iter_pos]
-  elif strider == IterKind.Iter_Values: yield (i, data[iter_pos])
-  elif strider == IterKind.Offset_Values: yield (iter_pos, data[iter_pos])
-
-template stridedIteration*(strider: IterKind, t: Tensor): untyped =
+template stridedIteration*(t: Tensor): untyped =
   ## Iterate over a Tensor, displaying data as in C order, whatever the strides.
 
   # Get tensor data address with offset builtin
@@ -46,15 +36,15 @@ template stridedIteration*(strider: IterKind, t: Tensor): untyped =
   # Optimize for loops in contiguous cases
   if t.is_C_Contiguous:
     for i in 0 ..< t.size:
-      stridedIterationYield(strider, data, i, i)
+      yield data[i]
   else:
     initStridedIteration(coord, backstrides, iter_pos, t)
     for i in 0 ..< t.size:
-      stridedIterationYield(strider, data, i, iter_pos)
+      yield data[iter_pos]
       advanceStridedIteration(coord, backstrides, iter_pos, t)
 
 iterator items*[T](t: Tensor[T]): T {.noSideEffect.} =
-  stridedIteration(IterKind.Values, t)
+  stridedIteration(t)
 
 #########################################################
 
