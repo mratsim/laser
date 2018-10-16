@@ -4,7 +4,8 @@
 # Current iteration scheme in Arraymancer. Each tensor manages it's own loop
 import
   macros,
-  ./tensor, ./mem_optim_hints, ./metadata, ./utils
+  ./tensor, ./mem_optim_hints, ./metadata, ./utils,
+  ./tensor_display
 
 template initStridedIteration(coord, backstrides, iter_pos: untyped, t: Tensor): untyped =
   ## Iterator init
@@ -151,11 +152,19 @@ proc sanityChecks() =
   var x = randomTensor([5, 3], 10)
   let y = randomTensor([5, 3], 10)
 
-  echo x # (shape: [1, 2, 3], strides: [6, 3, 1], offset: 0, storage: (data: @[1, 10, 5, 5, 7, 3]))
-  echo y # (shape: [5, 2], strides: [2, 1], offset: 0, storage: (data: @[8, 3, 7, 9, 3, 8, 5, 3, 7, 1]))
+  echo x
+  echo y
 
   block:
     forEach i in x, j in y:
+      i += j
+    echo x
+
+  block:
+    let z = randomTensor([3, 5], 10).transpose()
+    doAssert: not z.is_C_contiguous()
+    echo z
+    forEach i in x, j in z:
       i += j
     echo x
 
