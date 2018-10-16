@@ -7,7 +7,7 @@ func product*(x: varargs[int]): int {.inline.}=
   result = 1
   for val in x: result *= val
 
-proc replaceNodes*(ast: NimNode, values: NimNode, containers: NimNode): NimNode =
+proc replaceNodes*(ast: NimNode, replacements: NimNode, to_replace: NimNode): NimNode =
   # Args:
   #   - The full syntax tree
   #   - an array of replacement value
@@ -15,9 +15,9 @@ proc replaceNodes*(ast: NimNode, values: NimNode, containers: NimNode): NimNode 
   proc inspect(node: NimNode): NimNode =
     case node.kind:
     of {nnkIdent, nnkSym}:
-      for i, c in containers:
+      for i, c in to_replace:
         if node.eqIdent($c):
-          return values[i]
+          return replacements[i]
       return node
     of nnkEmpty: return node
     of nnkLiterals: return node

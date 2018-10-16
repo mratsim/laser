@@ -2,7 +2,9 @@
 # Copyright (c) 2017-2018 Mamy André-Ratsimbazafy and the Arraymancer contributors
 
 # Current iteration scheme in Arraymancer. Each tensor manages it's own loop
-import ./tensor, ./mem_optim_hints, ./metadata
+import
+  macros,
+  ./tensor, ./mem_optim_hints, ./metadata, ./utils
 
 template initStridedIteration(coord, backstrides, iter_pos: untyped, t: Tensor): untyped =
   ## Iterator init
@@ -39,7 +41,7 @@ template stridedIteration*(t: Tensor): untyped =
       yield data[i]
   else:
     initStridedIteration(coord, backstrides, iter_pos, t)
-    for i in 0 ..< t.size:
+    for _ in 0 ..< t.size:
       yield data[iter_pos]
       advanceStridedIteration(coord, backstrides, iter_pos, t)
 
@@ -48,18 +50,114 @@ iterator items*[T](t: Tensor[T]): T {.noSideEffect.} =
 
 #########################################################
 
+macro forEach*(args: varargs[untyped]): untyped =
+  ## Please assign input tensor to a variable first
+  ## If they result from a proc, the proc that generated the tensor
+  ## will be called multiple time by the macro.
+  ## Also there is no mutability check
+
+  var params = args
+  var loopBody = params.pop()
+
+  var values = nnkBracket.newTree()
+  var tensors = nnkArglist.newTree()
+
+  for i, arg in params:
+    if arg.kind == nnkInfix:
+      if eqIdent(arg[0], "in"):
+        values.add arg[1]
+        tensors.add arg[2]
+    else:
+      error "Syntax error: argument " & ($arg.kind).substr(3) & " in position #" & $i & " was unexpected."
+
+  #### Initialization
+  var dataPtrsDecl = newStmtList()
+
+  var dataPtrs = nnkBracket.newTree()
+  for i, tensor in tensors:
+    let data_i = genSym(nskLet, "data" & $i)
+    dataPtrsDecl.add quote do:
+      let `data_i`{.restrict.} = `tensor`.dataPtr
+    dataPtrs.add data_i
+
+  let tensor0 = tensors[0]
+  var testShape = newStmtList()
+  for i in 1 ..< tensors.len:
+    let tensor_i = tensors[i]
+    testShape.add quote do:
+          assert `tensor0`.shape == `tensor_i`.shape
+
+  #### Deal with contiguous case
+  var testContiguous = newCall(ident"is_C_contiguous", tensors[0])
+  for i in 1 ..< tensors.len:
+    let tensor_i = tensors[i]
+    testContiguous = newCall(
+                      ident"and",
+                      testContiguous,
+                      newCall(ident"is_C_contiguous", tensor_i)
+                      )
+
+  let contiguousIndex = genSym(nskForVar, "contiguousIndex_")
+  var dataPtrs_contiguous = nnkBracket.newTree()
+  for dataPtr in dataPtrs:
+    dataPtrs_contiguous.add nnkBracketExpr.newTree(dataPtr, contiguousIndex)
+  let contiguousBody = loopBody.replaceNodes(replacements = dataPtrs_contiguous, to_replace = values)
+
+  #### Deal with non-contiguous case
+  var coords = nnkBracket.newTree()
+  var backstrides = nnkBracket.newTree()
+  var iter_pos = nnkBracket.newTree()
+  var stridedInits = newStmtList()
+  var advanceStrided = newStmtList()
+
+  for i in 0 ..< tensors.len:
+    # We don't gensym here, the initStridedIteration template will do that
+    coords.add ident("coord_t" & $i)
+    backstrides.add ident("backstrides_t" & $i)
+    iter_pos.add ident("iter_pos_t" & $i)
+    stridedInits.add newCall(
+      ident"initStridedIteration",
+      coords[^1], backstrides[^1], iter_pos[^1], tensors[i]
+    )
+    advanceStrided.add newCall(
+      ident"advanceStridedIteration",
+      coords[^1], backstrides[^1], iter_pos[^1], tensors[i]
+    )
+
+  var dataPtrs_strided = nnkBracket.newTree()
+  for i, dataPtr in dataPtrs:
+    dataPtrs_strided.add nnkBracketExpr.newTree(dataPtr, iter_pos[i])
+  let stridedBody = loopBody.replaceNodes(replacements = dataPtrs_strided, to_replace = values)
+
+  result = quote do:
+    withMemoryOptimHints()
+    `dataPtrsDecl`
+    `testShape`
+
+    if `testContiguous`:
+      for `contiguousIndex` in 0 ..< `tensor0`.size:
+        `contiguousBody`
+    else:
+      `stridedInits`
+      for _ in 0 ..< `tensor0`.size:
+        `stridedBody`
+        `advanceStrided`
+
+#########################################################
+
 proc sanityChecks() =
   # Sanity checks
 
-  let x = randomTensor([1, 2, 3], 10)
-  let y = randomTensor([5, 2], 10)
+  var x = randomTensor([5, 3], 10)
+  let y = randomTensor([5, 3], 10)
 
   echo x # (shape: [1, 2, 3], strides: [6, 3, 1], offset: 0, storage: (data: @[1, 10, 5, 5, 7, 3]))
   echo y # (shape: [5, 2], strides: [2, 1], offset: 0, storage: (data: @[8, 3, 7, 9, 3, 8, 5, 3, 7, 1]))
 
   block:
-    for val in x:
-      echo val
+    forEach i in x, j in y:
+      i += j
+    echo x
 
 when isMainModule:
   sanityChecks()
