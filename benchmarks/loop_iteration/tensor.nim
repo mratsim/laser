@@ -28,7 +28,7 @@ type
 func size*(t: Tensor): int {.inline.} =
   t.shape.product
 
-func rank*(t: Tensor): int {.inline.} =
+func rank*(t: Tensor): range[0 .. MAXRANK] {.inline.} =
   t.shape.len
 
 template tensor(result: var Tensor, shape: openarray|Metadata) =
@@ -67,6 +67,10 @@ func getIndex[T](t: Tensor[T], idx: varargs[int]): int {.inline.} =
     result += t.strides[i] * idx[i]
 
 func `[]`*[T](t: Tensor[T], idx: varargs[int]): T {.inline.}=
+  ## Index tensor
+  t.storage.data[t.getIndex(idx)]
+
+func `[]`*[T](t: var Tensor[T], idx: varargs[int]): var T {.inline.}=
   ## Index tensor
   t.storage.data[t.getIndex(idx)]
 
