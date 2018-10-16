@@ -99,3 +99,9 @@ func is_C_contiguous*(t: Tensor): bool {.inline.}=
         return false
     z *= t.shape[i]
   return true
+
+func transpose*(t: Tensor): Tensor {.inline.} =
+  t.shape.reversed(result.shape)
+  t.strides.reversed(result.strides)
+  result.offset = t.offset
+  result.storage = t.storage

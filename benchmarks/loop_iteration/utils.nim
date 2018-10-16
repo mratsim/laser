@@ -1,7 +1,7 @@
 # MIT License
 # Copyright (c) 2018 Mamy André-Ratsimbazafy
 
-import macros
+import macros, sequtils
 
 func product*(x: varargs[int]): int {.inline.}=
   result = 1
@@ -33,3 +33,7 @@ proc pop*(tree: var NimNode): NimNode =
   ## https://github.com/nim-lang/Nim/issues/5855
   result = tree[tree.len-1]
   tree.del(tree.len-1)
+
+func concatMap*[T](s: seq[T], f: proc(ss: T):string): string =
+  ## Map a function to a sequence of T and concatenate the result as string
+  return s.foldl(a & f(b), "")
