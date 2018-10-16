@@ -57,19 +57,33 @@ macro forEach*(args: varargs[untyped]): untyped =
   ## will be called multiple time by the macro.
   ## Also there is no mutability check
 
+  result = newStmtList()
+
   var params = args
   var loopBody = params.pop()
 
   var values = nnkBracket.newTree()
   var tensors = nnkArglist.newTree()
 
+  template syntaxError() {.dirty.} =
+    error "Syntax error: argument " & ($arg.kind).substr(3) & " in position #" & $i & " was unexpected."
+
   for i, arg in params:
     if arg.kind == nnkInfix:
       if eqIdent(arg[0], "in"):
         values.add arg[1]
         tensors.add arg[2]
+    elif arg.kind == nnkStmtList:
+      # In generic proc, symbols are resolved early
+      # the "in" symbol will be transformed into an opensymchoice of "contains"
+      # Note that arg order in "contains" is inverted compared to "in"
+      if arg[0].kind == nnkCall and arg[0][0].kind == nnkOpenSymChoice and eqident(arg[0][0][0], "contains"):
+        values.add arg[0][2]
+        tensors.add arg[0][1]
+      else:
+        syntaxError()
     else:
-      error "Syntax error: argument " & ($arg.kind).substr(3) & " in position #" & $i & " was unexpected."
+      syntaxError()
 
   #### Initialization
   var dataPtrsDecl = newStmtList()
@@ -117,11 +131,11 @@ macro forEach*(args: varargs[untyped]): untyped =
     backstrides.add ident("backstrides_t" & $i)
     iter_pos.add ident("iter_pos_t" & $i)
     stridedInits.add newCall(
-      ident"initStridedIteration",
+      bindSym"initStridedIteration",
       coords[^1], backstrides[^1], iter_pos[^1], tensors[i]
     )
     advanceStrided.add newCall(
-      ident"advanceStridedIteration",
+      bindSym"advanceStridedIteration",
       coords[^1], backstrides[^1], iter_pos[^1], tensors[i]
     )
 

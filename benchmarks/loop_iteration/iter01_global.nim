@@ -64,7 +64,7 @@ macro broadcastImpl(output: untyped, inputs_body: varargs[untyped]): untyped =
     let broadcasted = genSym(nskLet, "broadcast_" & $input & "__")
     doBroadcast.add newLetStmt(
       broadcasted,
-      newCall(ident"bc", input, shape)
+      newCall(bindSym"bc", input, shape)
     )
     bcInputs.add nnkBracketExpr.newTree(broadcasted, coord)
 
@@ -105,7 +105,7 @@ macro broadcastImpl(output: untyped, inputs_body: varargs[untyped]): untyped =
 macro broadcast(inputs_body: varargs[untyped]): untyped =
   getAST(broadcastImpl(newEmptyNode(), inputs_body))
 
-macro materialize(output: var Tensor, inputs_body: varargs[untyped]): untyped =
+macro materialize*(output: var Tensor, inputs_body: varargs[untyped]): untyped =
   getAST(broadcastImpl(output, inputs_body))
 
 #################################################################################
