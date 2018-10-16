@@ -12,17 +12,9 @@ proc genNestedFor(shape, indices, innerBody: NimNode): NimNode =
   result = innerBody
   for i in countdown(indices.len - 1, 0):
     let idx = indices[i]
-    result = nnkForStmt.newTree(
-      idx, # iteration variable
-      nnkInfix.newTree( # For loop bounds
-        newIdentNode"..<",
-        newLit 0,
-        nnkBracketExpr.newTree(
-          shape, newLit i
-        )
-      ),
-      result # For loop body
-    )
+    result = quote do:
+      for `idx` in 0 ..< `shape`[`i`]:
+        `result`
 
 macro triotForEach*(args: varargs[untyped]): untyped =
   ## Please assign input tensor to a variable first
