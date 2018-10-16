@@ -4,7 +4,9 @@
 import
   ./tensor,
   ./iter01_global,
-  ./iter02_pertensor
+  ./iter02_pertensor,
+  ./iter03_global_triot,
+  ./metadata
 
 import math, random, times, stats, strformat
 
@@ -30,8 +32,7 @@ template printStats() {.dirty.} =
   echo "\nDisplay output[[0,0]] to make sure it's not optimized away"
   echo output[[0, 0]] # Prevents compiler from optimizing stuff away
 
-proc mainBench1(a, b, c: Tensor, nb_samples: int) =
-  ## Bench with standard lib
+proc mainBench_global(a, b, c: Tensor, nb_samples: int) =
   var output = newTensor[float64](a.shape)
 
   block: # Actual bench
@@ -44,7 +45,7 @@ proc mainBench1(a, b, c: Tensor, nb_samples: int) =
       stats.push stop - start
     printStats()
 
-proc mainBench2(a, b, c: Tensor, nb_samples: int) =
+proc mainBench_perTensor(a, b, c: Tensor, nb_samples: int) =
   ## Bench with standard lib
   var output = newTensor[float64](a.shape)
 
@@ -58,6 +59,20 @@ proc mainBench2(a, b, c: Tensor, nb_samples: int) =
       stats.push stop - start
     printStats()
 
+proc mainBench_global_triot(a, b, c: Tensor, nb_samples: int) =
+  ## Bench with standard lib
+  var output = newTensor[float64](a.shape)
+
+  block: # Actual bench
+    var stats: RunningStat
+    for _ in 0 ..< nb_samples:
+      let start = cpuTime()
+      triotForEach o in output, x in a, y in b, z in c:
+        o = x + y - sin z
+      let stop = cpuTime()
+      stats.push stop - start
+    printStats()
+
 when isMainModule:
   warmup()
   block: # All contiguous
@@ -65,31 +80,40 @@ when isMainModule:
       a = randomTensor([1000, 1000], 1.0)
       b = randomTensor([1000, 1000], 1.0)
       c = randomTensor([1000, 1000], 1.0)
-    mainBench1(a, b, c, 1000)
-    mainBench2(a, b, c, 1000)
+    mainBench_global(a, b, c, 1000)
+    mainBench_perTensor(a, b, c, 1000)
+    mainBench_global_triot(a, b, c, 1000)
 
-    # Warmup: 1.2838 s, result 224 (displayed to avoid compiler optimizing warmup away)
+    # Warmup: 1.2005 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
     #######################################################################################
 
     # Tensors of Float64 bench
     # Collected 1000 samples
-    # Average broadcast time: 22.840ms
-    # Stddev  broadcast time: 1.955ms
-    # Min     broadcast time: 21.410ms
-    # Max     broadcast time: 40.491ms
+    # Average broadcast time: 21.823ms
+    # Stddev  broadcast time: 1.038ms
+    # Min     broadcast time: 21.468ms
+    # Max     broadcast time: 38.080ms
 
     # Display output[[0,0]] to make sure it's not optimized away
     # 0.06512909995725152
 
-    ######################################################################################
+    # Tensors of Float64 bench
+    # Collected 1000 samples
+    # Average broadcast time: 8.711ms
+    # Stddev  broadcast time: 0.314ms
+    # Min     broadcast time: 8.505ms
+    # Max     broadcast time: 13.968ms
+
+    # Display output[[0,0]] to make sure it's not optimized away
+    # 0.06512909995725152
 
     # Tensors of Float64 bench
     # Collected 1000 samples
-    # Average broadcast time: 9.403ms
-    # Stddev  broadcast time: 0.538ms
-    # Min     broadcast time: 8.538ms
-    # Max     broadcast time: 15.061ms
+    # Average broadcast time: 20.193ms
+    # Stddev  broadcast time: 0.523ms
+    # Min     broadcast time: 19.882ms
+    # Max     broadcast time: 28.555ms
 
     # Display output[[0,0]] to make sure it's not optimized away
     # 0.06512909995725152
@@ -99,25 +123,36 @@ when isMainModule:
       a = randomTensor([100, 10000], 1.0)
       b = randomTensor([10000, 100], 1.0).transpose
       c = randomTensor([10000, 100], 1.0).transpose
-    mainBench1(a, b, c, 1000)
-    mainBench2(a, b, c, 1000)
+    mainBench_global(a, b, c, 1000)
+    mainBench_perTensor(a, b, c, 1000)
+    mainBench_global_triot(a, b, c, 1000)
 
     # Tensors of Float64 bench
     # Collected 1000 samples
-    # Average broadcast time: 55.418ms
-    # Stddev  broadcast time: 7.909ms
-    # Min     broadcast time: 49.098ms
-    # Max     broadcast time: 122.145ms
+    # Average broadcast time: 57.119ms
+    # Stddev  broadcast time: 2.345ms
+    # Min     broadcast time: 53.350ms
+    # Max     broadcast time: 80.492ms
 
     # Display output[[0,0]] to make sure it's not optimized away
     # 0.3163590358464783
 
     # Tensors of Float64 bench
     # Collected 1000 samples
-    # Average broadcast time: 40.173ms
-    # Stddev  broadcast time: 3.903ms
-    # Min     broadcast time: 36.701ms
-    # Max     broadcast time: 76.235ms
+    # Average broadcast time: 37.686ms
+    # Stddev  broadcast time: 1.941ms
+    # Min     broadcast time: 34.232ms
+    # Max     broadcast time: 63.990ms
+
+    # Display output[[0,0]] to make sure it's not optimized away
+    # 0.3163590358464783
+
+    # Tensors of Float64 bench
+    # Collected 1000 samples
+    # Average broadcast time: 68.860ms
+    # Stddev  broadcast time: 21.816ms
+    # Min     broadcast time: 46.227ms
+    # Max     broadcast time: 139.676ms
 
     # Display output[[0,0]] to make sure it's not optimized away
     # 0.3163590358464783

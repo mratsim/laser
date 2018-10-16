@@ -70,7 +70,7 @@ macro triotForEach*(args: varargs[untyped]): untyped =
   # And a case statement to select the proper one
   # at runtime
   var triotCase = nnkCaseStmt.newTree(
-    newCall(ident"rank", tensor0)
+    newCall(bindSym"rank", tensor0)
   )
 
   for rank in 0 .. MAXRANK:
@@ -85,7 +85,7 @@ macro triotForEach*(args: varargs[untyped]): untyped =
       to_replace = values
     )
     let branchStmt = genNestedFor(
-      newDotExpr(tensor0, ident"shape"),
+      newDotExpr(tensor0, bindSym"shape"),
       indices,
       newInnerBody
     )
