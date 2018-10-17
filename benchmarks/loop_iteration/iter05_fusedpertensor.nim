@@ -152,16 +152,17 @@ macro fusedForEach*(args: varargs[untyped]): untyped =
           `apply_backstrides`
 
   result = quote do:
-    `aliasesStmt`
-    `testShape`
-    `dataPtrsDecl`
-    let `size` = `alias0`.size
+    block:
+      `aliasesStmt`
+      `testShape`
+      `dataPtrsDecl`
+      let `size` = `alias0`.size
 
-    if `test_C_Contiguous`:
-      for `contiguousIndex` in 0 ..< `size`:
-        `contiguousBody`
-    else:
-      `noncontiguousBody`
+      if `test_C_Contiguous`:
+        for `contiguousIndex` in 0 ..< `size`:
+          `contiguousBody`
+      else:
+        `noncontiguousBody`
 
 #########################################################
 
