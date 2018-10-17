@@ -6,28 +6,6 @@ import
   ./mem_optim_hints, ./utils,
   macros
 
-template fused_strided_iteration[T](t: Tensor[T]): untyped =
-  ## Iterate over a Tensor, displaying data as in C order, whatever the strides.
-
-  ## Iterator init
-  var coord: array[MAXRANK, int] # Coordinates in the n-dimentional space
-  var iter_pos = t.offset
-
-  ## Iterator loop
-  for i in 0 ..< t.shape.product:
-    ## Templating the return value
-    yield t.storage.data[iter_pos]
-
-    ## Computing the next position
-    for k in countdown(t.rank - 1,0):
-      if coord[k] < t.shape[k]-1:
-        coord[k] += 1
-        iter_pos += t.strides[k]
-        break
-      else:
-        coord[k] = 0
-        iter_pos -= t.strides[k]*(t.shape[k]-1)
-
 macro fusedForEach*(args: varargs[untyped]): untyped =
   ## Warning: there is no mutability check
 
