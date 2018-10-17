@@ -6,6 +6,7 @@ import
   ./iter01_global,
   ./iter02_pertensor,
   ./iter03_global_triot,
+  ./iter05_fusedpertensor,
   ./metadata
 
 import math, random, times, stats, strformat
@@ -22,58 +23,52 @@ proc warmup() =
   let stop = cpuTime()
   echo &"Warmup: {stop - start:>4.4f} s, result {foo} (displayed to avoid compiler optimizing warmup away)"
 
-template printStats() {.dirty.} =
-  echo &"\nTensors of Float64 bench"
-  echo &"Collected {stats.n} samples"
-  echo &"Average broadcast time: {stats.mean * 1000 :>4.3f}ms"
-  echo &"Stddev  broadcast time: {stats.standardDeviationS * 1000 :>4.3f}ms"
-  echo &"Min     broadcast time: {stats.min * 1000 :>4.3f}ms"
-  echo &"Max     broadcast time: {stats.max * 1000 :>4.3f}ms"
+template printStats(name: string) {.dirty.} =
+  echo "\n" & name & " - float64"
+  echo &"Collected {stats.n} samples in {global_stop - global_start:>4.3f} seconds"
+  echo &"Average time: {stats.mean * 1000 :>4.3f}ms"
+  echo &"Stddev  time: {stats.standardDeviationS * 1000 :>4.3f}ms"
+  echo &"Min     time: {stats.min * 1000 :>4.3f}ms"
+  echo &"Max     time: {stats.max * 1000 :>4.3f}ms"
   echo "\nDisplay output[[0,0]] to make sure it's not optimized away"
   echo output[[0, 0]] # Prevents compiler from optimizing stuff away
 
-proc mainBench_global(a, b, c: Tensor, nb_samples: int) =
+template bench(name: string, body: untyped) {.dirty.}=
   var output = newTensor[float64](a.shape)
 
   block: # Actual bench
     var stats: RunningStat
+    let global_start = cpuTime()
     for _ in 0 ..< nb_samples:
       let start = cpuTime()
-      materialize(output, a, b, c):
-        a + b - sin c
+      body
       let stop = cpuTime()
       stats.push stop - start
-    printStats()
+    let global_stop = cpuTime()
+    printStats(name)
+
+proc mainBench_global(a, b, c: Tensor, nb_samples: int) =
+  bench("Global reference iteration"):
+    materialize(output, a, b, c):
+      a + b - sin c
 
 proc mainBench_perTensor(a, b, c: Tensor, nb_samples: int) =
-  ## Bench with standard lib
-  var output = newTensor[float64](a.shape)
-
-  block: # Actual bench
-    var stats: RunningStat
-    for _ in 0 ..< nb_samples:
-      let start = cpuTime()
-      forEach o in output, x in a, y in b, z in c:
-        o = x + y - sin z
-      let stop = cpuTime()
-      stats.push stop - start
-    printStats()
+  bench("Per tensor reference iteration"):
+    forEach o in output, x in a, y in b, z in c:
+      o = x + y - sin z
 
 proc mainBench_global_triot(a, b, c: Tensor, nb_samples: int) =
-  ## Bench with standard lib
-  var output = newTensor[float64](a.shape)
+  bench("Global TRIOT iteration"):
+    triotForEach o in output, x in a, y in b, z in c:
+      o = x + y - sin z
 
-  block: # Actual bench
-    var stats: RunningStat
-    for _ in 0 ..< nb_samples:
-      let start = cpuTime()
-      triotForEach o in output, x in a, y in b, z in c:
-        o = x + y - sin z
-      let stop = cpuTime()
-      stats.push stop - start
-    printStats()
+proc mainBench_fusedperTensor(a, b, c: Tensor, nb_samples: int) =
+  bench("Fused per tensor reference iteration"):
+    fusedForEach o in output, x in a, y in b, z in c:
+      o = x + y - sin z
 
 when isMainModule:
+  randomize(42) # For reproducibility
   warmup()
   block: # All contiguous
     let
@@ -83,40 +78,7 @@ when isMainModule:
     mainBench_global(a, b, c, 1000)
     mainBench_perTensor(a, b, c, 1000)
     mainBench_global_triot(a, b, c, 1000)
-
-    # Warmup: 1.2005 s, result 224 (displayed to avoid compiler optimizing warmup away)
-
-    #######################################################################################
-
-    # Tensors of Float64 bench
-    # Collected 1000 samples
-    # Average broadcast time: 21.823ms
-    # Stddev  broadcast time: 1.038ms
-    # Min     broadcast time: 21.468ms
-    # Max     broadcast time: 38.080ms
-
-    # Display output[[0,0]] to make sure it's not optimized away
-    # 0.06512909995725152
-
-    # Tensors of Float64 bench
-    # Collected 1000 samples
-    # Average broadcast time: 8.711ms
-    # Stddev  broadcast time: 0.314ms
-    # Min     broadcast time: 8.505ms
-    # Max     broadcast time: 13.968ms
-
-    # Display output[[0,0]] to make sure it's not optimized away
-    # 0.06512909995725152
-
-    # Tensors of Float64 bench
-    # Collected 1000 samples
-    # Average broadcast time: 20.193ms
-    # Stddev  broadcast time: 0.523ms
-    # Min     broadcast time: 19.882ms
-    # Max     broadcast time: 28.555ms
-
-    # Display output[[0,0]] to make sure it's not optimized away
-    # 0.06512909995725152
+    mainBench_fusedperTensor(a, b, c, 1000)
 
   block: # Non C contiguous (but no Fortran contiguous fast-path)
     let
@@ -126,33 +88,91 @@ when isMainModule:
     mainBench_global(a, b, c, 1000)
     mainBench_perTensor(a, b, c, 1000)
     mainBench_global_triot(a, b, c, 1000)
+    mainBench_fusedperTensor(a, b, c, 1000)
 
-    # Tensors of Float64 bench
-    # Collected 1000 samples
-    # Average broadcast time: 57.119ms
-    # Stddev  broadcast time: 2.345ms
-    # Min     broadcast time: 53.350ms
-    # Max     broadcast time: 80.492ms
 
-    # Display output[[0,0]] to make sure it's not optimized away
-    # 0.3163590358464783
+# Warmup: 1.1933 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
-    # Tensors of Float64 bench
-    # Collected 1000 samples
-    # Average broadcast time: 37.686ms
-    # Stddev  broadcast time: 1.941ms
-    # Min     broadcast time: 34.232ms
-    # Max     broadcast time: 63.990ms
+############################################
 
-    # Display output[[0,0]] to make sure it's not optimized away
-    # 0.3163590358464783
+# Global reference iteration - float64
+# Collected 1000 samples in 21.296 seconds
+# Average time: 21.292ms
+# Stddev  time: 0.426ms
+# Min     time: 21.139ms
+# Max     time: 28.544ms
 
-    # Tensors of Float64 bench
-    # Collected 1000 samples
-    # Average broadcast time: 68.860ms
-    # Stddev  broadcast time: 21.816ms
-    # Min     broadcast time: 46.227ms
-    # Max     broadcast time: 139.676ms
+# Display output[[0,0]] to make sure it's not optimized away
+# -0.41973403633413
 
-    # Display output[[0,0]] to make sure it's not optimized away
-    # 0.3163590358464783
+# Per tensor reference iteration - float64
+# Collected 1000 samples in 8.646 seconds
+# Average time: 8.642ms
+# Stddev  time: 0.195ms
+# Min     time: 8.543ms
+# Max     time: 11.056ms
+
+# Display output[[0,0]] to make sure it's not optimized away
+# -0.41973403633413
+
+# Global TRIOT iteration - float64
+# Collected 1000 samples in 19.514 seconds
+# Average time: 19.510ms
+# Stddev  time: 0.407ms
+# Min     time: 19.349ms
+# Max     time: 25.644ms
+
+# Display output[[0,0]] to make sure it's not optimized away
+# -0.41973403633413
+
+# Fused per tensor reference iteration - float64
+# Collected 1000 samples in 8.645 seconds
+# Average time: 8.641ms
+# Stddev  time: 0.253ms
+# Min     time: 8.531ms
+# Max     time: 13.235ms
+
+# Display output[[0,0]] to make sure it's not optimized away
+# -0.41973403633413
+
+############################################
+
+# Global reference iteration - float64
+# Collected 1000 samples in 49.648 seconds
+# Average time: 49.644ms
+# Stddev  time: 2.316ms
+# Min     time: 47.169ms
+# Max     time: 78.987ms
+
+# Display output[[0,0]] to make sure it's not optimized away
+# 1.143903810108473
+
+# Per tensor reference iteration - float64
+# Collected 1000 samples in 36.795 seconds
+# Average time: 36.790ms
+# Stddev  time: 1.175ms
+# Min     time: 34.855ms
+# Max     time: 49.315ms
+
+# Display output[[0,0]] to make sure it's not optimized away
+# 1.143903810108473
+
+# Global TRIOT iteration - float64
+# Collected 1000 samples in 47.085 seconds
+# Average time: 47.080ms
+# Stddev  time: 1.337ms
+# Min     time: 45.313ms
+# Max     time: 68.331ms
+
+# Display output[[0,0]] to make sure it's not optimized away
+# 1.143903810108473
+
+# Fused per tensor reference iteration - float64
+# Collected 1000 samples in 30.588 seconds
+# Average time: 30.583ms
+# Stddev  time: 1.169ms
+# Min     time: 28.384ms
+# Max     time: 41.547ms
+
+# Display output[[0,0]] to make sure it's not optimized away
+# 1.143903810108473
