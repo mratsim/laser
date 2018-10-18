@@ -29,6 +29,9 @@ type
 func rank*(t: Tensor): Natural {.inline.} =
   t.shape.len
 
+func size*(t: Tensor): Natural =
+  t.shape.product
+
 func is_C_contiguous*(t: Tensor): bool {.inline.} =
   ## Check if the tensor follows C convention / is row major
   var z = 1
