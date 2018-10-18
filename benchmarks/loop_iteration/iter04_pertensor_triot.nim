@@ -4,13 +4,13 @@
 # Current iteration scheme in Arraymancer. Each tensor manages it's own loop
 import
   macros,
-  ./tensor, ./mem_optim_hints, ./metadata, ./utils,
+  ./tensor, ./compiler_optim_hints, ./metadata, ./utils,
   ./tensor_display
 
 template initStridedIteration(backstrides, iter_pos: untyped, t: Tensor): untyped =
   ## Iterator init
   var iter_pos = 0
-  withMemoryOptimHints()
+  withCompilerOptimHints()
   var coord {.align64, noInit.}: array[MAXRANK, int]
   var backstrides {.align64, noInit.}: array[MAXRANK, int]
   for i in 0..<t.rank:

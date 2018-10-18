@@ -19,7 +19,7 @@
 # As a workaround we use a template
 
 
-template withMemoryOptimHints*() =
+template withCompilerOptimHints*() =
   when not defined(js):
     {.pragma: align64, codegenDecl: "$# $# __attribute__((aligned(64)))".}
     {.pragma: restrict, codegenDecl: "$# __restrict__ $#".}

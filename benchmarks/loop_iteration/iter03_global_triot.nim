@@ -3,7 +3,7 @@
 
 import
   macros,
-  ./tensor, ./tensor_display, ./metadata, ./utils, ./mem_optim_hints
+  ./tensor, ./tensor_display, ./metadata, ./utils, ./compiler_optim_hints
 
 proc genNestedFor(shape, indices, innerBody: NimNode): NimNode =
   # shape is a NimNode representing a Metadata

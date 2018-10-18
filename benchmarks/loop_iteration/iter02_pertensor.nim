@@ -4,13 +4,13 @@
 # Current iteration scheme in Arraymancer. Each tensor manages it's own loop
 import
   macros,
-  ./tensor, ./mem_optim_hints, ./metadata, ./utils,
+  ./tensor, ./compiler_optim_hints, ./metadata, ./utils,
   ./tensor_display
 
 template initStridedIteration(coord, backstrides, iter_pos: untyped, t: Tensor): untyped =
   ## Iterator init
   var iter_pos = 0
-  withMemoryOptimHints()
+  withCompilerOptimHints()
   var coord {.align64, noInit.}: array[MAXRANK, int]
   var backstrides {.align64, noInit.}: array[MAXRANK, int]
   for i in 0..<t.rank:
@@ -32,7 +32,7 @@ template stridedIteration*(t: Tensor): untyped =
   ## Iterate over a Tensor, displaying data as in C order, whatever the strides.
 
   # Get tensor data address with offset builtin
-  withMemoryOptimHints()
+  withCompilerOptimHints()
   # TODO, allocate so that we can assume_align
   let data{.restrict.} = t.dataPtr # Warning ⚠: data pointed may be mutated
 
@@ -145,7 +145,7 @@ macro forEach*(args: varargs[untyped]): untyped =
   let stridedBody = loopBody.replaceNodes(replacements = dataPtrs_strided, to_replace = values)
 
   result = quote do:
-    withMemoryOptimHints()
+    withCompilerOptimHints()
     `dataPtrsDecl`
     `testShape`
 

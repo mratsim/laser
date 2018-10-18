@@ -1,18 +1,9 @@
-# Copyright 2017 Mamy André-Ratsimbazafy - the Arraymancer project
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Laser & Arraymancer
+# Copyright (c) 2017-2018 Mamy André-Ratsimbazafy
+# Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
+# This file may not be copied, modified, or distributed except according to those terms.
 
-const MAXRANK*{.intdefine.} = 6
+const LASER_MAXRANK*{.intdefine.} = 6
   # On x86-64, a cache line can contain 8 int64. Hence for best performance
   # MAXRANK should be at most 8 on x86_64 machines
   # Unless, you want to index using int32 which limits dimensions
@@ -22,7 +13,7 @@ type DynamicStackArray*[T] = object
     ## Custom stack allocated array that behaves like seq.
     ## We must avoid seq creation when modifying tensor shapes, strides or slicing in a tight loop.
     ## Seq creation are also not possible within an OpenMP loop.
-    data*: array[MAXRANK, T]
+    data*: array[LASER_MAXRANK, T]
     len*: int
 
 type

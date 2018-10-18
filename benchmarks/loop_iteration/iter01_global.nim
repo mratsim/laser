@@ -3,7 +3,7 @@
 
 import
   strformat, macros,
-  ./metadata, ./tensor, ./utils, ./mem_optim_hints,
+  ./metadata, ./tensor, ./utils, ./compiler_optim_hints,
   ./tensor_display
 
 func bcShape(x, y: Metadata): Metadata =
@@ -74,7 +74,7 @@ macro broadcastImpl(output: untyped, inputs_body: varargs[untyped]): untyped =
     block:
       let `shape` = getBroadcastShape(`inputs`)
       let rank = `shape`.len
-      withMemoryOptimHints()
+      withCompilerOptimHints()
       var `coord`{.align64.}: array[MAXRANK, int] # Current coordinates in the n-dimensional space
       `doBroadcast`
 

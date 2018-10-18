@@ -3,7 +3,7 @@
 
 import
   ./tensor, ./tensor_display, ./metadata,
-  ./mem_optim_hints, ./utils,
+  ./compiler_optim_hints, ./utils,
   macros
 
 macro fusedForEach*(args: varargs[untyped]): untyped =
@@ -47,7 +47,7 @@ macro fusedForEach*(args: varargs[untyped]): untyped =
   var dataPtrsDecl = newStmtList()
   var dataPtrs = nnkBracket.newTree()
 
-  dataPtrsDecl.add newCall(bindSym"withMemoryOptimHints")
+  dataPtrsDecl.add newCall(bindSym"withCompilerOptimHints")
 
   for i, tensor in tensors:
     let alias = genSym(nskLet, "alias" & $i & '_' & $tensor & '_')
@@ -90,7 +90,7 @@ macro fusedForEach*(args: varargs[untyped]): untyped =
 
   ####
   init_strided_iteration.add quote do:
-    # withMemoryOptimHints() <- done in dataPtrsDecl
+    # withCompilerOptimHints() <- done in dataPtrsDecl
     var `coord` {.align64.}: array[MAXRANK, int]
 
   let k = genSym(nskForVar)
