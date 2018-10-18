@@ -87,62 +87,59 @@ template omp_parallel_for_default*(
     use_simd = true,
     body)
 
-template omp_parallel_blocks*(
+template omp_parallel_chunks*(
     length: Natural,
-    block_offset, block_size: untyped,
+    chunk_offset, chunk_size: untyped,
     omp_threshold: static Natural,
     omp_grain_size: static Positive,
     use_simd: static bool = true,
     body: untyped): untyped =
-  ## Create a block range for each threads. You can use:
-  ## `for index in block_offset ..< block_size:` or
-  ## `zeroMem(foo[block_offset].addr, block_size)`
+  ## Create a chunk for each threads. You can use:
+  ## `for index in chunk_offset ..< chunk_size:` or
+  ## `zeroMem(foo[chunk_offset].addr, chunk_size)`
   ##
   ##
-  ## Splits the input `length` into blocks and do a parallel loop
-  ## on each block. The number of blocks depends on the number of cores at runtime.
-  ## `block_offset` and `block_size` should be passed as undeclared identifiers.
-  ## Within the template block they will contain the start offset and the length
-  ## of the current thread block. I.e. their value is thread-specific.
+  ## Splits the input `length` into chunks and do a parallel loop
+  ## on each chunk. The number of chunks depends on the number of cores at runtime.
+  ## `chunk_offset` and `chunk_size` should be passed as undeclared identifiers.
+  ## Within the template scope they will contain the start offset and the length
+  ## of the current thread chunk. I.e. their value is thread-specific.
   ##
   ## This is useful for non-contiguous processing as a replacement to omp_parallel_for
   ## or when operating on (contiguous) ranges for example for memset or memcpy
 
   when not defined(openmp):
-    const block_offset = 0
-    let block_size = length
-    body
+    const `chunk_offset`{.inject.} = 0
+    let `chunk_size`{.inject.} = length
+    block: body
   else:
     let ompsize = length # If length is the result of a proc, call the proc only once
-    let nb_blocks = if omp_threshold < ompsize:
+    let nb_chunks = if omp_threshold < ompsize:
       min(
         omp_get_max_threads(),
         max(1, ompsize div omp_grain_size) # if ompsize < omp_grain_size
       )
       else: 1
-
-    let block_size = ompsize div nb_blocks
+    let whole_chunk_size = ompsize div nb_chunks
 
     when use_simd:
-      for block_index in `||`(0, nb_blocks-1, "simd"):
-        let `block_offset`{.inject.} = block_size * block_index
-        let `block_size`{.inject.} =  if block_index < nb_blocks - 1: block_size
-                                      else: ompsize - block_offset
-        block:
-          body
+      for chunk_id in `||`(0, nb_chunks-1, "simd"):
+        let `chunk_offset`{.inject.} = whole_chunk_size * chunk_id
+        let `chunk_size`{.inject.} =  if chunk_id < nb_chunks - 1: whole_chunk_size
+                                      else: ompsize - chunk_offset
+        block: body
     else:
-      for block_index in 0||(nb_blocks-1):
-        let `block_offset`{.inject.} = block_size * block_index
-        let `block_size`{.inject.} =  if block_index < nb_blocks - 1: block_size
-                                      else: ompsize - block_offset
-        block:
-          body
+      for chunk_id in 0||(nb_chunks-1):
+        let `chunk_offset`{.inject.} = whole_chunk_size * chunk_id
+        let `chunk_size`{.inject.} =  if chunk_id < nb_chunks - 1: whole_chunk_size
+                                      else: ompsize - chunk_offset
+        block: body
 
-template omp_parallel_blocks_default*(
+template omp_parallel_chunks_default*(
     length: Natural,
-    block_offset, block_size: untyped,
+    chunk_offset, chunk_size: untyped,
     body: untyped): untyped =
-  ## This will be renamed omp_parallel_blocks once
+  ## This will be renamed omp_parallel_chunks once
   ## https://github.com/nim-lang/Nim/issues/9414 is solved.
   ## Compared to omp_parallel_for the following are set by default
   ## - omp_threshold:
@@ -155,9 +152,9 @@ template omp_parallel_blocks_default*(
   ##     by passing `-d:OMP_MEMORY_BOUND_GRAIN_SIZE=123456` during compilation.
   ##     A value of 1 will always parallelize the loop.
   ## - simd is used by default
-  omp_parallel_blocks(
+  omp_parallel_chunks(
     length,
-    block_offset, block_size,
+    chunk_offset, chunk_size,
     omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
     omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
     use_simd = true,

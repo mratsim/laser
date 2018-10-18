@@ -2,10 +2,10 @@ import ../laser/openmp/[omp_parallel, omp_tuning]
 import math, random, sequtils
 
 proc doOp(s: var seq[float32]) {.noInline.}=
-  omp_parallel_blocks_default(s.len, block_offset, block_size):
+  omp_parallel_chunks_default(s.len, chunk_offset, chunk_size):
     # Create a block range for each thread
     # Each thread can work on it's own range
-    for idx in block_offset ..< block_size:
+    for idx in chunk_offset ..< chunk_offset + chunk_size:
       s[idx] = sin(s[idx]) + cos(s[idx])
 
 proc main() =
