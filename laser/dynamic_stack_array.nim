@@ -1,8 +1,3 @@
-# Laser & Arraymancer
-# Copyright (c) 2017-2018 Mamy André-Ratsimbazafy
-# Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
-# This file may not be copied, modified, or distributed except according to those terms.
-
 const LASER_MAXRANK*{.intdefine.} = 6
   # On x86-64, a cache line can contain 8 int64. Hence for best performance
   # MAXRANK should be at most 8 on x86_64 machines
@@ -16,42 +11,16 @@ type DynamicStackArray*[T] = object
     data*: array[LASER_MAXRANK, T]
     len*: int
 
-type
-  Metadata* = DynamicStackArray[int]
-    ## Custom stack allocated array that holds tensors metadata
-
-func initMetadata*(len: int): Metadata {.inline.} =
-  result.len = len
-
-func toMetadata*(s: varargs[int]): Metadata =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert s.len <= MAXRANK
-  result.len = s.len
-  for i in 0..<s.len:
-    result.data[i] = s[i]
-
-template toMetadata*(m: Metadata): Metadata = m
-
 func copyFrom*(a: var DynamicStackArray, s: varargs[int]) =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert s.len <= MAXRANK
   a.len = s.len
   for i in 0..<s.len:
     a.data[i] = s[i]
 
-func copyFrom*(a: var DynamicStackArray, s: DynamicStackArray) =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert s.len <= MAXRANK
-  a.len = s.len
-  for i in 0..<s.len:
-    a.data[i] = s.data[i]
+func copyFrom*(a: var DynamicStackArray, s: DynamicStackArray) {.inline.} =
+  a = s
 
 func setLen*(a: var DynamicStackArray, len: int) {.inline.} =
-  when compileOption("boundChecks"):
-    assert len <= MAXRANK
+  assert len <= MAXRANK
   a.len = len
 
 func low*(a: DynamicStackArray): int {.inline.} =
@@ -67,21 +36,12 @@ template `^^`(s: DynamicStackArray, i: Index): int =
   else: int(i)
 
 func `[]`*[T](a: DynamicStackArray[T], idx: Index): T {.inline.} =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert idx >= 0 and idx < MAXRANK
   a.data[a ^^ idx]
 
 func `[]`*[T](a: var DynamicStackArray[T], idx: Index): var T {.inline.} =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert idx >= 0 and idx < MAXRANK
   a.data[a ^^ idx]
 
 func `[]=`*[T](a: var DynamicStackArray[T], idx: Index, v: T) {.inline.} =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert idx >= 0 and idx < MAXRANK
   a.data[a ^^ idx] = v
 
 func `[]`*[T](a: DynamicStackArray[T], slice: Slice[int]): DynamicStackArray[T] =
@@ -89,9 +49,6 @@ func `[]`*[T](a: DynamicStackArray[T], slice: Slice[int]): DynamicStackArray[T] 
   let end_slice = a ^^ slice.b
 
   if end_slice >= bgn_slice:
-    # boundsChecks automatically done for array indexing
-    # when compileOption("boundChecks"):
-    #   assert slice.a >= 0 and slice.b < a.len
     result.len = (end_slice - bgn_slice + 1)
     for i in 0..<result.len:
       result[i] = a[bgn_slice+i]
@@ -132,29 +89,18 @@ func product*[T:SomeNumber](a: DynamicStackArray[T]): T =
     result *= value
 
 func insert*[T](a: var DynamicStackArray[T], value: T, index: int = 0) =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert a.len+1 < MAXRANK
-  #   assert index >= 0 and index <= a.len
   for i in countdown(a.len, index+1):
     a[i] = a[i-1]
   a[index] = value
   inc a.len
 
 func delete*(a: var DynamicStackArray, index: int) =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert a.len > 0 #TODO: support tensor rank 0
-  #   assert index >= 0 and index < a.len
   dec(a.len)
   for i in index..<a.len:
     a[i] = a[i+1]
   a[a.len] = 0
 
 func add*[T](a: var DynamicStackArray[T], value: T) {.inline.} =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert a.len+1 < MAXRANK
   a[a.len] = value
   inc a.len
 
@@ -163,9 +109,6 @@ func `&`*[T](a: DynamicStackArray[T], value: T): DynamicStackArray[T] {.inline.}
   result.add(value)
 
 func `&`*(a, b: DynamicStackArray): DynamicStackArray =
-  # boundsChecks automatically done for array indexing
-  # when compileOption("boundChecks"):
-  #   assert a.len+b.len < MAXRANK
   result = a
   result.len += b.len
   for i in 0..<b.len:
@@ -200,7 +143,6 @@ func `==`*(a, s: DynamicStackArray): bool =
   return true
 
 iterator zip*[T, U](a: DynamicStackArray[T], b: DynamicStackArray[U]): (T, T) =
-  # reshape_no_copy relies on zip stopping early
   let len = min(a.len, b.len)
 
   for i in 0..<len:
