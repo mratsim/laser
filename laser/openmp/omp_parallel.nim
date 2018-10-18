@@ -94,7 +94,7 @@ template omp_parallel_chunks*(
     omp_grain_size: static Positive,
     use_simd: static bool = true,
     body: untyped): untyped =
-  ## Create a chunk for each threads. You can use:
+  ## Create a chunk for each thread. You can use:
   ## `for index in chunk_offset ..< chunk_size:` or
   ## `zeroMem(foo[chunk_offset].addr, chunk_size)`
   ##
