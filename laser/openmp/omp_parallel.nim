@@ -52,7 +52,7 @@ template omp_parallel_for*(
 
     let ompsize {.exportc: "ompsize_" & omp_suffix(genNew = false).} = length
     let nb_threads {.exportc: "nb_threads_" & omp_suffix(genNew = false).} = (
-      min(omp_get_max_threads(), ompsize div omp_grain_size)
+      min(omp_get_max_threads(), max(1, ompsize div omp_grain_size))
     )
 
     const omp_annotation = (when use_simd:"simd " else: "") &
