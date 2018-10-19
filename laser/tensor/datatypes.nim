@@ -60,15 +60,23 @@ func is_C_contiguous*(t: Tensor): bool {.inline.} =
 
 withCompilerOptimHints()
 
-func unsafe_raw_data*[T](t: Tensor[T]): RawImmutableView[T] {.inline.} =
-  ## Unsafe: the pointer can outlive the input tensor
-  let raw_pointer{.restrict.} = assume_aligned t.storage.raw_data
+template unsafe_raw_data_impl() {.dirty.} =
+  when aligned:
+    let raw_pointer{.restrict.} = assume_aligned t.storage.raw_data
+  else:
+    let raw_pointer{.restrict.} = t.storage.raw_data
   result = cast[type result](raw_pointer[t.offset].addr)
 
-func unsafe_raw_data*[T](t: var Tensor[T]): RawMutableView[T] {.inline.} =
+func unsafe_raw_data*[T](t: Tensor[T], aligned: static bool = true): RawImmutableView[T] {.inline.} =
   ## Unsafe: the pointer can outlive the input tensor
-  let raw_pointer{.restrict.} = assume_aligned t.storage.raw_data
-  result = cast[type result](raw_pointer[t.offset].addr)
+  ## For optimization purposes, Laser will hint the compiler that
+  ## while the pointer is valid, all data accesses will be through it (no aliasing)
+  ## and that the data is aligned by LASER_MEM_ALIGN (default 64).
+  unsafe_raw_data_impl()
+
+func unsafe_raw_data*[T](t: var Tensor[T], aligned: static bool = true): RawMutableView[T] {.inline.} =
+  ## Unsafe: the pointer can outlive the input tensor
+  unsafe_raw_data_impl()
 
 func `[]`*[T](v: RawImmutableView[T], idx: int): T {.inline.}=
   distinctBase(type v)(v)[idx]
