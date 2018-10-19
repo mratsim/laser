@@ -4,11 +4,34 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 # Strided parallel iteration for tensors
+# This is generic and work on any tensor types as long
+# as it implement the following interface:
+#
+# Tensor[T]:
+#   Tensors data storage backend must be shallow copied on assignment (reference semantics)
+#   the macro works on aliases to ensure that if the tensor is the result of another routine
+#   that routine is only called once, for example x[0..<2, _] will not slice `x` multiple times.
+#
+# Routine and fields used, (routines mean proc, template, macros):
+#   - rank, size:
+#       routines or fields that return an int
+#   - shape, strides:
+#       routines or fields that returns an array, seq or indexable container
+#       that supports `[]`. Read-only access.
+#   - unsafe_raw_data:
+#       rountine or field that returns a ptr UncheckedArray[T]
+#       or a distinct type with `[]` indexing implemented.
+#       The address should be the start of the raw data including
+#       the eventual tensor offset for subslices, i.e. equivalent to
+#       the address of x[0, 0, 0, ...]
+#       Needs mutable access for var tensor.
+#
+# Additionally the forEach macro needs an `is_C_contiguous` routine
 
 import
   macros,
   ../private/ast_utils, ../compiler_optim_hints,
-  ../openmp/omp_parallel
+  ../openmp/omp_parallel, ../openmp/omp_tuning
 
 template isVar[T: object](x: T): bool =
   ## Workaround due to `is` operator not working for `var`
@@ -76,7 +99,7 @@ proc initForEach(
 
     let raw_ptr_i = genSym(nskLet, $tensor & "_raw_data" & $i & '_')
     raw_ptrs_stmt.add quote do:
-      let `raw_ptr_i`{.restrict.} = `alias`.unsafe_raw_data()
+      let `raw_ptr_i`{.restrict.} = `alias`.unsafe_raw_data
     raw_ptrs.add raw_ptr_i
 
   let alias0 = aliases[0]
@@ -193,7 +216,11 @@ proc forEachStridedImpl(
   else:
     let
       omp_threshold  = omp_params[0]
-      omp_grain_size = omp_params[1]
+      omp_grain_size = newCall( # scale grain_size down for strided operation
+                          ident"div",
+                          omp_params[1],
+                          bindSym"OMP_NON_CONTIGUOUS_SCALE_FACTOR"
+                        )
       use_simd       = omp_params[2]
     result.add quote do:
       omp_parallel_chunks(
@@ -242,6 +269,9 @@ macro forEachStrided*(args: varargs[untyped]): untyped =
   ##    x += y * z
   ## (512, 1024, true) corresponds to omp_threshold, omp_grain_size, use_simd
   ## from omp_parallel_for
+  ##
+  ## The OpenMP minimal per-core grain size
+  ## is always scaled down by OMP_NON_CONTIGUOUS_SCALE_FACTOR (4 by default)
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
@@ -282,6 +312,9 @@ macro forEach*(args: varargs[untyped]): untyped =
   ## the tensors memory layout. If you know at compile-time that the tensors are
   ## contiguous or strided, use forEachContiguous or forEachStrided instead.
   ## Runtime selection requires duplicating the code body.
+  ##
+  ## If the tensors are non-contiguous, the OpenMP minimal per-core grain size
+  ## is scaled down by OMP_NON_CONTIGUOUS_SCALE_FACTOR (4 by default)
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
@@ -302,7 +335,7 @@ macro forEach*(args: varargs[untyped]): untyped =
     values, raw_ptrs, size, loopBody, omp_params
   )
   let strided_body = forEachStridedImpl(
-    values, aliases, raw_ptrs, size, loopBody, omp_params
+    values, aliases, raw_ptrs, size, loopBody,
   )
   let alias0 = aliases[0]
   var test_C_Contiguous = newCall(ident"is_C_contiguous", alias0)
