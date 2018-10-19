@@ -10,6 +10,11 @@ import
   ../private/ast_utils, ../compiler_optim_hints,
   ../openmp/omp_parallel
 
+template isVar[T: object](x: T): bool =
+  ## Workaround due to `is` operator not working for `var`
+  ## https://github.com/nim-lang/Nim/issues/9443
+  compiles(addr(x))
+
 proc initForEach(
         args: NimNode,
         params: var NimNode,
@@ -61,11 +66,13 @@ proc initForEach(
   raw_ptrs_stmt.add newCall(bindSym"withCompilerOptimHints")
 
   for i, tensor in tensors:
-    # TODO alias should be a var if input is var otherwise
-    #      we only have RawImmutableView
-    let alias = genSym(nskLet, $tensor & "_alias" & $i & '_')
+    let alias = newIdentNode($tensor & "_alias" & $i & '_')
     aliases.add alias
-    aliases_stmt.add newLetStmt(alias, tensor)
+    aliases_stmt.add quote do:
+      when isVar(`tensor`):
+        var `alias` = `tensor`
+      else:
+        let `alias` = `tensor`
 
     let raw_ptr_i = genSym(nskLet, $tensor & "_raw_data" & $i & '_')
     raw_ptrs_stmt.add quote do:

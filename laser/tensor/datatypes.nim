@@ -54,6 +54,9 @@ func is_C_contiguous*(t: Tensor): bool {.inline.} =
 # and outliving their source tensor (via `lent` destructors)
 # and keeping the `restrict` and `alignment`
 # optimization hints https://github.com/nim-lang/Nim/issues/7776
+#
+# Another anti-escape could be the "var T from container" and "lent T from container"
+# mentionned here: https://nim-lang.org/docs/manual.html#var-return-type-future-directions
 
 withCompilerOptimHints()
 
