@@ -143,7 +143,9 @@ proc forEachContiguousImpl(
 proc forEachStridedImpl(
   values, aliases,
   raw_ptrs, size,
-  loopBody, omp_params: NimNode,
+  loopBody: NimNode,
+  use_openmp: static bool,
+  omp_params: NimNode,
   ): NimNode =
   # Build the parallel body of a strided iterator
 
@@ -159,7 +161,8 @@ proc forEachStridedImpl(
     j = genSym(nskForVar, "j_mem_offset_") # Setting the start offset of each tensor iterator during init
     k = genSym(nskForVar, "k_next_elem_")  # Computing the next element in main body loop
     chunk_offset = newIdentNode("chunk_offset_")
-    chunk_size = newIdentNode("chunk_size_")
+    chunk_size =  if use_openmp: newIdentNode("chunk_size_")
+                  else: size
 
   init_strided_iteration.add quote do:
     var `coord` {.align_array.}: array[LASER_MEM_ALIGN, int]
@@ -176,13 +179,14 @@ proc forEachStridedImpl(
       `iter_pos_i` -= `alias`.strides[`k`] * (`alias`.shape[`k`]-1)
 
   # Now add the starting memory offset to the init
-  init_strided_iteration.add quote do:
-    if `chunk_offset` != 0:
-      var z = 1
-      for `j` in countdown(`alias0`.rank - 1, 0):
-        `coord`[`j`] = (`chunk_offset` div z) mod `alias0`.shape[`j`]
-        `iter_start_offset`
-        z *= `alias0`.shape[`j`]
+  if use_openmp:
+    init_strided_iteration.add quote do:
+      if `chunk_offset` != 0:
+        var accum_size = 1
+        for `j` in countdown(`alias0`.rank - 1, 0):
+          `coord`[`j`] = (`chunk_offset` div accum_size) mod `alias0`.shape[`j`]
+          `iter_start_offset`
+          accum_size *= `alias0`.shape[`j`]
 
   var elems_strided = nnkBracket.newTree()
   for i, raw_ptr in raw_ptrs:
@@ -209,20 +213,23 @@ proc forEachStridedImpl(
           `apply_backstrides`
 
   result = newStmtList()
-  let
-    omp_threshold  =  if omp_params.isNil: newLit OMP_MEMORY_BOUND_THRESHOLD
-                      else: omp_params[0]
-    omp_grain_size =  if omp_params.isNil: newLit( # scale grain_size down for strided operation
-                        OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
-                      ) else: newLit(
-                        omp_params[1].intVal div OMP_NON_CONTIGUOUS_SCALE_FACTOR
-                      )
-    use_simd       = if omp_params.isNil: newLit true else: omp_params[2]
-  result.add quote do:
-    omp_parallel_chunks(
-      `size`, `chunk_offset`, `chunk_size`,
-      `omp_threshold`, `omp_grain_size`, `use_simd`):
-        `stridedBody`
+  if use_openmp:
+    let
+      omp_threshold  =  if omp_params.isNil: newLit OMP_MEMORY_BOUND_THRESHOLD
+                        else: omp_params[0]
+      omp_grain_size =  if omp_params.isNil: newLit( # scale grain_size down for strided operation
+                          OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
+                        ) else: newLit(
+                          omp_params[1].intVal div OMP_NON_CONTIGUOUS_SCALE_FACTOR
+                        )
+      use_simd       = if omp_params.isNil: newLit true else: omp_params[2]
+    result.add quote do:
+      omp_parallel_chunks(
+        `size`, `chunk_offset`, `chunk_size`,
+        `omp_threshold`, `omp_grain_size`, `use_simd`):
+          `stridedBody`
+  else:
+    result.add stridedBody
 
 macro forEachContiguous*(args: varargs[untyped]): untyped =
   ## Format:
@@ -285,7 +292,7 @@ macro forEachStrided*(args: varargs[untyped]): untyped =
 
   let size = genSym(nskLet, "size_")
   let parallel_body = forEachStridedImpl(
-    values, aliases, raw_ptrs, size, loopBody, omp_params
+    values, aliases, raw_ptrs, size, loopBody, true, omp_params
   )
   let alias0 = aliases[0]
 
@@ -296,6 +303,41 @@ macro forEachStrided*(args: varargs[untyped]): untyped =
       `raw_ptrs_stmt`
       let `size` = `alias0`.size
       `parallel_body`
+
+macro forEachStridedSerial*(args: varargs[untyped]): untyped =
+  ## Format:
+  ## forEachStridedSerial x in a, y in b, z in c:
+  ##    x += y * z
+  ##
+  ## Strided iteration with serial execution. OpenMP params passed to it will be ignored
+  var
+    params, loopBody, values, aliases, raw_ptrs: NimNode
+    aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
+    omp_params: NimNode
+
+  initForEach(
+        args,
+        params,
+        loopBody,
+        omp_params,
+        values, aliases, raw_ptrs,
+        aliases_stmt, raw_ptrs_stmt,
+        test_shapes
+  )
+
+  let size = genSym(nskLet, "size_")
+  let serial_body = forEachStridedImpl(
+    values, aliases, raw_ptrs, size, loopBody, false, omp_params
+  )
+  let alias0 = aliases[0]
+
+  result = quote do:
+    block:
+      `aliases_stmt`
+      `test_shapes`
+      `raw_ptrs_stmt`
+      let `size` = `alias0`.size
+      `serial_body`
 
 macro forEach*(args: varargs[untyped]): untyped =
   ## Format:
@@ -331,7 +373,7 @@ macro forEach*(args: varargs[untyped]): untyped =
     values, raw_ptrs, size, loopBody, omp_params
   )
   let strided_body = forEachStridedImpl(
-    values, aliases, raw_ptrs, size, loopBody, omp_params
+    values, aliases, raw_ptrs, size, loopBody, true, omp_params
   )
   let alias0 = aliases[0]
   var test_C_Contiguous = newCall(ident"is_C_contiguous", alias0)
