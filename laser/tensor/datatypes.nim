@@ -76,7 +76,24 @@ func unsafe_raw_data*[T](t: Tensor[T], aligned: static bool = true): RawImmutabl
 
 func unsafe_raw_data*[T](t: var Tensor[T], aligned: static bool = true): RawMutableView[T] {.inline.} =
   ## Unsafe: the pointer can outlive the input tensor
+  ## For optimization purposes, Laser will hint the compiler that
+  ## while the pointer is valid, all data accesses will be through it (no aliasing)
+  ## and that the data is aligned by LASER_MEM_ALIGN (default 64).
   unsafe_raw_data_impl()
+
+macro raw_data_unaligned*(body: untyped): untyped =
+  ## Within this code block, all raw data accesses will not be
+  ## assumed aligned by default (LASER_MEM_ALIGN is 6 by default).
+  ## Use this when interfacing with external buffers of unknown alignment.
+  ##
+  ## ⚠ Warning:
+  ##     At the moment Nim's builtin term-rewriting macros are not scoped.
+  ##     All processing within the file this is called will be considered
+  ##     unaligned. https://github.com/nim-lang/Nim/issues/7214#issuecomment-431567894.
+  block:
+    template trmUnsafeRawData{unsafe_raw_data(x, aligned)}(x, aligned): auto =
+      {.noRewrite.}: unsafe_raw_data(x, false)
+    body
 
 func `[]`*[T](v: RawImmutableView[T], idx: int): T {.inline.}=
   distinctBase(type v)(v)[idx]
