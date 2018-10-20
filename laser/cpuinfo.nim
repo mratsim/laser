@@ -40,7 +40,7 @@ const
   # We use a patched header as the original one doesn't typedef its struct
   # which lead to "error: must use 'struct' tag to refer to type 'cpuinfo_processor'"
   # headerPath = cpuinfoPath & DirSep & "include" & DirSep & "cpuinfo.h"
-  headerPath = curSrcFolder & DirSep & "cpuinfo.h"
+  headerPath = curSrcFolder & DirSep & "third_party" & DirSep & "cpuinfo.h"
 
 ###########################################
 ############### Public API ################
