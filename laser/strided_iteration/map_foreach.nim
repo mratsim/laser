@@ -209,24 +209,20 @@ proc forEachStridedImpl(
           `apply_backstrides`
 
   result = newStmtList()
-  if omp_params.isNil:
-    result.add quote do:
-      omp_parallel_chunks_default(`size`, `chunk_offset`, `chunk_size`):
-          `stridedBody`
-  else:
-    let
-      omp_threshold  = omp_params[0]
-      omp_grain_size = newCall( # scale grain_size down for strided operation
-                          ident"div",
-                          omp_params[1],
-                          bindSym"OMP_NON_CONTIGUOUS_SCALE_FACTOR"
-                        )
-      use_simd       = omp_params[2]
-    result.add quote do:
-      omp_parallel_chunks(
-        `size`, `chunk_offset`, `chunk_size`,
-        `omp_threshold`, `omp_grain_size`, `use_simd`):
-          `stridedBody`
+  let
+    omp_threshold  =  if omp_params.isNil: newLit OMP_MEMORY_BOUND_THRESHOLD
+                      else: omp_params[0]
+    omp_grain_size =  if omp_params.isNil: newLit( # scale grain_size down for strided operation
+                        OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
+                      ) else: newLit(
+                        omp_params[1].intVal div OMP_NON_CONTIGUOUS_SCALE_FACTOR
+                      )
+    use_simd       = if omp_params.isNil: newLit true else: omp_params[2]
+  result.add quote do:
+    omp_parallel_chunks(
+      `size`, `chunk_offset`, `chunk_size`,
+      `omp_threshold`, `omp_grain_size`, `use_simd`):
+        `stridedBody`
 
 macro forEachContiguous*(args: varargs[untyped]): untyped =
   ## Format:
@@ -335,7 +331,7 @@ macro forEach*(args: varargs[untyped]): untyped =
     values, raw_ptrs, size, loopBody, omp_params
   )
   let strided_body = forEachStridedImpl(
-    values, aliases, raw_ptrs, size, loopBody,
+    values, aliases, raw_ptrs, size, loopBody, omp_params
   )
   let alias0 = aliases[0]
   var test_C_Contiguous = newCall(ident"is_C_contiguous", alias0)
