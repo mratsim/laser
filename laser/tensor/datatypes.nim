@@ -29,13 +29,13 @@ type
 
 withCompilerOptimHints()
 
-func rank*(t: Tensor): Natural {.inline.} =
+func rank*(t: Tensor): Natural {.inline, hot, gcc_pure.}=
   t.shape.len
 
-func size*(t: Tensor): Natural {.hot.}=
+func size*(t: Tensor): Natural {.hot, gcc_pure.}=
   t.shape.product
 
-func is_C_contiguous*(t: Tensor): bool =
+func is_C_contiguous*(t: Tensor): bool {.hot, gcc_pure.}=
   ## Check if the tensor follows C convention / is row major
   var cur_size = 1
   for i in countdown(t.shape.rank - 1,0):
@@ -68,14 +68,14 @@ template unsafe_raw_data_impl() {.dirty.} =
     let raw_pointer{.restrict.} = t.storage.raw_data
   result = cast[type result](raw_pointer[t.offset].addr)
 
-func unsafe_raw_data*[T](t: Tensor[T], aligned: static bool = true): RawImmutableView[T] {.inline.} =
+func unsafe_raw_data*[T](t: Tensor[T], aligned: static bool = true): RawImmutableView[T] {.inline, hot, gcc_pure.} =
   ## Unsafe: the pointer can outlive the input tensor
   ## For optimization purposes, Laser will hint the compiler that
   ## while the pointer is valid, all data accesses will be through it (no aliasing)
   ## and that the data is aligned by LASER_MEM_ALIGN (default 64).
   unsafe_raw_data_impl()
 
-func unsafe_raw_data*[T](t: var Tensor[T], aligned: static bool = true): RawMutableView[T] {.inline.} =
+func unsafe_raw_data*[T](t: var Tensor[T], aligned: static bool = true): RawMutableView[T] {.inline, hot, gcc_pure.} =
   ## Unsafe: the pointer can outlive the input tensor
   ## For optimization purposes, Laser will hint the compiler that
   ## while the pointer is valid, all data accesses will be through it (no aliasing)
@@ -96,8 +96,8 @@ macro raw_data_unaligned*(body: untyped): untyped =
       {.noRewrite.}: unsafe_raw_data(x, false)
     body
 
-func `[]`*[T](v: RawImmutableView[T], idx: int): T {.inline.}=
+func `[]`*[T](v: RawImmutableView[T], idx: int): T {.inline, hot, gcc_pure.}=
   distinctBase(type v)(v)[idx]
 
-func `[]`*[T](v: RawMutableView[T], idx: int): var T {.inline.}=
+func `[]`*[T](v: RawMutableView[T], idx: int): var T {.inline, hot, gcc_pure.}=
   distinctBase(type v)(v)[idx]

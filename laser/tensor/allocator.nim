@@ -10,11 +10,11 @@ import
 
 withCompilerOptimHints()
 
-proc finalizer[T](storage: CpuStorage[T]) =
+proc finalizer[T](storage: CpuStorage[T]) {.hot.}=
   if storage.memowner and not storage.memalloc.isNil:
     storage.memalloc.deallocShared()
 
-func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] {.aligned_ptr_result, malloc.} =
+func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] {.hot, aligned_ptr_result, malloc.} =
   let address = cast[ByteAddress](p)
   let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
     if (address and (LASER_MEM_ALIGN - 1)) == 0:
@@ -24,7 +24,7 @@ func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] {.aligned_pt
       assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
   return aligned_ptr
 
-proc allocCpuStorage*(T: typedesc, size: int): CpuStorage[T] =
+proc allocCpuStorage*(T: typedesc, size: int): CpuStorage[T] {.hot.}=
   new(result, finalizer[T])
   result.memalloc = allocShared0(sizeof(T) * size + LASER_MEM_ALIGN - 1)
   result.memowner = true
