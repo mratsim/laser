@@ -6,7 +6,6 @@
 import
   ../openmp/[omp_parallel, omp_tuning],
   ../strided_iteration/map_forEach,
-  ../metadata,
   ./datatypes, ./allocator,
   typetraits
 
@@ -46,10 +45,10 @@ proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
     # we require higher parallelization thresholds
     if src.is_C_contiguous:
       omp_parallel_chunks(
-        size, chunk_offset, chunk_size,
-        OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
-        use_simd = false):
-        copymem(
+            size, chunk_offset, chunk_size,
+            OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
+            use_simd = false):
+        copyMem(
           dst.storage.raw_data[chunk_offset],
           src.storage.raw_data[chunk_offset],
           chunk_size
@@ -82,10 +81,10 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
     # we require higher parallelization thresholds
     if src.is_C_contiguous:
       omp_parallel_chunks(
-        size, chunk_offset, chunk_size,
-        OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
-        use_simd = false):
-        copymem(
+            size, chunk_offset, chunk_size,
+            OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
+            use_simd = false):
+        copyMem(
           dst.storage.raw_data[chunk_offset],
           src.storage.raw_data[chunk_offset],
           chunk_size

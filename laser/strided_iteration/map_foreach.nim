@@ -170,7 +170,7 @@ proc forEachStridedImpl(
                   else: size
 
   init_strided_iteration.add quote do:
-    var `coord` {.align_array.}: array[LASER_MEM_ALIGN, int]
+    var `coord` {.align_variable.}: array[LASER_MEM_ALIGN, int]
 
   for i, alias in aliases:
     let iter_pos_i = gensym(nskVar, "iter" & $i & "_pos_")

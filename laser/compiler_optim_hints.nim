@@ -9,12 +9,49 @@ static:
   assert (LASER_MEM_ALIGN and (LASER_MEM_ALIGN - 1)) == 0, "Alignment " & $LASER_MEM_ALIGN & "must be a power of 2"
 
 template withCompilerOptimHints*() =
-  {.pragma: align_array, codegenDecl: "$# $# __attribute__((aligned(" & $LASER_MEM_ALIGN & ")))".}
+  # See https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html
+  # and https://gcc.gnu.org/onlinedocs/gcc/Common-Variable-Attributes.html#Common-Variable-Attributes
+
+  # Variable. Variable is created aligned by LASER_MEM_ALIGN.
+  {.pragma: align_variable, codegenDecl: "$# $# __attribute__((aligned(" & $LASER_MEM_ALIGN & ")))".}
+
+  # Variable. Pointer does not alias any existing valid pointers.
   when not defined(vcc):
     {.pragma: restrict, codegenDecl: "$# __restrict__ $#".}
   else:
     {.pragma: restrict, codegenDecl: "$# __restrict $#".}
-  {.pragma: align_function, codegenDecl: "__attribute__((assume_aligned(" & $LASER_MEM_ALIGN & "))) $# $#$#".}
+
+  # Function. Return pointer is aligned to LASER_MEM_ALIGN
+  {.pragma: align_function, codegenDecl: "__attribute__(assume_aligned(" & $LASER_MEM_ALIGN & ")) $# $#$#".}
+
+  # Function. Returned pointer cannot alias any other valid pointer and no pointers to valid object occur in any
+  # storage pointed to.
+  {.pragma: malloc, codegenDecl: "__attribute__(malloc) $# $#$#".}
+
+  # Function. Creates one or more function versions that can process multiple arguments using SIMD.
+  # Ignored when -fopenmp is used and within an OpenMP simd loop
+  {.pragma: simd, codegenDecl: "__attribute__(simd) $# $#$#".}
+
+  # We don't define per-function fast-math, GCC attribute optimize is broken:
+  # --> https://gcc.gnu.org/ml/gcc/2009-10/msg00402.html
+  #
+  # Workaround floating point latency for algorithms like sum
+  # should be done manually.
+  #
+  # See : https://stackoverflow.com/questions/39095993/does-each-floating-point-operation-take-the-same-time
+  # and https://www.agner.org/optimize/vectorclass.pdf "Using multiple accumulators"
+  #
+  # FP addition as a latency of 3~5 clock cycles, i.e. the result cannot be reused for that much time.
+  # But the throughput is 1 FP add per clock cycle (and even 2 per clock cycle for Haswell)
+  # So we need to use extra accumulators to fully utilize the FP throughput despite FP latency.
+  # On Skylake, all FP latencies are 4: https://www.agner.org/optimize/blog/read.php?i=415
+  # so ideally 8 accumulators are needed (assuming we don't starve of registers).
+  #
+  # Note that this is per CPU cores, each core needs its own "global CPU accumulator" to combat
+  # false sharing when multithreading.
+  #
+  # This wouldn't be needed with fast-math because compiler would consider FP addition associative
+  # and create intermediate variables as needed to exploit this through put.
 
 const withBuiltins = defined(gcc) or defined(clang) or defined(icc)
 
