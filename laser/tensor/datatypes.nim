@@ -7,7 +7,7 @@
 
 import
   ../dynamic_stack_array, ../compiler_optim_hints,
-  sugar
+  sugar, typetraits
 
 type
   RawImmutableView*[T] = distinct ptr UncheckedArray[T]
@@ -15,16 +15,19 @@ type
 
   Metadata* = DynamicStackArray[int]
 
-  Tensor*[T] = object                  # Total stack: 128 bytes = 2 cache-lines
-    shape*: Metadata                   # 56 bytes
-    strides*: Metadata                 # 56 bytes
-    offset*: int                       # 8 bytes
-    storage*: CpuStorage[T]            # 8 bytes
+  Tensor*[T] = object                    # Total stack: 128 bytes = 2 cache-lines
+    shape*: Metadata                     # 56 bytes
+    strides*: Metadata                   # 56 bytes
+    offset*: int                         # 8 bytes
+    storage*: CpuStorage[T]              # 8 bytes
 
-  CpuStorage*[T] = ref object          # Total heap: 25 bytes = 1 cache-line
-    raw_data*: ptr UncheckedArray[T]   # 8 bytes
-    memalloc*: pointer                 # 8 bytes
-    memowner*: bool                    # 1 byte
+  CpuStorage*{.shallow.}[T] = ref object # Total heap: 25 bytes = 1 cache-line
+    when supportsCopyMem(T):
+      raw_data*: ptr UncheckedArray[T]   # 8 bytes
+      memalloc*: pointer                 # 8 bytes
+      memowner*: bool                    # 1 byte
+    else: # Tensors of strings, other ref types or non-trivial destructors
+      raw_data*: seq[T]                  # 8 bytes (16 for seq v2 backed by destructors?)
 
 
 withCompilerOptimHints()
@@ -62,11 +65,14 @@ func is_C_contiguous*(t: Tensor): bool {.hot, gcc_pure.}=
 # mentionned here: https://nim-lang.org/docs/manual.html#var-return-type-future-directions
 
 template unsafe_raw_data_impl() {.dirty.} =
-  when aligned:
-    let raw_pointer{.restrict.} = assume_aligned t.storage.raw_data
+  when T.supportsCopyMem:
+    when aligned:
+      let raw_pointer{.restrict.} = assume_aligned t.storage.raw_data
+    else:
+      let raw_pointer{.restrict.} = t.storage.raw_data
+    result = cast[type result](raw_pointer[t.offset].addr)
   else:
-    let raw_pointer{.restrict.} = t.storage.raw_data
-  result = cast[type result](raw_pointer[t.offset].addr)
+    result = cast[type result](t.storage.raw_data[t.offset].addr)
 
 func unsafe_raw_data*[T](t: Tensor[T], aligned: static bool = true): RawImmutableView[T] {.inline, hot, gcc_pure.} =
   ## Unsafe: the pointer can outlive the input tensor

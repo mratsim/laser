@@ -81,12 +81,12 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
     # we require higher parallelization thresholds
     if src.is_C_contiguous:
       omp_parallel_chunks(
-            size, chunk_offset, chunk_size,
+            src.size, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
-          dst.storage.raw_data[chunk_offset],
-          src.storage.raw_data[chunk_offset],
+          dst.storage.raw_data[chunk_offset].addr,
+          src.storage.raw_data[chunk_offset].unsafeAddr,
           chunk_size
           )
     else:
@@ -97,3 +97,30 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
     # we assume we can't use OpenMP
     forEachSerial d in dst, s in src:
       d = s # non-recursive copy
+
+proc setZero*[T](t: var Tensor[T]) =
+  ## Reset/initialize the tensor data to binary zero.
+  ## The tensor metadata is not touched.
+  ## Input tensor must be contiguous.
+  ##
+  ## ⚠ Warning:
+  ##    The data of the input tensor will be overwritten.
+  ##    If destination tensor is a view, all views of that data will be changed.
+  ##    They however conserve their shape and strides.
+  if unlikely(not t.is_C_contiguous):
+    # TODO: error model - https://github.com/numforge/laser/issues/2
+    # + If using exceptions, display the tensor ident with astToStr
+    raise newException(ValueError, "Input tensor is not contiguous.")
+
+  when not T.supportsCopyMem:
+    t.storage.reset()
+  else:
+    omp_parallel_chunks(
+          t.size, chunk_offset, chunk_size,
+          OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
+          use_simd = false):
+      zeroMem(
+        t.storage.raw_data[chunk_offset].addr,
+        chunk_size
+        )
+
