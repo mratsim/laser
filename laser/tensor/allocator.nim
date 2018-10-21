@@ -14,7 +14,7 @@ proc finalizer[T](storage: CpuStorage[T]) =
   if storage.memowner and not storage.memalloc.isNil:
     storage.memalloc.deallocShared()
 
-func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] {.align_function, malloc.} =
+func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] {.aligned_ptr_result, malloc.} =
   let address = cast[ByteAddress](p)
   let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
     if (address and (LASER_MEM_ALIGN - 1)) == 0:

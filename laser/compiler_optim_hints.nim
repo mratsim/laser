@@ -25,8 +25,8 @@ template withCompilerOptimHints*() =
   else:
     {.pragma: restrict, codegenDecl: "$# __restrict $#".}
 
-  # Function. Return pointer is aligned to LASER_MEM_ALIGN
-  {.pragma: align_function, codegenDecl: "__attribute__(assume_aligned(" & $LASER_MEM_ALIGN & ")) $# $#$#".}
+  # Function. Returned pointer is aligned to LASER_MEM_ALIGN
+  {.pragma: aligned_ptr_result, codegenDecl: "__attribute__(assume_aligned(" & $LASER_MEM_ALIGN & ")) $# $#$#".}
 
   # Function. Returned pointer cannot alias any other valid pointer and no pointers to valid object occur in any
   # storage pointed to.
