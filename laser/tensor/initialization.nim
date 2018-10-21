@@ -122,7 +122,7 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
       raise newException(ValueError, "Input tensor is not contiguous.")
 
   when not T.supportsCopyMem:
-    t.storage.reset()
+    t.storage.raw_data.reset()
   else:
     omp_parallel_chunks(
           t.size, chunk_offset, chunk_size,
