@@ -61,10 +61,10 @@ func is_C_contiguous*(t: Tensor): bool =
 # Another anti-escape could be the "var T from container" and "lent T from container"
 # mentionned here: https://nim-lang.org/docs/manual.html#var-return-type-future-directions
 
-withCompilerOptimHints()
-
 template unsafe_raw_data_impl() {.dirty.} =
+
   when T.supportsCopyMem:
+    withCompilerOptimHints()
     when aligned:
       let raw_pointer{.restrict.} = assume_aligned t.storage.raw_data
     else:

@@ -14,11 +14,10 @@ proc finalizer[T](storage: CpuStorage[T]) =
   if storage.memowner and not storage.memalloc.isNil:
     storage.memalloc.deallocShared()
 
-withCompilerOptimHints()
-
 func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
   static: assert T.supportsCopyMem, "Tensors of seq, strings, ref types and types with non-trivial destructors cannot be aligned"
 
+  withCompilerOptimHints()
   let address = cast[ByteAddress](p)
   let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
     if (address and (LASER_MEM_ALIGN - 1)) == 0:
