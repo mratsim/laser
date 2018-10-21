@@ -108,7 +108,12 @@ template assume_aligned*[T](data: ptr T): ptr T =
   else:
     data
 
-template prefetch*[T](data: ptr T, rw: static PrefetchRW, locality: static PrefetchLocality) =
+template prefetch*[T](data: ptr T, rw: static PrefetchRW = Read, locality: static PrefetchLocality = HighTemporalLocality) =
+  ## Prefetch examples:
+  ##   - https://scripts.mit.edu/~birge/blog/accelerating-code-using-gccs-prefetch-extension/
+  ##   - https://stackoverflow.com/questions/7327994/prefetching-examples
+  ##   - https://lemire.me/blog/2018/04/30/is-software-prefetching-__builtin_prefetch-useful-for-performance/
+  ##   - https://www.naftaliharris.com/blog/2x-speedup-with-one-line-of-code/
   when withBuiltins:
     builtin_prefetch(data, rw, locality)
   else:
