@@ -86,7 +86,7 @@ proc initForEach(
   raw_ptrs_stmt = newStmtList()
   raw_ptrs = nnkBracket.newTree()
 
-  raw_ptrs_stmt.add newCall(bindSym"withCompilerOptimHints")
+  aliases_stmt.add newCall(bindSym"withCompilerOptimHints")
 
   for i, tensor in tensors:
     let alias = newIdentNode($tensor & "_alias" & $i & '_')

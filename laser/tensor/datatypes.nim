@@ -26,21 +26,24 @@ type
     memalloc*: pointer                 # 8 bytes
     memowner*: bool                    # 1 byte
 
+
+withCompilerOptimHints()
+
 func rank*(t: Tensor): Natural {.inline.} =
   t.shape.len
 
-func size*(t: Tensor): Natural =
+func size*(t: Tensor): Natural {.hot.}=
   t.shape.product
 
-func is_C_contiguous*(t: Tensor): bool {.inline.} =
+func is_C_contiguous*(t: Tensor): bool =
   ## Check if the tensor follows C convention / is row major
-  var z = 1
+  var cur_size = 1
   for i in countdown(t.shape.rank - 1,0):
     # 1. We should ignore strides on dimensions of size 1
     # 2. Strides always must have the size equal to the product of the next dimensions
-    if t.shape[i] != 1 and t.strides[i] != z:
+    if t.shape[i] != 1 and t.strides[i] != cur_size:
         return false
-    z *= t.shape[i]
+    cur_size *= t.shape[i]
   return true
 
 # ##################
@@ -57,8 +60,6 @@ func is_C_contiguous*(t: Tensor): bool {.inline.} =
 #
 # Another anti-escape could be the "var T from container" and "lent T from container"
 # mentionned here: https://nim-lang.org/docs/manual.html#var-return-type-future-directions
-
-withCompilerOptimHints()
 
 template unsafe_raw_data_impl() {.dirty.} =
   when aligned:

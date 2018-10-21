@@ -36,6 +36,29 @@ template withCompilerOptimHints*() =
   # Ignored when -fopenmp is used and within an OpenMP simd loop
   {.pragma: simd, codegenDecl: "__attribute__(simd) $# $#$#".}
 
+  # Function. Indicates hot and cold path. Ignored when using profile guided optimization.
+  {.pragma: hot, codegenDecl: "__attribute__(hot) $# $#$#".}
+  {.pragma: cold, codegenDecl: "__attribute__(cold) $# $#$#".}
+
+  # ## pure and const
+  # ## Affect Common Sub-expression Elimination, Dead Code Elimination and loop optimization.
+  # See
+  #   - https://lwn.net/Articles/285332/
+  #   - http://benyossef.com/helping-the-compiler-help-you/
+  #
+  # Function. The function only accesses its input params and global variables state.
+  # It does not modify any global, calling it multiple times with the same params
+  # and global variables will produce the same result.
+  {.pragma: gcc_pure, codegenDecl: "__attribute__(pure) $# $#$#".}
+  #
+  # Function. The function only accesses its input params and calling it multiple times
+  # with the same params will produce the same result.
+  # Warning ⚠:
+  #   Pointer inputs must not be dereferenced to read the memory pointed to.
+  #   In Nim stack arrays are passed by pointers and big stack data structures
+  #   are passed by reference as well. I.e. Result unknown.
+  {.pragma: gcc_const, codegenDecl: "__attribute__(const) $# $#$#".}
+
   # We don't define per-function fast-math, GCC attribute optimize is broken:
   # --> https://gcc.gnu.org/ml/gcc/2009-10/msg00402.html
   #
