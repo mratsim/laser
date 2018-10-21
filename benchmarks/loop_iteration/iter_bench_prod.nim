@@ -75,13 +75,13 @@ template bench(name: string, body: untyped) {.dirty.}=
 
   block: # Actual bench
     var stats: RunningStat
-    let global_start = cpuTime()
-    for _ in 0 ..< nb_samples:
-      let start = cpuTime()
+    let global_start = epochTime() # Due to multithreading we must use epoch time instead of CPU time
+    for _ in 0 ..< nb_samples:     # or divide by the number of threads
+      let start = epochTime()
       body
-      let stop = cpuTime()
+      let stop = epochTime()
       stats.push stop - start
-    let global_stop = cpuTime()
+    let global_stop = epochTime()
     printStats(name)
 
 proc mainBench_libImpl(a, b, c: Tensor, nb_samples: int) =

@@ -31,7 +31,8 @@
 import
   macros,
   ../private/ast_utils, ../compiler_optim_hints,
-  ../openmp/omp_parallel, ../openmp/omp_tuning
+  ../openmp/[omp_parallel, omp_tuning]
+export omp_suffix # Pending https://github.com/nim-lang/Nim/issues/9365 or 9366
 
 template isVar[T: object](x: T): bool =
   ## Workaround due to `is` operator not working for `var`
