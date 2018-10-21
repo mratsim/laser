@@ -8,15 +8,15 @@ import
 
 # Storage backend allocation primitives
 
-withCompilerOptimHints()
-
-proc finalizer[T](storage: CpuStorage[T]) {.hot.}=
+proc finalizer[T](storage: CpuStorage[T]) =
   static: assert T.supportsCopyMem, "Tensors of seq, strings, ref types and types with non-trivial destructors cannot be finalized by this proc"
 
   if storage.memowner and not storage.memalloc.isNil:
     storage.memalloc.deallocShared()
 
-func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] {.hot, aligned_ptr_result, malloc.} =
+withCompilerOptimHints()
+
+func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
   static: assert T.supportsCopyMem, "Tensors of seq, strings, ref types and types with non-trivial destructors cannot be aligned"
 
   let address = cast[ByteAddress](p)
@@ -28,15 +28,16 @@ func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] {.hot, align
       assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
   return aligned_ptr
 
-proc allocCpuStorage*(T: typedesc, size: int): CpuStorage[T] {.hot.}=
+proc allocCpuStorage*[T](storage: var CpuStorage[T], size: int) =
   ## Allocate aligned memory to hold `size` elements of type T.
   ## If T does not supports copyMem, it is also zero-initialized.
   ## I.e. Tensors of seq, strings, ref types or types with non-trivial destructors
   ## are always zero-initialized. This prevents potential GC issues.
   when T.supportsCopyMem:
-    new(result, finalizer[T])
-    result.memalloc = allocShared0(sizeof(T) * size + LASER_MEM_ALIGN - 1)
-    result.memowner = true
-    result.raw_data = align_raw_data(T, result.memalloc)
+    new(storage, finalizer[T])
+    storage.memalloc = allocShared0(sizeof(T) * size + LASER_MEM_ALIGN - 1)
+    storage.memowner = true
+    storage.raw_data = align_raw_data(T, storage.memalloc)
   else: # Always 0-initialize Tensors of seq, strings, ref types and types with non-trivial destructors
-    result.raw_data = newSeq[T](size)
+    new(storage)
+    newSeq[T](storage.raw_data, size)

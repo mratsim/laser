@@ -1,5 +1,7 @@
-import ./compiler_optim_hints
-withCompilerOptimHints()
+# Laser
+# Copyright (c) 2018 Mamy André-Ratsimbazafy
+# Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
+# This file may not be copied, modified, or distributed except according to those terms.
 
 const LASER_MAXRANK*{.intdefine.} = 6
   # On x86-64, a cache line can contain 8 int64. Hence for best performance
@@ -26,10 +28,10 @@ func setLen*(a: var DynamicStackArray, len: int) {.inline.} =
   assert len <= MAXRANK
   a.len = len
 
-func low*(a: DynamicStackArray): int {.inline, gcc_const.} =
+func low*(a: DynamicStackArray): int {.inline.} =
   0
 
-func high*(a: DynamicStackArray): int {.inline, gcc_const.} =
+func high*(a: DynamicStackArray): int {.inline.} =
   a.len-1
 
 type Index = SomeSignedInt or BackwardsIndex
@@ -38,16 +40,16 @@ template `^^`(s: DynamicStackArray, i: Index): int =
     s.len - int(i)
   else: int(i)
 
-func `[]`*[T](a: DynamicStackArray[T], idx: Index): T {.inline, gcc_pure.} =
+func `[]`*[T](a: DynamicStackArray[T], idx: Index): T {.inline.} =
   a.data[a ^^ idx]
 
-func `[]`*[T](a: var DynamicStackArray[T], idx: Index): var T {.inline, gcc_pure.} =
+func `[]`*[T](a: var DynamicStackArray[T], idx: Index): var T {.inline.} =
   a.data[a ^^ idx]
 
 func `[]=`*[T](a: var DynamicStackArray[T], idx: Index, v: T) {.inline.} =
   a.data[a ^^ idx] = v
 
-func `[]`*[T](a: DynamicStackArray[T], slice: Slice[int]): DynamicStackArray[T] {.gcc_pure.}=
+func `[]`*[T](a: DynamicStackArray[T], slice: Slice[int]): DynamicStackArray[T] =
   let bgn_slice = a ^^ slice.a
   let end_slice = a ^^ slice.b
 
@@ -86,7 +88,7 @@ func `$`*(a: DynamicStackArray): string =
     firstElement = false
   result.add("]")
 
-func product*[T:SomeNumber](a: DynamicStackArray[T]): T {.hot, gcc_pure.}=
+func product*[T:SomeNumber](a: DynamicStackArray[T]): T =
   result = 1
   for value in items(a):
     result *= value
@@ -111,7 +113,7 @@ func `&`*[T](a: DynamicStackArray[T], value: T): DynamicStackArray[T] {.inline.}
   result = a
   result.add(value)
 
-func `&`*(a, b: DynamicStackArray): DynamicStackArray {.hot.}=
+func `&`*(a, b: DynamicStackArray): DynamicStackArray =
   result = a
   result.len += b.len
   for i in 0..<b.len:
@@ -129,7 +131,7 @@ func reversed*(a: DynamicStackArray, result: var DynamicStackArray) =
     result[i] = 0
   result.len = a.len
 
-func `==`*[T](a: DynamicStackArray[T], s: openarray[T]): bool {.hot, gcc_pure.}=
+func `==`*[T](a: DynamicStackArray[T], s: openarray[T]): bool =
   if a.len != s.len:
     return false
   for i in 0..<s.len:
@@ -137,7 +139,7 @@ func `==`*[T](a: DynamicStackArray[T], s: openarray[T]): bool {.hot, gcc_pure.}=
       return false
   return true
 
-func `==`*(a, s: DynamicStackArray): bool {.hot, gcc_pure.}=
+func `==`*(a, s: DynamicStackArray): bool =
   if a.len != s.len:
     return false
   for i in 0..<s.len:
@@ -165,6 +167,6 @@ func concat*[T](dsas: varargs[DynamicStackArray[T]]): DynamicStackArray[T] =
       result[i] = val
       inc(i)
 
-func max*[T](a: DynamicStackArray[T]): T {.gcc_pure.}=
+func max*[T](a: DynamicStackArray[T]): T =
   for val in a:
     result = max(result, val)

@@ -5,11 +5,19 @@
 
 import
   ../openmp/[omp_parallel, omp_tuning],
+  ../compiler_optim_hints,
   ../strided_iteration/map_forEach,
   ./datatypes, ./allocator,
   typetraits
 
 ## Initialization and copy routines
+
+func toMetadata(s: varargs[int]): Metadata =
+  result.len = s.len
+  for i in 0..<s.len:
+    result.data[i] = s[i]
+
+template toMetadata(m: Metadata): Metadata = m
 
 template initTensorMetadataImpl(result: var Tensor, size: var int, shape: openarray[int]|Metadata) =
   ## We don't use a proc directly due to https://github.com/nim-lang/Nim/issues/6529
@@ -21,10 +29,10 @@ template initTensorMetadataImpl(result: var Tensor, size: var int, shape: openar
     result.strides[i] = size
     size *= shape[i]
 
-func initTensorMetadata(result: var Tensor, size: var int, shape: openarray[int]) =
+func initTensorMetadata*(result: var Tensor, size: var int, shape: openarray[int]) =
   initTensorMetadataImpl(result, size, shape)
 
-func initTensorMetadata(result: var Tensor, size: var int, shape: Metadata) =
+func initTensorMetadata*(result: var Tensor, size: var int, shape: Metadata) =
   initTensorMetadataImpl(result, size, shape)
 
 proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
@@ -98,7 +106,7 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
     forEachSerial d in dst, s in src:
       d = s # non-recursive copy
 
-proc setZero*[T](t: var Tensor[T]) =
+proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
   ## Reset/initialize the tensor data to binary zero.
   ## The tensor metadata is not touched.
   ## Input tensor must be contiguous.
@@ -107,10 +115,11 @@ proc setZero*[T](t: var Tensor[T]) =
   ##    The data of the input tensor will be overwritten.
   ##    If destination tensor is a view, all views of that data will be changed.
   ##    They however conserve their shape and strides.
-  if unlikely(not t.is_C_contiguous):
-    # TODO: error model - https://github.com/numforge/laser/issues/2
-    # + If using exceptions, display the tensor ident with astToStr
-    raise newException(ValueError, "Input tensor is not contiguous.")
+  when check_contiguous:
+    if unlikely(not t.is_C_contiguous):
+      # TODO: error model - https://github.com/numforge/laser/issues/2
+      # + If using exceptions, display the tensor ident with astToStr
+      raise newException(ValueError, "Input tensor is not contiguous.")
 
   when not T.supportsCopyMem:
     t.storage.reset()

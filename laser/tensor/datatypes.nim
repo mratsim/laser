@@ -6,7 +6,7 @@
 # Types and low level primitives for tensors
 
 import
-  ../dynamic_stack_array, ../compiler_optim_hints,
+  ../dynamic_stack_arrays, ../compiler_optim_hints,
   sugar, typetraits
 
 type
@@ -29,19 +29,16 @@ type
     else: # Tensors of strings, other ref types or non-trivial destructors
       raw_data*: seq[T]                  # 8 bytes (16 for seq v2 backed by destructors?)
 
-
-withCompilerOptimHints()
-
-func rank*(t: Tensor): Natural {.inline, hot, gcc_pure.}=
+func rank*(t: Tensor): range[0 .. LASER_MAXRANK] {.inline.} =
   t.shape.len
 
-func size*(t: Tensor): Natural {.hot, gcc_pure.}=
+func size*(t: Tensor): Natural =
   t.shape.product
 
-func is_C_contiguous*(t: Tensor): bool {.hot, gcc_pure.}=
+func is_C_contiguous*(t: Tensor): bool =
   ## Check if the tensor follows C convention / is row major
   var cur_size = 1
-  for i in countdown(t.shape.rank - 1,0):
+  for i in countdown(t.rank - 1,0):
     # 1. We should ignore strides on dimensions of size 1
     # 2. Strides always must have the size equal to the product of the next dimensions
     if t.shape[i] != 1 and t.strides[i] != cur_size:
@@ -64,6 +61,8 @@ func is_C_contiguous*(t: Tensor): bool {.hot, gcc_pure.}=
 # Another anti-escape could be the "var T from container" and "lent T from container"
 # mentionned here: https://nim-lang.org/docs/manual.html#var-return-type-future-directions
 
+withCompilerOptimHints()
+
 template unsafe_raw_data_impl() {.dirty.} =
   when T.supportsCopyMem:
     when aligned:
@@ -74,14 +73,14 @@ template unsafe_raw_data_impl() {.dirty.} =
   else:
     result = cast[type result](t.storage.raw_data[t.offset].addr)
 
-func unsafe_raw_data*[T](t: Tensor[T], aligned: static bool = true): RawImmutableView[T] {.inline, hot, gcc_pure.} =
+func unsafe_raw_data*[T](t: Tensor[T], aligned: static bool = true): RawImmutableView[T] {.inline.} =
   ## Unsafe: the pointer can outlive the input tensor
   ## For optimization purposes, Laser will hint the compiler that
   ## while the pointer is valid, all data accesses will be through it (no aliasing)
   ## and that the data is aligned by LASER_MEM_ALIGN (default 64).
   unsafe_raw_data_impl()
 
-func unsafe_raw_data*[T](t: var Tensor[T], aligned: static bool = true): RawMutableView[T] {.inline, hot, gcc_pure.} =
+func unsafe_raw_data*[T](t: var Tensor[T], aligned: static bool = true): RawMutableView[T] {.inline.} =
   ## Unsafe: the pointer can outlive the input tensor
   ## For optimization purposes, Laser will hint the compiler that
   ## while the pointer is valid, all data accesses will be through it (no aliasing)
@@ -102,8 +101,11 @@ macro raw_data_unaligned*(body: untyped): untyped =
       {.noRewrite.}: unsafe_raw_data(x, false)
     body
 
-func `[]`*[T](v: RawImmutableView[T], idx: int): T {.inline, hot, gcc_pure.}=
+func `[]`*[T](v: RawImmutableView[T], idx: int): T {.inline.}=
   distinctBase(type v)(v)[idx]
 
-func `[]`*[T](v: RawMutableView[T], idx: int): var T {.inline, hot, gcc_pure.}=
+func `[]`*[T](v: RawMutableView[T], idx: int): var T {.inline.}=
   distinctBase(type v)(v)[idx]
+
+func `[]=`*[T](v: RawMutableView[T], idx: int, val: T) {.inline.}=
+  distinctBase(type v)(v)[idx] = val
