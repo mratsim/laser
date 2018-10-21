@@ -83,7 +83,7 @@ func unsafe_raw_data*[T](t: var Tensor[T], aligned: static bool = true): RawMuta
 
 macro raw_data_unaligned*(body: untyped): untyped =
   ## Within this code block, all raw data accesses will not be
-  ## assumed aligned by default (LASER_MEM_ALIGN is 6 by default).
+  ## assumed aligned by default (LASER_MEM_ALIGN is 64 by default).
   ## Use this when interfacing with external buffers of unknown alignment.
   ##
   ## ⚠ Warning:
