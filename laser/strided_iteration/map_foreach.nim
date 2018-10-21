@@ -93,9 +93,9 @@ proc initForEach(
     aliases.add alias
     aliases_stmt.add quote do:
       when isVar(`tensor`):
-        var `alias` = `tensor`
+        var `alias`{.align_variable.} = `tensor`
       else:
-        let `alias` = `tensor`
+        let `alias`{.align_variable.} = `tensor`
 
     let raw_ptr_i = genSym(nskLet, $tensor & "_raw_data" & $i & '_')
     raw_ptrs_stmt.add quote do:

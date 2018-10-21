@@ -13,6 +13,10 @@ template withCompilerOptimHints*() =
   # and https://gcc.gnu.org/onlinedocs/gcc/Common-Variable-Attributes.html#Common-Variable-Attributes
 
   # Variable. Variable is created aligned by LASER_MEM_ALIGN.
+  # This is useful to ensure an object can be loaded
+  # in a minimum amount of cache lines load
+  # For example, the stack part of tensors are 128 bytes and can be loaded in 2 cache lines
+  # but would require 3 loads if they are misaligned.
   {.pragma: align_variable, codegenDecl: "$# $# __attribute__((aligned(" & $LASER_MEM_ALIGN & ")))".}
 
   # Variable. Pointer does not alias any existing valid pointers.
