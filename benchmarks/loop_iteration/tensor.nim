@@ -48,13 +48,6 @@ func newTensor*[T](shape: Metadata): Tensor[T] =
   tensor(result, shape)
   result.storage.data = newSeq[T](shape.product)
 
-proc rand[T: object|tuple](max: T): T =
-  ## A generic random function for any stack object or tuple
-  ## that initialize all fields randomly
-  result = max
-  for field in result.fields:
-    field = rand(field)
-
 proc randomTensor*[T](shape: openarray[int], max: T): Tensor[T] =
   tensor(result, shape)
   result.storage.data = newSeqWith(shape.product, T(rand(max)))
