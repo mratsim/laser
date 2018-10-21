@@ -82,8 +82,19 @@ template withCompilerOptimHints*() =
 
 const withBuiltins = defined(gcc) or defined(clang) or defined(icc)
 
+type
+  PrefetchRW* {.size: cint.sizeof.} = enum
+    Read = 0
+    Write = 1
+  PrefetchLocality* {.size: cint.sizeof.} = enum
+    NoTemporalLocality = 0 # Data can be discarded from CPU cache after access
+    LowTemporalLocality = 1
+    ModerateTemporalLocality = 2
+    HighTemporalLocality = 3 # Data should be left in all levels of cache possible
+
 when withBuiltins:
-  proc builtin_assume_aligned[T](data: ptr T, n: csize): ptr T {.importc: "__builtin_assume_aligned", noDecl.}
+  proc builtin_assume_aligned(data: pointer, alignment: static csize): pointer {.importc: "__builtin_assume_aligned", noDecl.}
+  proc builtin_prefetch(data: pointer, rw: static PrefetchRW, locality: static PrefetchLocality) {.importc: "__builtin_prefetch", noDecl.}
 
 when defined(cpp):
   proc static_cast[T](input: T): T
@@ -96,6 +107,12 @@ template assume_aligned*[T](data: ptr T): ptr T =
     builtin_assume_aligned(data, LASER_MEM_ALIGN)
   else:
     data
+
+template prefetch*[T](data: ptr T, rw: static PrefetchRW, locality: static PrefetchLocality) =
+  when withBuiltins:
+    builtin_prefetch(data, rw, locality)
+  else:
+    discard
 
 template pragma_ivdep() =
   ## Tell the compiler to ignore unproven loop dependencies
