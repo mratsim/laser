@@ -45,11 +45,11 @@ when defined(cpp):
   proc static_cast[T](input: T): T
     {.importcpp: "static_cast<'0>(@)".}
 
-template assume_aligned*[T](data: ptr T): ptr T =
+template assume_aligned*[T](data: ptr T, alignment: static int = LASER_MEM_ALIGN): ptr T =
   when defined(cpp) and withBuiltins: # builtin_assume_aligned returns void pointers, this does not compile in C++, they must all be typed
-    static_cast builtin_assume_aligned(data, LASER_MEM_ALIGN)
+    static_cast builtin_assume_aligned(data, alignment)
   elif withBuiltins:
-    cast[ptr T](builtin_assume_aligned(data, LASER_MEM_ALIGN))
+    cast[ptr T](builtin_assume_aligned(data, alignment))
   else:
     data
 
@@ -129,10 +129,9 @@ template withCompilerFunctionHints() =
   # and https://www.agner.org/optimize/vectorclass.pdf "Using multiple accumulators"
   #
   # FP addition has a latency of 3~5 clock cycles, i.e. the result cannot be reused for that much time.
-  # But the throughput is 1 FP add per clock cycle (and even 2 per clock cycle for Haswell)
+  # But the throughput is 1 FP add per clock cycle (and even 2 per clock cycle for Skylake)
   # So we need to use extra accumulators to fully utilize the FP throughput despite FP latency.
   # On Skylake, all FP latencies are 4: https://www.agner.org/optimize/blog/read.php?i=415
-  # so ideally 8 accumulators are needed (assuming we don't starve of registers).
   #
   # Note that this is per CPU cores, each core needs its own "global CPU accumulator" to combat
   # false sharing when multithreading.

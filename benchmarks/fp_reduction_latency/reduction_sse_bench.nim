@@ -72,6 +72,7 @@ proc warmup() =
   echo &"Warmup: {stop - start:>4.4f} s, result {foo} (displayed to avoid compiler optimizing warmup away)"
 
 template printStats(name: string, accum: float32) {.dirty.} =
+  echo "\n" & name & " - float32"
   echo &"Collected {stats.n} samples in {global_stop - global_start:>4.3f} seconds"
   echo &"Average time: {stats.mean * 1000 :>4.3f} ms"
   echo &"Stddev  time: {stats.standardDeviationS * 1000 :>4.3f} ms"

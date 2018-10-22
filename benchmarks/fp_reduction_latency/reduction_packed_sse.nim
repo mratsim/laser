@@ -5,7 +5,8 @@ import
   ../../laser/strided_iteration/map_foreach,
   ../../laser/tensor/[allocator, datatypes, initialization],
   ../../laser/[compiler_optim_hints, dynamic_stack_arrays],
-  ../../laser/simd
+  ../../laser/simd,
+  ../../laser/hpc_kernels/sum_sse3
 
 withCompilerOptimHints()
 
@@ -62,6 +63,7 @@ proc warmup() =
   echo &"Warmup: {stop - start:>4.4f} s, result {foo} (displayed to avoid compiler optimizing warmup away)"
 
 template printStats(name: string, accum: float32) {.dirty.} =
+  echo "\n" & name & " - float32"
   echo &"Collected {stats.n} samples in {global_stop - global_start:>4.3f} seconds"
   echo &"Average time: {stats.mean * 1000 :>4.3f} ms"
   echo &"Stddev  time: {stats.standardDeviationS * 1000 :>4.3f} ms"
@@ -134,6 +136,11 @@ proc mainBench_8_packed_sse_accums(a: Tensor[float32], nb_samples: int) =
     accum += accum0
     accum += accum1
 
+proc mainBench_12_packed_sse_prod(a: Tensor[float32], nb_samples: int) =
+  var accum = 0'f32
+  bench("Reduction - packed 12 accumulators SSE - prod impl", accum):
+    accum += sum_sse3(a.storage.raw_data, a.size)
+
 proc mainBench_8_packed_avx_accums(a: Tensor[float32], nb_samples: int) =
   var accum = 0'f32
   bench("Reduction - packed 8 accumulators AVX", accum):
@@ -180,6 +187,7 @@ when isMainModule:
       a = randomTensor([10000, 1000], -1.0'f32 .. 1.0'f32)
     mainBench_4_packed_sse_accums(a, 1000)
     mainBench_8_packed_sse_accums(a, 1000)
+    mainBench_12_packed_sse_prod(a, 1000)
 
     {.passC: "-mavx".}
     mainBench_8_packed_avx_accums(a, 1000)
