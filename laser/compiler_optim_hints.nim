@@ -128,7 +128,7 @@ template withCompilerFunctionHints() =
   # See : https://stackoverflow.com/questions/39095993/does-each-floating-point-operation-take-the-same-time
   # and https://www.agner.org/optimize/vectorclass.pdf "Using multiple accumulators"
   #
-  # FP addition as a latency of 3~5 clock cycles, i.e. the result cannot be reused for that much time.
+  # FP addition has a latency of 3~5 clock cycles, i.e. the result cannot be reused for that much time.
   # But the throughput is 1 FP add per clock cycle (and even 2 per clock cycle for Haswell)
   # So we need to use extra accumulators to fully utilize the FP throughput despite FP latency.
   # On Skylake, all FP latencies are 4: https://www.agner.org/optimize/blog/read.php?i=415
