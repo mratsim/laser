@@ -684,3 +684,313 @@ when isMainModule:
 
 # Display output[[0,0]] to make sure it's not optimized away
 # -356453.53125
+
+#############################################################
+# Assembly generated in march=native
+
+# 10.75 s   20.8%	10.75 s	 	     mainBench1_accum_simple_QKAy4s19aaqk31KNFq64WfA
+# 10.69 s   20.7%	10.68 s	 	     mainBench1_accum_macro_QKAy4s19aaqk31KNFq64WfA_2
+# 5.72 s   11.0%	5.71 s	 	     mainBench2_accum_simple_QKAy4s19aaqk31KNFq64WfA_3
+# 4.71 s    9.1%	4.71 s	 	     mainBench4_accum_simple_QKAy4s19aaqk31KNFq64WfA_5
+# 4.46 s    8.6%	4.46 s	 	     mainBench3_accum_simple_QKAy4s19aaqk31KNFq64WfA_4
+# 3.76 s    7.3%	3.76 s	 	     mainBench8_accum_simple_QKAy4s19aaqk31KNFq64WfA_9
+# 3.52 s    6.8%	3.52 s	 	     mainBench6_accum_simple_QKAy4s19aaqk31KNFq64WfA_7
+# 3.33 s    6.4%	3.33 s	 	     mainBench7_accum_simple_QKAy4s19aaqk31KNFq64WfA_8
+# 3.32 s    6.4%	3.32 s	 	     mainBench5_accum_simple_QKAy4s19aaqk31KNFq64WfA_6
+
+## mainBench_1_accum_simple
+# +0xd5	    nopw                %cs:(%rax,%rax)
+# +0xe0	        vaddss              (%rdx,%rsi,4), %xmm0, %xmm0
+# +0xe5	        vaddss              4(%rdx,%rsi,4), %xmm0, %xmm0
+# +0xeb	        vaddss              8(%rdx,%rsi,4), %xmm0, %xmm0
+# +0xf1	        vaddss              12(%rdx,%rsi,4), %xmm0, %xmm0
+# +0xf7	        vaddss              16(%rdx,%rsi,4), %xmm0, %xmm0
+# +0xfd	        vaddss              20(%rdx,%rsi,4), %xmm0, %xmm0
+# +0x103	      vaddss              24(%rdx,%rsi,4), %xmm0, %xmm0
+# +0x109	      vaddss              28(%rdx,%rsi,4), %xmm0, %xmm0
+# +0x10f	      addq                $8, %rsi
+# +0x113	      cmpq                %rsi, %rax
+# +0x116	      jne                 "mainBench1_accum_simple_QKAy4s19aaqk31KNFq64WfA+0xe0"
+
+## mainBench_1_accum_macro
+# +0x12e	    xorl                %edx, %edx
+# +0x130	        vaddss              -28(%rsi,%rdx,4), %xmm0, %xmm0
+# +0x136	        vaddss              -24(%rsi,%rdx,4), %xmm0, %xmm0
+# +0x13c	        vaddss              -20(%rsi,%rdx,4), %xmm0, %xmm0
+# +0x142	        vaddss              -16(%rsi,%rdx,4), %xmm0, %xmm0
+# +0x148	        vaddss              -12(%rsi,%rdx,4), %xmm0, %xmm0
+# +0x14e	        vaddss              -8(%rsi,%rdx,4), %xmm0, %xmm0
+# +0x154	        vaddss              -4(%rsi,%rdx,4), %xmm0, %xmm0
+# +0x15a	        vaddss              (%rsi,%rdx,4), %xmm0, %xmm0
+# +0x15f	        addq                $8, %rdx
+# +0x163	        cmpq                %rdx, %rax
+# +0x166	        jne                 "mainBench1_accum_macro_QKAy4s19aaqk31KNFq64WfA_2+0x130"
+
+## mainBench_2_accum_simple
+# +0x119	    nopl                (%rax)
+# +0x120	        vmovsd              (%rdi,%rdx,4), %xmm0
+# +0x125	        vaddps              %xmm0, %xmm1, %xmm0
+# +0x129	        vmovsd              8(%rdi,%rdx,4), %xmm1
+# +0x12f	        vaddps              %xmm1, %xmm0, %xmm0
+# +0x133	        vmovsd              16(%rdi,%rdx,4), %xmm1
+# +0x139	        vaddps              %xmm1, %xmm0, %xmm0
+# +0x13d	        vmovsd              24(%rdi,%rdx,4), %xmm1
+# +0x143	        vaddps              %xmm1, %xmm0, %xmm0
+# +0x147	        vmovsd              32(%rdi,%rdx,4), %xmm1
+# +0x14d	        vaddps              %xmm1, %xmm0, %xmm0
+# +0x151	        vmovsd              40(%rdi,%rdx,4), %xmm1
+# +0x157	        vaddps              %xmm1, %xmm0, %xmm0
+# +0x15b	        vmovsd              48(%rdi,%rdx,4), %xmm1
+# +0x161	        vaddps              %xmm1, %xmm0, %xmm0
+# +0x165	        vmovsd              56(%rdi,%rdx,4), %xmm1
+# +0x16b	        vaddps              %xmm1, %xmm0, %xmm1
+# +0x16f	        addq                $16, %rdx
+# +0x173	        addq                $8, %rbx
+# +0x177	        jne                 "mainBench2_accum_simple_QKAy4s19aaqk31KNFq64WfA_3+0x120"
+
+## mainBench_3_accum_simple
+# +0xbe	    nop
+# +0xc0	        vaddss              (%rsi,%rdi,4), %xmm2, %xmm2
+# +0xc5	        vaddss              4(%rsi,%rdi,4), %xmm1, %xmm1
+# +0xcb	        vaddss              8(%rsi,%rdi,4), %xmm0, %xmm0
+# +0xd1	        addq                $3, %rdi
+# +0xd5	        cmpq                %rax, %rdi
+# +0xd8	        jl                  "mainBench3_accum_simple_QKAy4s19aaqk31KNFq64WfA_4+0xc0"
+
+## mainBench_4_accum_simple
+# +0x125	    nopw                %cs:(%rax,%rax)
+# +0x130	        vaddss              (%rsi,%rdi,4), %xmm3, %xmm3
+# +0x135	        vaddss              4(%rsi,%rdi,4), %xmm2, %xmm2
+# +0x13b	        vaddss              8(%rsi,%rdi,4), %xmm1, %xmm1
+# +0x141	        vaddss              12(%rsi,%rdi,4), %xmm0, %xmm0
+# +0x147	        vaddss              16(%rsi,%rdi,4), %xmm3, %xmm3
+# +0x14d	        vaddss              20(%rsi,%rdi,4), %xmm2, %xmm2
+# +0x153	        vaddss              24(%rsi,%rdi,4), %xmm1, %xmm1
+# +0x159	        vaddss              28(%rsi,%rdi,4), %xmm0, %xmm0
+# +0x15f	        vaddss              32(%rsi,%rdi,4), %xmm3, %xmm3
+# +0x165	        vaddss              36(%rsi,%rdi,4), %xmm2, %xmm2
+# +0x16b	        vaddss              40(%rsi,%rdi,4), %xmm1, %xmm1
+# +0x171	        vaddss              44(%rsi,%rdi,4), %xmm0, %xmm0
+# +0x177	        vaddss              48(%rsi,%rdi,4), %xmm3, %xmm3
+# +0x17d	        vaddss              52(%rsi,%rdi,4), %xmm2, %xmm2
+# +0x183	        vaddss              56(%rsi,%rdi,4), %xmm1, %xmm1
+# +0x189	        vaddss              60(%rsi,%rdi,4), %xmm0, %xmm0
+# +0x18f	        addq                $16, %rdi
+# +0x193	        addq                $4, %rbx
+# +0x197	        jne                 "mainBench4_accum_simple_QKAy4s19aaqk31KNFq64WfA_5+0x130"
+
+## mainBench_5_accum_simple (fastest)
+# +0xbd	    nopl                (%rax)
+# +0xc0	        vaddss              (%rsi,%rdi,4), %xmm3, %xmm3
+# +0xc5	        vaddps              4(%rsi,%rdi,4), %xmm0, %xmm0
+# +0xcb	        addq                $5, %rdi
+# +0xcf	        cmpq                %rax, %rdi
+# +0xd2	        jl                  "mainBench5_accum_simple_QKAy4s19aaqk31KNFq64WfA_6+0xc0"
+
+## mainBench_6_accum_simple (3rd fastest)
+# +0xc1	    nopw                %cs:(%rax,%rax)
+# +0xd0	        vaddss              (%rsi,%rdi,4), %xmm2, %xmm2
+# +0xd5	        vaddps              4(%rsi,%rdi,4), %xmm0, %xmm0
+# +0xdb	        vaddss              20(%rsi,%rdi,4), %xmm1, %xmm1
+# +0xe1	        addq                $6, %rdi
+# +0xe5	        cmpq                %rax, %rdi
+# +0xe8	        jl                  "mainBench6_accum_simple_QKAy4s19aaqk31KNFq64WfA_7+0xd0"
+
+## mainBench_7_accum_simple (2nd fastest)
+# +0xc8	    nopl                (%rax,%rax)
+# +0xd0	        vaddss              (%rsi,%rdi,4), %xmm3, %xmm3
+# +0xd5	        vaddps              4(%rsi,%rdi,4), %xmm0, %xmm0
+# +0xdb	        vmovsd              20(%rsi,%rdi,4), %xmm2
+# +0xe1	        vaddps              %xmm2, %xmm1, %xmm1
+# +0xe5	        addq                $7, %rdi
+# +0xe9	        cmpq                %rax, %rdi
+# +0xec	        jl                  "mainBench7_accum_simple_QKAy4s19aaqk31KNFq64WfA_8+0xd0"
+
+## mainBench_8_accum_simple (4th fastest)
+# +0xdb	    nopl                (%rax,%rax)
+# +0xe0	        vaddss              (%rsi,%rdi,4), %xmm4, %xmm4
+# +0xe5	        vaddps              4(%rsi,%rdi,4), %xmm0, %xmm0
+# +0xeb	        vaddss              20(%rsi,%rdi,4), %xmm3, %xmm3
+# +0xf1	        vaddss              24(%rsi,%rdi,4), %xmm2, %xmm2
+# +0xf7	        vaddss              28(%rsi,%rdi,4), %xmm1, %xmm1
+# +0xfd	        vaddss              32(%rsi,%rdi,4), %xmm4, %xmm4
+# +0x103	      vaddps              36(%rsi,%rdi,4), %xmm0, %xmm0
+# +0x109	      vaddss              52(%rsi,%rdi,4), %xmm3, %xmm3
+# +0x10f	      vaddss              56(%rsi,%rdi,4), %xmm2, %xmm2
+# +0x115	      vaddss              60(%rsi,%rdi,4), %xmm1, %xmm1
+# +0x11b	      addq                $16, %rdi
+# +0x11f	      addq                $2, %rdx
+# +0x123	      jne                 "mainBench8_accum_simple_QKAy4s19aaqk31KNFq64WfA_9+0xe0"
+
+#############################################################
+# Assembly generated in fastmath
+
+# 3.78 s   11.6%	3.77 s	 	     mainBench8_accum_simple_QKAy4s19aaqk31KNFq64WfA_9
+# 3.68 s   11.3%	3.68 s	 	     mainBench3_accum_simple_QKAy4s19aaqk31KNFq64WfA_4
+# 3.63 s   11.2%	3.62 s	 	     mainBench5_accum_simple_QKAy4s19aaqk31KNFq64WfA_6
+# 3.63 s   11.2%	3.62 s	 	     mainBench6_accum_simple_QKAy4s19aaqk31KNFq64WfA_7
+# 3.54 s   10.9%	3.53 s	 	     mainBench7_accum_simple_QKAy4s19aaqk31KNFq64WfA_8
+# 3.46 s   10.6%	3.45 s	 	     mainBench4_accum_simple_QKAy4s19aaqk31KNFq64WfA_5
+# 3.19 s    9.8%	3.18 s	 	     mainBench2_accum_simple_QKAy4s19aaqk31KNFq64WfA_3
+# 3.14 s    9.6%	3.13 s	 	     mainBench1_accum_simple_QKAy4s19aaqk31KNFq64WfA
+# 3.05 s    9.4%	3.05 s	 	     mainBench1_accum_macro_QKAy4s19aaqk31KNFq64WfA_2
+
+## mainBench_5_accum_simple
+# +0x171	    nopw                %cs:(%rax,%rax)
+# +0x180	        movaps              %xmm14, -368(%rbp)
+# +0x188	        movaps              %xmm6, -384(%rbp)
+# +0x18f	        movaps              %xmm4, -400(%rbp)
+# +0x196	        movaps              %xmm15, -416(%rbp)
+# +0x19e	        movaps              %xmm12, -432(%rbp)
+# +0x1a6	        movaps              %xmm0, -448(%rbp)
+# +0x1ad	        movupd              64(%rbx), %xmm10
+# +0x1b3	        movapd              %xmm10, -352(%rbp)
+# +0x1bc	        movupd              (%rbx), %xmm12
+# +0x1c1	        movups              16(%rbx), %xmm6
+# +0x1c5	        movupd              32(%rbx), %xmm13
+# +0x1cb	        movups              48(%rbx), %xmm7
+# +0x1cf	        movaps              %xmm7, -288(%rbp)
+# +0x1d6	        movupd              144(%rbx), %xmm11
+# +0x1df	        movapd              %xmm11, -272(%rbp)
+# +0x1e8	        movups              96(%rbx), %xmm14
+# +0x1ed	        movupd              80(%rbx), %xmm4
+# +0x1f2	        movups              128(%rbx), %xmm1
+# +0x1f9	        movupd              112(%rbx), %xmm15
+# +0x1ff	        movapd              %xmm12, %xmm3
+# +0x204	        movapd              %xmm12, %xmm0
+# +0x209	        movapd              %xmm13, %xmm8
+# +0x20e	        blendpd             $2, %xmm12, %xmm8
+# +0x215	        blendps             $2, %xmm6, %xmm12
+# +0x21c	        blendpd             $2, %xmm13, %xmm10
+# +0x223	        movapd              %xmm10, -320(%rbp)
+# +0x22c	        blendpd             $2, %xmm6, %xmm3
+# +0x232	        movapd              %xmm3, -304(%rbp)
+# +0x23a	        blendps             $8, %xmm6, %xmm0
+# +0x240	        movaps              %xmm0, -336(%rbp)
+# +0x247	        movaps              %xmm6, %xmm10
+# +0x24b	        blendps             $2, %xmm13, %xmm10
+# +0x252	        blendps             $8, %xmm7, %xmm13
+# +0x259	        blendpd             $2, %xmm13, %xmm12
+# +0x260	        movaps              -112(%rbp), %xmm0
+# +0x264	        addps               %xmm12, %xmm0
+# +0x268	        movaps              %xmm0, -112(%rbp)
+# +0x26c	        movapd              %xmm4, %xmm3
+# +0x270	        movapd              %xmm4, %xmm12
+# +0x275	        movapd              %xmm15, %xmm13
+# +0x27a	        blendpd             $2, %xmm4, %xmm13
+# +0x281	        movapd              %xmm4, %xmm9
+# +0x286	        blendps             $2, %xmm14, %xmm9
+# +0x28d	        movapd              %xmm11, %xmm6
+# +0x292	        blendpd             $2, %xmm15, %xmm6
+# +0x299	        blendpd             $2, %xmm14, %xmm3
+# +0x2a0	        blendps             $8, %xmm14, %xmm12
+# +0x2a7	        blendps             $2, %xmm15, %xmm14
+# +0x2ae	        movaps              %xmm14, %xmm11
+# +0x2b2	        movaps              %xmm15, %xmm7
+# +0x2b6	        blendps             $8, %xmm1, %xmm7
+# +0x2bc	        blendpd             $2, %xmm7, %xmm9
+# +0x2c3	        movaps              -416(%rbp), %xmm15
+# +0x2cb	        movaps              -176(%rbp), %xmm4
+# +0x2d2	        addps               %xmm9, %xmm4
+# +0x2d6	        movaps              %xmm4, -176(%rbp)
+# +0x2dd	        movaps              -368(%rbp), %xmm14
+# +0x2e5	        movaps              -400(%rbp), %xmm4
+# +0x2ec	        movaps              -304(%rbp), %xmm7
+# +0x2f3	        shufps              $57, -320(%rbp), %xmm7
+# +0x2fb	        movaps              -432(%rbp), %xmm9
+# +0x303	        addps               %xmm7, %xmm5
+# +0x306	        shufps              $57, %xmm6, %xmm3
+# +0x30a	        addps               %xmm3, %xmm2
+# +0x30d	        movaps              -288(%rbp), %xmm6
+# +0x314	        movaps              %xmm6, %xmm3
+# +0x317	        movaps              -352(%rbp), %xmm0
+# +0x31e	        blendps             $2, %xmm0, %xmm3
+# +0x324	        movapd              -336(%rbp), %xmm7
+# +0x32c	        shufpd              $1, %xmm3, %xmm7
+# +0x331	        addps               %xmm7, %xmm14
+# +0x335	        movaps              %xmm1, %xmm3
+# +0x338	        movaps              -272(%rbp), %xmm7
+# +0x33f	        blendps             $2, %xmm7, %xmm3
+# +0x345	        shufpd              $1, %xmm3, %xmm12
+# +0x34b	        addps               %xmm12, %xmm4
+# +0x34f	        movaps              %xmm6, %xmm3
+# +0x352	        blendpd             $2, %xmm0, %xmm3
+# +0x358	        shufps              $147, %xmm3, %xmm8
+# +0x35d	        addps               %xmm8, %xmm15
+# +0x361	        movaps              %xmm1, %xmm3
+# +0x364	        blendpd             $2, %xmm7, %xmm3
+# +0x36a	        shufps              $147, %xmm3, %xmm13
+# +0x36f	        movaps              -384(%rbp), %xmm3
+# +0x376	        addps               %xmm13, %xmm9
+# +0x37a	        movaps              %xmm9, %xmm12
+# +0x37e	        blendps             $8, %xmm0, %xmm6
+# +0x384	        blendpd             $2, %xmm6, %xmm10
+# +0x38b	        addps               %xmm10, %xmm3
+# +0x38f	        movaps              %xmm3, %xmm6
+# +0x392	        blendps             $8, %xmm7, %xmm1
+# +0x398	        blendpd             $2, %xmm1, %xmm11
+# +0x39f	        movaps              -448(%rbp), %xmm0
+# +0x3a6	        addps               %xmm11, %xmm0
+# +0x3aa	        addq                $160, %rbx
+# +0x3b1	        addq                $-8, %rdi
+# +0x3b5	        jne                 "mainBench5_accum_simple_QKAy4s19aaqk31KNFq64WfA_6+0x180"
+
+
+## mainBench_1_accum_macro (fastest)
+# +0x1c8	    nopl                (%rax,%rax)
+# +0x1d0	        movups              -112(%rdi,%rsi,4), %xmm1
+# +0x1d5	        addps               %xmm2, %xmm1
+# +0x1d8	        movups              -96(%rdi,%rsi,4), %xmm2
+# +0x1dd	        addps               %xmm0, %xmm2
+# +0x1e0	        movups              -80(%rdi,%rsi,4), %xmm0
+# +0x1e5	        movups              -64(%rdi,%rsi,4), %xmm3
+# +0x1ea	        movups              -48(%rdi,%rsi,4), %xmm4
+# +0x1ef	        addps               %xmm0, %xmm4
+# +0x1f2	        addps               %xmm1, %xmm4
+# +0x1f5	        movups              -32(%rdi,%rsi,4), %xmm1
+# +0x1fa	        addps               %xmm3, %xmm1
+# +0x1fd	        addps               %xmm2, %xmm1
+# +0x200	        movups              -16(%rdi,%rsi,4), %xmm2
+# +0x205	        addps               %xmm4, %xmm2
+# +0x208	        movups              (%rdi,%rsi,4), %xmm0
+# +0x20c	        addps               %xmm1, %xmm0
+# +0x20f	        addq                $32, %rsi
+# +0x213	        addq                $4, %rcx
+# +0x217	        jne                 "mainBench1_accum_macro_QKAy4s19aaqk31KNFq64WfA_2+0x1d0"
+
+#############################################################
+# Assembly generated in fastmath + march=native
+
+# 3.78 s   11.6%	3.77 s	 	     mainBench8_accum_simple_QKAy4s19aaqk31KNFq64WfA_9
+# 3.68 s   11.3%	3.68 s	 	     mainBench3_accum_simple_QKAy4s19aaqk31KNFq64WfA_4
+# 3.63 s   11.2%	3.62 s	 	     mainBench5_accum_simple_QKAy4s19aaqk31KNFq64WfA_6
+# 3.63 s   11.2%	3.62 s	 	     mainBench6_accum_simple_QKAy4s19aaqk31KNFq64WfA_7
+# 3.54 s   10.9%	3.53 s	 	     mainBench7_accum_simple_QKAy4s19aaqk31KNFq64WfA_8
+# 3.46 s   10.6%	3.45 s	 	     mainBench4_accum_simple_QKAy4s19aaqk31KNFq64WfA_5
+# 3.19 s    9.8%	3.18 s	 	     mainBench2_accum_simple_QKAy4s19aaqk31KNFq64WfA_3
+# 3.14 s    9.6%	3.13 s	 	     mainBench1_accum_simple_QKAy4s19aaqk31KNFq64WfA
+# 3.05 s    9.4%	3.05 s	 	     mainBench1_accum_macro_QKAy4s19aaqk31KNFq64WfA_2
+
+## mainBench_1_accum_macro
+
+# +0x177	    nopw                (%rax,%rax)
+# +0x180	        vaddps              -480(%rdi,%rsi,4), %ymm0, %ymm0
+# +0x189	        vaddps              -448(%rdi,%rsi,4), %ymm1, %ymm1
+# +0x192	        vaddps              -416(%rdi,%rsi,4), %ymm2, %ymm2
+# +0x19b	        vaddps              -384(%rdi,%rsi,4), %ymm3, %ymm3
+# +0x1a4	        vaddps              -352(%rdi,%rsi,4), %ymm0, %ymm0
+# +0x1ad	        vaddps              -320(%rdi,%rsi,4), %ymm1, %ymm1
+# +0x1b6	        vaddps              -288(%rdi,%rsi,4), %ymm2, %ymm2
+# +0x1bf	        vaddps              -256(%rdi,%rsi,4), %ymm3, %ymm3
+# +0x1c8	        vaddps              -224(%rdi,%rsi,4), %ymm0, %ymm0
+# +0x1d1	        vaddps              -192(%rdi,%rsi,4), %ymm1, %ymm1
+# +0x1da	        vaddps              -160(%rdi,%rsi,4), %ymm2, %ymm2
+# +0x1e3	        vaddps              -128(%rdi,%rsi,4), %ymm3, %ymm3
+# +0x1e9	        vaddps              -96(%rdi,%rsi,4), %ymm0, %ymm0
+# +0x1ef	        vaddps              -64(%rdi,%rsi,4), %ymm1, %ymm1
+# +0x1f5	        vaddps              -32(%rdi,%rsi,4), %ymm2, %ymm2
+# +0x1fb	        vaddps              (%rdi,%rsi,4), %ymm3, %ymm3
+# +0x200	        subq                $-128, %rsi
+# +0x204	        addq                $4, %rbx
+# +0x208	        jne                 "mainBench1_accum_macro_QKAy4s19aaqk31KNFq64WfA_2+0x180"
+
