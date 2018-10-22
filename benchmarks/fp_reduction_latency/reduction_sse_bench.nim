@@ -57,7 +57,7 @@ func `[]`*[T](t: Tensor[T], idx: varargs[int]): T {.inline.}=
 
 ################################################################
 
-import random, times, stats, strformat
+import random, times, stats, strformat, math
 
 proc warmup() =
   # Warmup - make sure cpu is on max perf
@@ -72,13 +72,13 @@ proc warmup() =
   echo &"Warmup: {stop - start:>4.4f} s, result {foo} (displayed to avoid compiler optimizing warmup away)"
 
 template printStats(name: string, accum: float32) {.dirty.} =
-  echo "\n" & name & " - float64"
   echo &"Collected {stats.n} samples in {global_stop - global_start:>4.3f} seconds"
-  echo &"Average time: {stats.mean * 1000 :>4.3f}ms"
-  echo &"Stddev  time: {stats.standardDeviationS * 1000 :>4.3f}ms"
-  echo &"Min     time: {stats.min * 1000 :>4.3f}ms"
-  echo &"Max     time: {stats.max * 1000 :>4.3f}ms"
-  echo "\nDisplay output[[0,0]] to make sure it's not optimized away"
+  echo &"Average time: {stats.mean * 1000 :>4.3f} ms"
+  echo &"Stddev  time: {stats.standardDeviationS * 1000 :>4.3f} ms"
+  echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
+  echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
+  echo &"Theoretical perf: {a.size.float / (float(10^6) * stats.mean):>4.3f} MFLOP/s"
+  echo "\nDisplay sum of samples sums to make sure it's not optimized away"
   echo accum # Prevents compiler from optimizing stuff away
 
 template bench(name: string, accum: var float32, body: untyped) {.dirty.}=

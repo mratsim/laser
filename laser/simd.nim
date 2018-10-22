@@ -34,6 +34,8 @@ when defined(i386) or defined(amd64):
     ##   { A0, A1, A2, A3 }, { B0, B1, B2, B3 }
     ## Result:
     ##   { A0 + B0, A1, A2, A3 }
+
+  ##SSE3
   func mm_movehdup_ps*(a: m128): m128 {.importc: "_mm_movehdup_ps", x86.}
     ## Duplicates high parts of the input
     ## Input:
