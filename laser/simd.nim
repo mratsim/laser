@@ -9,16 +9,16 @@ when defined(i386) or defined(amd64):
   #   - https://www.agner.org/optimize/instruction_tables.pdf
 
   when defined(vcc):
-    {.pragma: x86_type, header:"<intrin.h>".}
+    {.pragma: x86_type, byCopy, header:"<intrin.h>".}
     {.pragma: x86, noDecl, header:"<intrin.h>".}
   else:
-    {.pragma: x86_type, header:"<x86intrin.h>".}
+    {.pragma: x86_type, byCopy, header:"<x86intrin.h>".}
     {.pragma: x86, noDecl, header:"<x86intrin.h>".}
   type
     m128* {.importc: "__m128", x86_type.} = object
       f0, f1, f2, f3: float32
     m128d* {.importc: "__m128d", x86_type.} = object
-      f0, f1: float64
+      d0, d1: float64
 
   ## SSE
   # Reminder: x86 is little-endian, order is [low part, high part]
@@ -57,3 +57,23 @@ when defined(i386) or defined(amd64):
     ##   { A0, A1, A2, A3 }
     ## Result:
     ##   A0
+
+  ## AVX
+  when defined(amd64):
+    type
+      m256* {.importc: "__m256", x86_type.} = object
+        f0, f1, f2, f3, f4, f5, f6, f7: float32
+      m256d* {.importc: "__m256d", x86_type.} = object
+        f0, f1, f2, f3: float64
+
+  func mm256_setzero_ps*(): m256 {.importc: "_mm256_setzero_ps", x86.}
+    ## [float32 0, 0, 0, 0]
+  func mm256_load_ps*(aligned_data: ptr float32): m256 {.importc: "_mm256_load_ps", x86.}
+    ## Load 4 packed float32 in __m128. They must be aligned on 16-byte boundary.
+  func mm256_add_ps*(a, b: m256): m256 {.importc: "_mm256_add_ps", x86.}
+    ## Vector addition
+  func mm256_castps256_ps128*(a: m256): m128 {.importc: "_mm256_castps256_ps128", x86.}
+    ## Returns the lower part of a m256 in a m128
+  func mm256_extractf128_ps*(v: m256, m: cint{lit}): m128 {.importc: "_mm256_extractf128_ps", x86.}
+    ## Extracts the low part (m = 0) or high part (m = 1) of a m256 into a m128
+    ## m must be a literal
