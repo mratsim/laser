@@ -6,7 +6,7 @@
 import
   ../openmp/[omp_parallel, omp_tuning],
   ../compiler_optim_hints,
-  ../strided_iteration/map_forEach,
+  ../strided_iteration/map_foreach,
   ./datatypes, ./allocator,
   typetraits
 
