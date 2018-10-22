@@ -37,13 +37,6 @@ proc newTensor*[T](shape: Metadata): Tensor[T] =
   allocCpuStorage(result.storage, size)
   setZero(result, check_contiguous = false)
 
-proc randomTensor*[T](shape: openarray[int], max: T): Tensor[T] =
-  var size: int
-  initTensorMetadata(result, size, shape)
-  allocCpuStorage(result.storage, size)
-  forEachContiguousSerial val in result:
-    val = T(rand(max))
-
 proc randomTensor*[T](shape: openarray[int], valrange: Slice[T]): Tensor[T] =
   var size: int
   initTensorMetadata(result, size, shape)
