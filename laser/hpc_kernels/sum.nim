@@ -34,6 +34,10 @@ func sum_kernel*(data: ptr UncheckedArray[float32], len: Natural): float32 =
   ## Warning:
   ##   This kernel considers floating-point addition commutative
   ##   and will reorder additions.
+
+  # Note that the kernel is memory-bandwith bound once the
+  # CPU pipeline is saturated. Using AVX doesn't help
+  # loading data from memory faster.
   when defined(i386) or defined(amd_64):
     if cpuinfo_has_x86_sse3():
       return sum_sse3(data, len)
