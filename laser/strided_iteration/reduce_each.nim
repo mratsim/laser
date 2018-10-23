@@ -50,7 +50,7 @@ proc reduceContiguousImpl(
                   )
 
   result = quote do:
-    for `index` in `chunk_offset` ..< `chunk_size`:
+    for `index` in `chunk_offset` ..< `chunk_offset` + `chunk_size`:
       `body`
 
 proc reduceStridedImpl(
