@@ -280,7 +280,7 @@ proc cpuinfo_get_current_core*(): ptr CPUInfo_core {.cpuinfo_proc.}
 # Headers - use the patched header with typedefs
 # Also for some reason we need to passC in the same line
 # Otherwise "curSrcFolder" is ignored
-{.passC: "-I" & cpuinfoPath & "src -I" & curSrcFolder.}
+{.passC: "-I" & cpuinfoPath & "src -I" & curSrcFolder & DirSep & "third_party".}
 
 template compile(path: static string): untyped =
   # Path: the path from cpuinfo/src folder
@@ -354,3 +354,6 @@ compile"init.c"
 if not cpuinfo_initialize():
   raise newException(LibraryError, "Could not initialize the cpuinfo module")
 addQuitProc(cpuinfo_deinitialize)
+
+{.pragma: cpuinfo, cdecl, header: headerPath.}
+func cpuinfo_has_x86_sse3*(): bool {.cpuinfo.}

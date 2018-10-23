@@ -6,7 +6,7 @@ import
   ../../laser/tensor/[allocator, datatypes, initialization],
   ../../laser/[compiler_optim_hints, dynamic_stack_arrays],
   ../../laser/simd,
-  ../../laser/hpc_kernels/sum_sse3
+  ../../laser/hpc_kernels/sum
 
 withCompilerOptimHints()
 
@@ -139,7 +139,7 @@ proc mainBench_8_packed_sse_accums(a: Tensor[float32], nb_samples: int) =
 proc mainBench_packed_sse_prod(a: Tensor[float32], nb_samples: int) =
   var accum = 0'f32
   bench("Reduction - prod impl", accum):
-    accum += sum_sse3(a.storage.raw_data, a.size)
+    accum += sum_kernel(a.storage.raw_data, a.size)
 
 proc mainBench_8_packed_avx_accums(a: Tensor[float32], nb_samples: int) =
   var accum = 0'f32
