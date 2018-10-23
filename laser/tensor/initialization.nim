@@ -88,6 +88,7 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
     # We use memcpy, due to SIMD optimizations in memcpy,
     # we require higher parallelization thresholds
     if src.is_C_contiguous:
+      assert dst.shape == src.shape
       omp_parallel_chunks(
             src.size, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
@@ -105,6 +106,23 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
     # we assume we can't use OpenMP
     forEachSerial d in dst, s in src:
       d = s # non-recursive copy
+
+proc copyFromRaw*[T](dst: var Tensor[T], buffer: ptr UncheckedArray[T], len: Natural) =
+  ## Copy data from the buffer into the destination tensor.
+  ## Destination tensor size and buffer length should be the same
+  when T.supportsCopyMem:
+    doAssert dst.size == len, "Tensor size and buffer length should be the same"
+    omp_parallel_chunks(
+            len, chunk_offset, chunk_size,
+            OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
+            use_simd = false):
+        copyMem(
+          dst.storage.raw_data[chunk_offset].addr,
+          buffer[chunk_offset].unsafeAddr,
+          chunk_size
+          )
+  else:
+    {.fatal: "Only non-ref types and types with trivial destructors can be raw copied.".}
 
 proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
   ## Reset/initialize the tensor data to binary zero.
