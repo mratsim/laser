@@ -60,7 +60,7 @@ proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
         copyMem(
           dst.storage.raw_data[chunk_offset],
           src.storage.raw_data[chunk_offset],
-          chunk_size
+          chunk_size * sizeof(T)
           )
     else:
       forEachStrided d in dst, s in src:
@@ -98,7 +98,7 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
         copyMem(
           dst.storage.raw_data[chunk_offset].addr,
           src.storage.raw_data[chunk_offset].unsafeAddr,
-          chunk_size
+          chunk_size * sizeof(T)
           )
     else:
       forEachStrided d in dst, s in src:
@@ -109,20 +109,22 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
     forEachSerial d in dst, s in src:
       d = s # non-recursive copy
 
-proc copyFromRaw*[T](dst: var Tensor[T], buffer: ptr UncheckedArray[T], len: Natural) =
+proc copyFromRaw*[T](dst: var Tensor[T], buffer: ptr T, len: Natural) =
   ## Copy data from the buffer into the destination tensor.
   ## Destination tensor size and buffer length should be the same
   when T.supportsCopyMem:
+    withCompilerOptimHints()
     doAssert dst.size == len, "Tensor size and buffer length should be the same"
     var nb_chunks: Natural
+    let buf{.restrict.} = cast[ptr UncheckedArray[T]](buffer)
     omp_parallel_chunks(
-            src.size, nb_chunks, chunk_id, chunk_offset, chunk_size,
+            len, nb_chunks, chunk_id, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
           dst.storage.raw_data[chunk_offset].addr,
-          buffer[chunk_offset].unsafeAddr,
-          chunk_size
+          buf[chunk_offset].unsafeAddr,
+          chunk_size * sizeof(T)
           )
   else:
     {.fatal: "Only non-ref types and types with trivial destructors can be raw copied.".}
@@ -152,6 +154,6 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
           use_simd = false):
       zeroMem(
         t.storage.raw_data[chunk_offset].addr,
-        chunk_size
+        chunk_size * sizeof(T)
         )
 
