@@ -1,4 +1,4 @@
-import ../laser/strided_iteration/[foreach_reduce, foreach]
+import ../laser/strided_iteration/[reduce_each, foreach]
 import ../laser/tensor/[datatypes, allocator, initialization]
 import ../laser/[compiler_optim_hints, dynamic_stack_arrays]
 import sequtils
@@ -16,7 +16,7 @@ proc foo[T](x, y: Tensor[T]): T =
     nb_chunks: Natural
     partial_reduce{.align_variable.}: array[max_threads * padding, T]
 
-  forEachReduce nb_chunks, chunk_id, xi in x, yi in y:
+  reduceEach nb_chunks, chunk_id, xi in x, yi in y:
     partial_reduce[chunk_id * padding] = xi + yi
 
   echo partial_reduce

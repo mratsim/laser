@@ -116,7 +116,7 @@ proc reduceStridedImpl(
           `coord`[`k`] = 0
           `apply_backstrides`
 
-macro forEachReduce*(nb_chunks: var Natural, chunk_id: untyped, args: varargs[untyped]): untyped =
+macro reduceEach*(nb_chunks: var Natural, chunk_id: untyped, args: varargs[untyped]): untyped =
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
