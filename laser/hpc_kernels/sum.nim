@@ -4,7 +4,7 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  ../cpuinfo,
+  ../cpuinfo, ../compiler_optim_hints,
   ./private/align_unroller
 
 when defined(i386) or defined(amd_64):
@@ -16,6 +16,9 @@ func sum_fallback(data: ptr UncheckedArray[float32], len: Natural): float32 =
   ## of speed and code-size across architectures
   ## especially when fastmath is turned on.
   ## Benchmarked: 2x faster than naive reduction and 2x slower than the SSE3 kernel
+
+  withCompilerOptimHints()
+  let data{.restrict.} = data
 
   # Loop peeling is left at the compiler discretion,
   # if optimizing for code size is desired

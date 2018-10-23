@@ -9,6 +9,8 @@ import
 
 func sum_sse3*(data: ptr UncheckedArray[float32], len: Natural): float32 =
   ## Sum a contiguous range of float32 using SSE3 instructions
+  withCompilerOptimHints()
+  let data{.restrict.} = data
 
   # Loop peeling, while not aligned to 16-byte boundary advance
   var idx = 0
@@ -16,7 +18,7 @@ func sum_sse3*(data: ptr UncheckedArray[float32], len: Natural): float32 =
     result += data[idx]
     inc idx
 
-  let data_aligned = assume_aligned cast[ptr UncheckedArray[float32]](data[idx].addr)
+  let data_aligned{.restrict.} = assume_aligned cast[ptr UncheckedArray[float32]](data[idx].addr)
 
   # Main vectorized and unrolled loop.
   const step = 16
