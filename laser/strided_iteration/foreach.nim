@@ -166,6 +166,7 @@ proc forEachStridedImpl(
     coord = genSym(nskVar, "coord_")
     j = genSym(nskForVar, "j_mem_offset_") # Setting the start offset of each tensor iterator during init
     k = genSym(nskForVar, "k_next_elem_")  # Computing the next element in main body loop
+    chunk_id = newIdentNode("chunk_id_")
     chunk_offset = newIdentNode("chunk_offset_")
     chunk_size =  if use_openmp: newIdentNode("chunk_size_")
                   else: size
@@ -230,7 +231,7 @@ proc forEachStridedImpl(
       use_simd       = if omp_params.isNil: newLit true else: omp_params[2]
     result = quote do:
       omp_parallel_chunks(
-        `size`, `chunk_offset`, `chunk_size`,
+        `size`, `chunk_id`, `chunk_offset`, `chunk_size`,
         `omp_threshold`, `omp_grain_size`, `use_simd`):
           `stridedBody`
   else:

@@ -112,7 +112,7 @@ template omp_parallel_for_default*(
 
 template omp_parallel_chunks*(
     length: Natural,
-    chunk_offset, chunk_size: untyped,
+    chunk_id, chunk_offset, chunk_size: untyped,
     omp_threshold: static Natural,
     omp_grain_size: static Positive,
     use_simd: static bool = true,
@@ -146,13 +146,13 @@ template omp_parallel_chunks*(
     let whole_chunk_size = ompsize div nb_chunks
 
     when use_simd:
-      for chunk_id in `||`(0, nb_chunks-1, "simd"):
+      for `chunk_id`{.inject.} in `||`(0, nb_chunks-1, "simd"):
         let `chunk_offset`{.inject.} = whole_chunk_size * chunk_id
         let `chunk_size`{.inject.} =  if chunk_id < nb_chunks - 1: whole_chunk_size
                                       else: ompsize - chunk_offset
         block: body
     else:
-      for chunk_id in 0||(nb_chunks-1):
+      for `chunk_id`{.inject.} in 0||(nb_chunks-1):
         let `chunk_offset`{.inject.} = whole_chunk_size * chunk_id
         let `chunk_size`{.inject.} =  if chunk_id < nb_chunks - 1: whole_chunk_size
                                       else: ompsize - chunk_offset
@@ -160,7 +160,7 @@ template omp_parallel_chunks*(
 
 template omp_parallel_chunks_default*(
     length: Natural,
-    chunk_offset, chunk_size: untyped,
+    chunk_id, chunk_offset, chunk_size: untyped,
     body: untyped): untyped =
   ## This will be renamed omp_parallel_chunks once
   ## https://github.com/nim-lang/Nim/issues/9414 is solved.
@@ -177,7 +177,7 @@ template omp_parallel_chunks_default*(
   ## - simd is used by default
   omp_parallel_chunks(
     length,
-    chunk_offset, chunk_size,
+    chunk_id, chunk_offset, chunk_size,
     omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
     omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
     use_simd = true,

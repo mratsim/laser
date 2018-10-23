@@ -2,7 +2,7 @@
 # Copyright (c) 2018 Mamy André-Ratsimbazafy
 
 import
-  ../../laser/strided_iteration/map_foreach,
+  ../../laser/strided_iteration/foreach,
   ../../laser/tensor/[allocator, datatypes, initialization],
   ../../laser/[compiler_optim_hints, dynamic_stack_arrays],
   ../../laser/simd,
