@@ -130,9 +130,9 @@ template omp_parallel_chunks*(
   ##
   ## This is useful for non-contiguous processing as a replacement to omp_parallel_for
   ## or when operating on (contiguous) ranges for example for memset or memcpy
-
   when not defined(openmp):
     nb_chunks = 1
+    const `chunk_id`{.inject.} = 0
     const `chunk_offset`{.inject.} = 0
     let `chunk_size`{.inject.} = length
     block: body

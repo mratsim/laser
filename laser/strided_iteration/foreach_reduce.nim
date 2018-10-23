@@ -116,7 +116,7 @@ proc reduceStridedImpl(
           `coord`[`k`] = 0
           `apply_backstrides`
 
-macro forEachReduce*(chunk_id: untyped, args: varargs[untyped]): untyped =
+macro forEachReduce*(nb_chunks: var Natural, chunk_id: untyped, args: varargs[untyped]): untyped =
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
@@ -158,10 +158,18 @@ macro forEachReduce*(chunk_id: untyped, args: varargs[untyped]): untyped =
       `raw_ptrs_stmt`
       let `size` = `alias0`.size
       if `test_C_Contiguous`:
-        omp_parallel_chunks_default(
-            `size`, `chunk_id`, `chunk_offset`, `chunk_size`):
+        omp_parallel_chunks(
+              `size`, `nb_chunks`,
+              `chunk_id`, `chunk_offset`, `chunk_size`,
+              omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
+              omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
+              use_simd = true):
           `contiguous_body`
       else:
-        omp_parallel_chunks_default(
-            `size`, `chunk_id`, `chunk_offset`, `chunk_size`):
+        omp_parallel_chunks(
+              `size`, `nb_chunks`,
+              `chunk_id`, `chunk_offset`, `chunk_size`,
+              omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
+              omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
+              use_simd = true):
           `strided_body`
