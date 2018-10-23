@@ -111,7 +111,7 @@ template omp_parallel_for_default*(
     body)
 
 template omp_parallel_chunks*(
-    length: Natural,
+    length: Natural, nb_chunks: var Natural,
     chunk_id, chunk_offset, chunk_size: untyped,
     omp_threshold: static Natural,
     omp_grain_size: static Positive,
@@ -132,12 +132,13 @@ template omp_parallel_chunks*(
   ## or when operating on (contiguous) ranges for example for memset or memcpy
 
   when not defined(openmp):
+    nb_chunks = 1
     const `chunk_offset`{.inject.} = 0
     let `chunk_size`{.inject.} = length
     block: body
   else:
     let ompsize = length # If length is the result of a proc, call the proc only once
-    let nb_chunks = if omp_threshold < ompsize:
+    nb_chunks = if omp_threshold < ompsize:
       min(
         omp_get_max_threads(),
         max(1, ompsize div omp_grain_size) # if ompsize < omp_grain_size
@@ -159,7 +160,7 @@ template omp_parallel_chunks*(
         block: body
 
 template omp_parallel_chunks_default*(
-    length: Natural,
+    length: Natural, nb_chunks: var Natural,
     chunk_id, chunk_offset, chunk_size: untyped,
     body: untyped): untyped =
   ## This will be renamed omp_parallel_chunks once
@@ -176,7 +177,7 @@ template omp_parallel_chunks_default*(
   ##     A value of 1 will always parallelize the loop.
   ## - simd is used by default
   omp_parallel_chunks(
-    length,
+    length, nb_chunks,
     chunk_id, chunk_offset, chunk_size,
     omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
     omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,

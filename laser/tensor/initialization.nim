@@ -52,8 +52,9 @@ proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
     # We use memcpy, due to SIMD optimizations in memcpy,
     # we require higher parallelization thresholds
     if src.is_C_contiguous:
+      var nb_chunks: Natural
       omp_parallel_chunks(
-            size, chunk_offset, chunk_size,
+            size, nb_chunks, chunk_id, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
@@ -89,8 +90,9 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
     # we require higher parallelization thresholds
     if src.is_C_contiguous:
       assert dst.shape == src.shape
+      var nb_chunks: Natural
       omp_parallel_chunks(
-            src.size, chunk_offset, chunk_size,
+            src.size, nb_chunks, chunk_id, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
@@ -112,8 +114,9 @@ proc copyFromRaw*[T](dst: var Tensor[T], buffer: ptr UncheckedArray[T], len: Nat
   ## Destination tensor size and buffer length should be the same
   when T.supportsCopyMem:
     doAssert dst.size == len, "Tensor size and buffer length should be the same"
+    var nb_chunks: Natural
     omp_parallel_chunks(
-            len, chunk_offset, chunk_size,
+            src.size, nb_chunks, chunk_id, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
@@ -142,8 +145,9 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
   when not T.supportsCopyMem:
     t.storage.raw_data.reset()
   else:
+    var nb_chunks: Natural
     omp_parallel_chunks(
-          t.size, chunk_offset, chunk_size,
+          t.size, nb_chunks, chunk_id, chunk_offset, chunk_size,
           OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
           use_simd = false):
       zeroMem(
