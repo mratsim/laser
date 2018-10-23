@@ -1,18 +1,38 @@
-import ../laser/strided_iteration/foreach_reduce
-import ../laser/tensor/[datatypes, initialization]
+import ../laser/strided_iteration/[foreach_reduce, foreach]
+import ../laser/tensor/[datatypes, allocator, initialization]
 import ../laser/[compiler_optim_hints, dynamic_stack_arrays]
 import sequtils
 
-proc dot[T](x, y: Tensor[T]): T =
+proc foo[T](x, y: Tensor[T]): T =
   const
-    MAX_THREADS = 22
-    CACHE_LINE = 64
+    max_threads = 22
+    cache_line = 64
+    padding = cache_line div sizeof(T)
   # We support up to 22 simultaneous threads
   # We pad the value by 64 bytes to avoid
   # false sharing/cache invalidation
   withCompilerOptimHints()
   var
     nb_chunks: Natural
-    partial_reduce{.align_variable.}: array[MAX_THREADS * CACHE_LINE div sizeof(T), T]
+    partial_reduce{.align_variable.}: array[max_threads * padding, T]
+
   forEachReduce nb_chunks, chunk_id, xi in x, yi in y:
-    partial_reduce[CACHE_LINE * chunk_id] += xi * yi
+    partial_reduce[chunk_id * padding] = xi + yi
+
+  echo partial_reduce
+
+  for idx in 0 ..< nb_chunks:
+    result += partial_reduce[idx * padding]
+
+  echo partial_reduce
+
+proc toTensor[T](s: seq[T]): Tensor[T] =
+  var size: int
+  initTensorMetadata(result, size, [s.len])
+  allocCpuStorage(result.storage, size)
+  result.copyFromRaw(s[0].unsafeAddr, s.len)
+
+let a = toSeq(1..10001).toTensor
+let b = toSeq(-10000 .. 0).toTensor
+
+echo foo(a, b)
