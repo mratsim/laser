@@ -136,9 +136,9 @@ proc mainBench_8_packed_sse_accums(a: Tensor[float32], nb_samples: int) =
     accum += accum0
     accum += accum1
 
-proc mainBench_12_packed_sse_prod(a: Tensor[float32], nb_samples: int) =
+proc mainBench_packed_sse_prod(a: Tensor[float32], nb_samples: int) =
   var accum = 0'f32
-  bench("Reduction - packed 12 accumulators SSE - prod impl", accum):
+  bench("Reduction - prod impl", accum):
     accum += sum_sse3(a.storage.raw_data, a.size)
 
 proc mainBench_8_packed_avx_accums(a: Tensor[float32], nb_samples: int) =
@@ -187,7 +187,7 @@ when isMainModule:
       a = randomTensor([10000, 1000], -1.0'f32 .. 1.0'f32)
     mainBench_4_packed_sse_accums(a, 1000)
     mainBench_8_packed_sse_accums(a, 1000)
-    mainBench_12_packed_sse_prod(a, 1000)
+    mainBench_packed_sse_prod(a, 1000)
 
     {.passC: "-mavx".}
     mainBench_8_packed_avx_accums(a, 1000)
@@ -195,44 +195,59 @@ when isMainModule:
 
 ## Bench on i5 Broadwell
 
-# Warmup: 1.1929 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1946 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
-# Reduction - packed 4 accumulators SSE - float64
-# Collected 1000 samples in 2.934 seconds
-# Average time: 2.930ms
-# Stddev  time: 0.216ms
-# Min     time: 2.652ms
-# Max     time: 4.563ms
+# Reduction - packed 4 accumulators SSE - float32
+# Collected 1000 samples in 2.841 seconds
+# Average time: 2.837 ms
+# Stddev  time: 0.251 ms
+# Min     time: 2.569 ms
+# Max     time: 5.680 ms
+# Theoretical perf: 3524.917 MFLOP/s
 
-# Display output[[0,0]] to make sure it's not optimized away
+# Display sum of samples sums to make sure it's not optimized away
 # -356696.15625
 
-# Reduction - packed 8 accumulators SSE - float64
-# Collected 1000 samples in 2.667 seconds
-# Average time: 2.664ms
-# Stddev  time: 0.332ms
-# Min     time: 2.415ms
-# Max     time: 10.863ms
+# Reduction - packed 8 accumulators SSE - float32
+# Collected 1000 samples in 2.502 seconds
+# Average time: 2.498 ms
+# Stddev  time: 0.213 ms
+# Min     time: 2.299 ms
+# Max     time: 5.111 ms
+# Theoretical perf: 4003.616 MFLOP/s
 
-# Display output[[0,0]] to make sure it's not optimized away
+# Display sum of samples sums to make sure it's not optimized away
 # -356923.1875
 
-# Reduction - packed 8 accumulators AVX - float64
-# Collected 1000 samples in 2.736 seconds
-# Average time: 2.732ms
-# Stddev  time: 0.297ms
-# Min     time: 2.497ms
-# Max     time: 9.951ms
+# Reduction - prod impl - float32
+# Collected 1000 samples in 2.442 seconds
+# Average time: 2.439 ms
+# Stddev  time: 0.162 ms
+# Min     time: 2.274 ms
+# Max     time: 4.916 ms
+# Theoretical perf: 4100.865 MFLOP/s
 
-# Display output[[0,0]] to make sure it's not optimized away
+# Display sum of samples sums to make sure it's not optimized away
+# -170817.09375
+
+# Reduction - packed 8 accumulators AVX - float32
+# Collected 1000 samples in 2.567 seconds
+# Average time: 2.563 ms
+# Stddev  time: 0.186 ms
+# Min     time: 2.373 ms
+# Max     time: 5.158 ms
+# Theoretical perf: 3902.290 MFLOP/s
+
+# Display sum of samples sums to make sure it's not optimized away
 # -356915.03125
 
-# Reduction - packed 16 accumulators AVX - float64
-# Collected 1000 samples in 2.780 seconds
-# Average time: 2.776ms
-# Stddev  time: 0.323ms
-# Min     time: 2.496ms
-# Max     time: 7.415ms
+# Reduction - packed 16 accumulators AVX - float32
+# Collected 1000 samples in 2.580 seconds
+# Average time: 2.576 ms
+# Stddev  time: 0.230 ms
+# Min     time: 2.371 ms
+# Max     time: 5.134 ms
+# Theoretical perf: 3881.285 MFLOP/s
 
-# Display output[[0,0]] to make sure it's not optimized away
+# Display sum of samples sums to make sure it's not optimized away
 # -356914.875
