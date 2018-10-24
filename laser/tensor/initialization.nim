@@ -4,7 +4,7 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  ../openmp/[omp_parallel, omp_tuning],
+  ../openmp,
   ../compiler_optim_hints,
   ../strided_iteration/foreach,
   ./datatypes, ./allocator,
@@ -54,7 +54,7 @@ proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
     if src.is_C_contiguous:
       var nb_chunks: Natural
       omp_parallel_chunks(
-            size, nb_chunks, chunk_id, chunk_offset, chunk_size,
+            size, nb_chunks, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
@@ -92,7 +92,7 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
       assert dst.shape == src.shape
       var nb_chunks: Natural
       omp_parallel_chunks(
-            src.size, nb_chunks, chunk_id, chunk_offset, chunk_size,
+            src.size, nb_chunks, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
@@ -115,10 +115,10 @@ proc copyFromRaw*[T](dst: var Tensor[T], buffer: ptr T, len: Natural) =
   when T.supportsCopyMem:
     withCompilerOptimHints()
     doAssert dst.size == len, "Tensor size and buffer length should be the same"
-    var nb_chunks: Natural
     let buf{.restrict.} = cast[ptr UncheckedArray[T]](buffer)
+    var nb_chunks: Natural
     omp_parallel_chunks(
-            len, nb_chunks, chunk_id, chunk_offset, chunk_size,
+            len, nb_chunks, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
@@ -149,7 +149,7 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
   else:
     var nb_chunks: Natural
     omp_parallel_chunks(
-          t.size, nb_chunks, chunk_id, chunk_offset, chunk_size,
+          t.size, nb_chunks, chunk_offset, chunk_size,
           OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
           use_simd = false):
       zeroMem(

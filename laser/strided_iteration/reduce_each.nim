@@ -32,7 +32,7 @@ import
   macros,
   ./foreach_common,
   ../private/ast_utils,
-  ../openmp/[omp_parallel, omp_tuning]
+  ../openmp
 export omp_suffix # Pending https://github.com/nim-lang/Nim/issues/9365 or 9366
 
 proc reduceContiguousImpl(
@@ -116,7 +116,7 @@ proc reduceStridedImpl(
           `coord`[`k`] = 0
           `apply_backstrides`
 
-macro reduceEach*(nb_chunks: var Natural, chunk_id: untyped, args: varargs[untyped]): untyped =
+macro reduceEach*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
@@ -160,7 +160,7 @@ macro reduceEach*(nb_chunks: var Natural, chunk_id: untyped, args: varargs[untyp
       if `test_C_Contiguous`:
         omp_parallel_chunks(
               `size`, `nb_chunks`,
-              `chunk_id`, `chunk_offset`, `chunk_size`,
+              `chunk_offset`, `chunk_size`,
               omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
               omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
               use_simd = true):
@@ -168,7 +168,7 @@ macro reduceEach*(nb_chunks: var Natural, chunk_id: untyped, args: varargs[untyp
       else:
         omp_parallel_chunks(
               `size`, `nb_chunks`,
-              `chunk_id`, `chunk_offset`, `chunk_size`,
+              `chunk_offset`, `chunk_size`,
               omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
               omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
               use_simd = true):

@@ -1,4 +1,4 @@
-import ../laser/openmp/omp_parallel
+import ../laser/openmp
 import math, random, sequtils
 
 proc doOp(s: var seq[float32]) {.noInline.}=

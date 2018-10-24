@@ -27,7 +27,7 @@ to allow dispatching to `forEachContiguous` or `forEachStrided`
 
 The code is carefully tuned to produce the most performant and compact iteration scheme. The `forEach` macro however still has to duplicate the code body to dispatch for contiguous and non-contiguous case.
 
-The iteration supports OpenMP and the following parameters (see [omp_tuning.nim](../openmp/omp_tuning) file):
+The iteration supports OpenMP and the following parameters (see [openmp.nim](../openmp.nim) file):
   - omp_threshold: below this threshold, execution is always serial, default 512
   - omp_grain_size: amount of work items per core, default 1024
   - use_simd: Tell the compiler to unroll the loop so that SIMD can be used

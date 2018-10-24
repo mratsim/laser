@@ -1,9 +1,9 @@
-import ../laser/openmp/[omp_parallel, omp_tuning]
+import ../laser/openmp
 import math, random, sequtils
 
 proc doOp(s: var seq[float32]) {.noInline.}=
   var nb_chunks: Natural
-  omp_parallel_chunks_default(s.len, nb_chunks, chunk_id, chunk_offset, chunk_size):
+  omp_parallel_chunks_default(s.len, nb_chunks, chunk_offset, chunk_size):
     # Create a block range for each thread
     # Each thread can work on it's own range
     for idx in chunk_offset ..< chunk_offset + chunk_size:

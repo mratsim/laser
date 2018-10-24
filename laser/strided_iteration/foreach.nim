@@ -32,7 +32,7 @@ import
   macros,
   ./foreach_common,
   ../private/ast_utils,
-  ../openmp/[omp_parallel, omp_tuning]
+  ../openmp
 export omp_suffix # Pending https://github.com/nim-lang/Nim/issues/9365 or 9366
 
 proc forEachContiguousImpl(
@@ -91,7 +91,6 @@ proc forEachStridedImpl(
     coord = genSym(nskVar, "coord_")
     j = genSym(nskForVar, "j_mem_offset_") # Setting the start offset of each tensor iterator during init
     k = genSym(nskForVar, "k_next_elem_")  # Computing the next element in main body loop
-    chunk_id = newIdentNode("chunk_id_")
     chunk_offset = newIdentNode("chunk_offset_")
     chunk_size =  if use_openmp: newIdentNode("chunk_size_")
                   else: size
@@ -157,7 +156,7 @@ proc forEachStridedImpl(
     result = quote do:
       var nb_chunks: Natural
       omp_parallel_chunks(
-        `size`, nb_chunks, `chunk_id`, `chunk_offset`, `chunk_size`,
+        `size`, nb_chunks, `chunk_offset`, `chunk_size`,
         `omp_threshold`, `omp_grain_size`, `use_simd`):
           `stridedBody`
   else:

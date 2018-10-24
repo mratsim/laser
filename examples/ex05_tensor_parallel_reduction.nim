@@ -1,6 +1,7 @@
 import ../laser/strided_iteration/[reduce_each, foreach]
 import ../laser/tensor/[datatypes, allocator, initialization]
 import ../laser/[compiler_optim_hints, dynamic_stack_arrays]
+import ../laser/openmp
 import sequtils, macros
 
 proc foo[T](x, y: Tensor[T]): T =
@@ -12,14 +13,14 @@ proc foo[T](x, y: Tensor[T]): T =
   # We pad the value by 64 bytes to avoid
   # false sharing/cache invalidation
   withCompilerOptimHints()
-  var
-    nb_chunks: Natural
-    partial_reduce{.align_variable.}: array[max_threads * padding, T]
+  var partial_reduce{.align_variable.}: array[max_threads * padding, T]
 
-  reduceEach nb_chunks, chunk_id, xi in x, yi in y:
-    partial_reduce[chunk_id * padding] += xi + yi
+  var nb_chunks: Natural
+  reduceEach nb_chunks, xi in x, yi in y:
+    partial_reduce[omp_get_thread_num() * padding] += xi + yi
 
   for idx in 0 ..< nb_chunks:
+    echo partial_reduce[idx * padding]
     result += partial_reduce[idx * padding]
 
   echo partial_reduce
