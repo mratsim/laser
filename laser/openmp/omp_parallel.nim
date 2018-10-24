@@ -28,6 +28,14 @@ proc omp_suffix*(genNew: static bool = false): static string =
 
 import ./omp_tuning
 
+template attachGC(): untyped =
+  if(omp_get_thread_num()!=0):
+      setupForeignThreadGc()
+
+template detachGC(): untyped =
+  if(omp_get_thread_num()!=0):
+      teardownForeignThreadGc()
+
 template omp_parallel_for*(
       index: untyped,
       length: Natural,
@@ -63,10 +71,10 @@ template omp_parallel_for*(
     ## This way, the compiler will still be provided "simd" vectorization hints
     when use_simd:
       for `index`{.inject.} in `||`(0, length - 1, "simd"):
-        body
+        block: body
     else:
       for `index`{.inject.} in 0||(length-1):
-        body
+        block: body
   else:
     const # Workaround to expose an unique symbol in C.
       ompsize_Csymbol = "ompsize_" & omp_suffix(genNew = true)
@@ -82,7 +90,9 @@ template omp_parallel_for*(
       "if(" & $ompthreshold & " < " & ompsize_Csymbol & ")"
 
     for `index`{.inject.} in `||`(0, ompsize - 1, omp_annotation):
-      body
+      attachGC()
+      block: body
+      detachGC()
 
 template omp_parallel_for_default*(
       index: untyped,
@@ -151,13 +161,17 @@ template omp_parallel_chunks*(
         let `chunk_offset`{.inject.} = whole_chunk_size * chunk_id
         let `chunk_size`{.inject.} =  if chunk_id < nb_chunks - 1: whole_chunk_size
                                       else: ompsize - chunk_offset
+        attachGC()
         block: body
+        detachGC()
     else:
       for `chunk_id`{.inject.} in 0||(nb_chunks-1):
         let `chunk_offset`{.inject.} = whole_chunk_size * chunk_id
         let `chunk_size`{.inject.} =  if chunk_id < nb_chunks - 1: whole_chunk_size
                                       else: ompsize - chunk_offset
+        attachGC()
         block: body
+        detachGC()
 
 template omp_parallel_chunks_default*(
     length: Natural, nb_chunks: var Natural,
@@ -184,3 +198,16 @@ template omp_parallel_chunks_default*(
     use_simd = true,
     body
   )
+
+template omp_parallel*(body: untyped): untyped =
+  {.emit: "#pragma omp parallel".}
+  block:
+    attachGC()
+    body
+    detachGC()
+
+
+template omp_critical*(body: untyped): untyped =
+  {.emit: "#pragma omp critical".}
+  block:
+    body
