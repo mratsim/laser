@@ -83,3 +83,45 @@ proc initForEach*(
     let alias_i = aliases[i]
     test_shapes.add quote do:
       assert `alias0`.shape == `alias_i`.shape
+
+template stridedVarsSetup*(){.dirty.} =
+  for i, alias in aliases:
+    let iter_pos_i = gensym(nskVar, "iter" & $i & "_pos_")
+    iter_pos.add iter_pos_i
+    init_strided_iteration.add newVarStmt(iter_pos_i, newLit 0)
+    iter_start_offset.add quote do:
+      `iter_pos_i` += `coord`[`j`] * `alias`.strides[`j`]
+    increment_iter_pos.add quote do:
+      `iter_pos_i` += `alias`.strides[`k`]
+    apply_backstrides.add quote do:
+      `iter_pos_i` -= `alias`.strides[`k`] * (`alias`.shape[`k`]-1)
+
+
+template stridedChunkOffset*(){.dirty.} =
+  quote do:
+    if `chunk_offset` != 0:
+      var accum_size = 1
+      for `j` in countdown(`alias0`.rank - 1, 0):
+        `coord`[`j`] = (`chunk_offset` div accum_size) mod `alias0`.shape[`j`]
+        `iter_start_offset`
+        accum_size *= `alias0`.shape[`j`]
+
+template stridedBodyTemplate*(){.dirty.} =
+  quote do:
+      # Initialisation
+      `init_strided_iteration`
+
+      # Iterator loop
+      for _ in 0 ..< `chunk_size`:
+        # Apply computation
+        `body`
+
+        # Next position
+        for `k` in countdown(`alias0`.rank - 1, 0):
+          if `coord`[`k`] < `alias0`.shape[`k`] - 1:
+            `coord`[`k`] += 1
+            `increment_iter_pos`
+            break
+          else:
+            `coord`[`k`] = 0
+            `apply_backstrides`

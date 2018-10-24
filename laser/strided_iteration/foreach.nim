@@ -97,50 +97,18 @@ proc forEachStridedImpl(
   init_strided_iteration.add quote do:
     var `coord` {.align_variable.}: array[LASER_MEM_ALIGN, int]
 
-  for i, alias in aliases:
-    let iter_pos_i = gensym(nskVar, "iter" & $i & "_pos_")
-    iter_pos.add iter_pos_i
-    init_strided_iteration.add newVarStmt(iter_pos_i, newLit 0)
-    iter_start_offset.add quote do:
-      `iter_pos_i` += `coord`[`j`] * `alias`.strides[`j`]
-    increment_iter_pos.add quote do:
-      `iter_pos_i` += `alias`.strides[`k`]
-    apply_backstrides.add quote do:
-      `iter_pos_i` -= `alias`.strides[`k`] * (`alias`.shape[`k`]-1)
+  stridedVarsSetup()
 
   # Now add the starting memory offset to the init
   if use_openmp:
-    init_strided_iteration.add quote do:
-      if `chunk_offset` != 0:
-        var accum_size = 1
-        for `j` in countdown(`alias0`.rank - 1, 0):
-          `coord`[`j`] = (`chunk_offset` div accum_size) mod `alias0`.shape[`j`]
-          `iter_start_offset`
-          accum_size *= `alias0`.shape[`j`]
+    init_strided_iteration.add stridedChunkOffset()
 
   var elems_strided = nnkBracket.newTree()
   for i, raw_ptr in raw_ptrs:
     elems_strided.add nnkBracketExpr.newTree(raw_ptr, iter_pos[i])
 
   let body = loopBody.replaceNodes(replacements = elems_strided, to_replace = values)
-  let stridedBody = quote do:
-    # Initialisation
-    `init_strided_iteration`
-
-    # Iterator loop
-    for _ in 0 ..< `chunk_size`:
-      # Apply computation
-      `body`
-
-      # Next position
-      for `k` in countdown(`alias0`.rank - 1, 0):
-        if `coord`[`k`] < `alias0`.shape[`k`] - 1:
-          `coord`[`k`] += 1
-          `increment_iter_pos`
-          break
-        else:
-          `coord`[`k`] = 0
-          `apply_backstrides`
+  let stridedBody = stridedBodyTemplate()
 
   if use_openmp:
     let
