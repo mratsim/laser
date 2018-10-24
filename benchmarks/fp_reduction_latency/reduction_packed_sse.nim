@@ -52,14 +52,14 @@ import random, times, stats, strformat, math
 
 proc warmup() =
   # Warmup - make sure cpu is on max perf
-  let start = cpuTime()
+  let start = epochTime() # cpuTime() - cannot use cpuTime for multithreaded
   var foo = 123
   for i in 0 ..< 300_000_000:
     foo += i*i mod 456
     foo = foo mod 789
 
   # Compiler shouldn't optimize away the results as cpuTime rely on sideeffects
-  let stop = cpuTime()
+  let stop = epochTime() # cpuTime() - cannot use cpuTime for multithreaded
   echo &"Warmup: {stop - start:>4.4f} s, result {foo} (displayed to avoid compiler optimizing warmup away)"
 
 template printStats(name: string, accum: float32) {.dirty.} =
@@ -77,13 +77,13 @@ template printStats(name: string, accum: float32) {.dirty.} =
 template bench(name: string, accum: var float32, body: untyped) {.dirty.}=
   block: # Actual bench
     var stats: RunningStat
-    let global_start = cpuTime()
+    let global_start = epochTime() # cpuTime() - cannot use cpuTime for multithreaded
     for _ in 0 ..< nb_samples:
-      let start = cpuTime()
+      let start = epochTime() # cpuTime() - cannot use cpuTime for multithreaded
       body
-      let stop = cpuTime()
+      let stop = epochTime() # cpuTime() - cannot use cpuTime for multithreaded
       stats.push stop - start
-    let global_stop = cpuTime()
+    let global_stop = epochTime() # cpuTime() - cannot use cpuTime for multithreaded
     printStats(name, accum)
 
 func round_down_power_of_2(x: Natural, step: static Natural): int {.inline.} =
@@ -193,7 +193,7 @@ when isMainModule:
     mainBench_8_packed_avx_accums(a, 1000)
     mainBench_16_packed_avx_accums(a, 1000)
 
-## Bench on i5 Broadwell
+## Bench on i5 Broadwell - serial implementation
 
 # Warmup: 1.1946 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
@@ -248,6 +248,67 @@ when isMainModule:
 # Min     time: 2.371 ms
 # Max     time: 5.134 ms
 # Theoretical perf: 3881.285 MFLOP/s
+
+# Display sum of samples sums to make sure it's not optimized away
+# -356914.875
+
+################################################################
+## Bench on i5 Broadwell - prod implementation is OpenMP-enabled
+# Unfortunately we are memory-bandwith bound
+
+# Warmup: 1.1888 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# Reduction - packed 4 accumulators SSE - float32
+# Collected 1000 samples in 2.825 seconds
+# Average time: 2.824 ms
+# Stddev  time: 0.259 ms
+# Min     time: 2.552 ms
+# Max     time: 5.193 ms
+# Theoretical perf: 3540.637 MFLOP/s
+
+# Display sum of samples sums to make sure it's not optimized away
+# -356696.15625
+
+# Reduction - packed 8 accumulators SSE - float32
+# Collected 1000 samples in 2.498 seconds
+# Average time: 2.498 ms
+# Stddev  time: 0.227 ms
+# Min     time: 2.266 ms
+# Max     time: 4.867 ms
+# Theoretical perf: 4003.727 MFLOP/s
+
+# Display sum of samples sums to make sure it's not optimized away
+# -356923.1875
+
+# Reduction - prod impl - float32
+# Collected 1000 samples in 2.129 seconds
+# Average time: 2.129 ms
+# Stddev  time: 0.190 ms
+# Min     time: 1.925 ms
+# Max     time: 3.508 ms
+# Theoretical perf: 4697.260 MFLOP/s
+
+# Display sum of samples sums to make sure it's not optimized away
+# -356874.40625
+
+# Reduction - packed 8 accumulators AVX - float32
+# Collected 1000 samples in 2.539 seconds
+# Average time: 2.538 ms
+# Stddev  time: 0.255 ms
+# Min     time: 2.327 ms
+# Max     time: 5.358 ms
+# Theoretical perf: 3939.552 MFLOP/s
+
+# Display sum of samples sums to make sure it's not optimized away
+# -356915.03125
+
+# Reduction - packed 16 accumulators AVX - float32
+# Collected 1000 samples in 2.528 seconds
+# Average time: 2.528 ms
+# Stddev  time: 0.221 ms
+# Min     time: 2.336 ms
+# Max     time: 5.301 ms
+# Theoretical perf: 3955.728 MFLOP/s
 
 # Display sum of samples sums to make sure it's not optimized away
 # -356914.875
