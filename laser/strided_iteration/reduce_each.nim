@@ -26,7 +26,7 @@
 #       the address of x[0, 0, 0, ...]
 #       Needs mutable access for var tensor.
 #
-# Additionally the forEach macro needs an `is_C_contiguous` routine
+# Additionally the reduceEach macro needs an `is_C_contiguous` routine
 
 import
   macros,
@@ -36,26 +36,53 @@ import
 export omp_suffix # Pending https://github.com/nim-lang/Nim/issues/9365 or 9366
 
 proc reduceContiguousImpl(
-  chunk_offset, chunk_size,
-  values, raw_ptrs, size, loopBody: NimNode): NimNode =
+  nb_chunks, chunk_offset, chunk_size,
+  values, raw_ptrs, size, loopBody: NimNode,
+  use_openmp: static bool, omp_params: NimNode): NimNode =
 
   let index = newIdentNode("contiguousIndex_")
   var elems_contiguous = nnkBracket.newTree()
   for raw_ptr in raw_ptrs:
     elems_contiguous.add nnkBracketExpr.newTree(raw_ptr, index)
 
-  let body = loopBody.replaceNodes(
+  var body = loopBody.replaceNodes(
                   replacements = elems_contiguous,
                   to_replace = values
                   )
 
-  result = quote do:
-    for `index` in `chunk_offset` ..< `chunk_offset` + `chunk_size`:
-      `body`
+  if use_openmp:
+    body = quote do:
+      for `index` in `chunk_offset` ..< `chunk_offset` + `chunk_size`:
+        `body`
+
+    if omp_params.isNil:
+      result = quote do:
+        omp_parallel_chunks_default(
+              `size`, `nb_chunks`,
+              `chunk_offset`, `chunk_size`):
+            `body`
+    else:
+      let
+        omp_grain_size = omp_params[0]
+        use_simd       = omp_params[1]
+      result = quote do:
+        omp_parallel_chunks(
+            `size`, `nb_chunks`,
+            `chunk_offset`, `chunk_size`,
+            `omp_grain_size`, `use_simd`):
+          `body`
+  else:
+    result = quote do:
+      `nb_chunks` = 1
+      const `chunk_offset`{.inject.} = 0
+      let `chunk_size`{.inject.} = `size`
+      for index in `chunk_offset` ..< `chunk_offset` + `chunk_size`:
+        `body`
 
 proc reduceStridedImpl(
-  chunk_offset, chunk_size,
-  values, aliases, raw_ptrs, size, loopBody: NimNode): NimNode =
+  nb_chunks, chunk_offset, chunk_size,
+  values, aliases, raw_ptrs, size, loopBody: NimNode,
+  use_openmp: static bool, omp_params: NimNode): NimNode =
 
   var iter_pos = nnkBracket.newTree()
   var init_strided_iteration = newStmtList()
@@ -97,7 +124,7 @@ proc reduceStridedImpl(
     elems_strided.add nnkBracketExpr.newTree(raw_ptr, iter_pos[i])
 
   let body = loopBody.replaceNodes(replacements = elems_strided, to_replace = values)
-  result = quote do:
+  let stridedBody = quote do:
     # Initialisation
     `init_strided_iteration`
 
@@ -116,7 +143,29 @@ proc reduceStridedImpl(
           `coord`[`k`] = 0
           `apply_backstrides`
 
-macro reduceEach*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
+  if use_openmp:
+    let
+      omp_grain_size =  if omp_params.isNil: newLit( # scale grain_size down for strided operation
+                          OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
+                        ) else: newLit(
+                          omp_params[0].intVal div OMP_NON_CONTIGUOUS_SCALE_FACTOR
+                        )
+      use_simd       = if omp_params.isNil: newLit true else: omp_params[1]
+    result = quote do:
+      omp_parallel_chunks(
+            `size`, `nb_chunks`,
+            `chunk_offset`, `chunk_size`,
+            `omp_grain_size`, `use_simd`):
+        `stridedBody`
+  else:
+    result = quote do:
+      `nb_chunks` = 1
+      const `chunk_offset`{.inject.} = 0
+      let `chunk_size`{.inject.} = `size`
+      for index in `chunk_offset` ..< `chunk_offset` + `chunk_size`:
+        `stridedBody`
+
+template reduceEachContiguousTemplate(use_openmp: static bool){.dirty.} =
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
@@ -137,11 +186,85 @@ macro reduceEach*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
     chunk_offset = newIdentNode("chunk_offset_")
     chunk_size = newIdentNode("chunk_size_")
   let contiguous_body = reduceContiguousImpl(
-    chunk_offset, chunk_size, values, raw_ptrs, size, loopBody
+    nb_chunks, chunk_offset, chunk_size,
+    values, raw_ptrs, size, loopBody,
+    use_openmp, omp_params
+  )
+  let alias0 = aliases[0]
+
+  result = quote do:
+    block:
+      `aliases_stmt`
+      `test_shapes`
+      `raw_ptrs_stmt`
+      let `size` = `alias0`.size
+      `contiguous_body`
+
+template reduceEachStridedTemplate(use_openmp: static bool){.dirty.} =
+  var
+    params, loopBody, values, aliases, raw_ptrs: NimNode
+    aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
+    omp_params: NimNode
+
+  initForEach(
+        args,
+        params,
+        loopBody,
+        omp_params,
+        values, aliases, raw_ptrs,
+        aliases_stmt, raw_ptrs_stmt,
+        test_shapes
+  )
+
+  let
+    size = genSym(nskLet, "size_")
+    chunk_offset = newIdentNode("chunk_offset_")
+    chunk_size = newIdentNode("chunk_size_")
+  let strided_body = reduceStridedImpl(
+    nb_chunks, chunk_offset, chunk_size,
+    values, aliases, raw_ptrs, size, loopBody,
+    use_openmp, omp_params
+    )
+  let alias0 = aliases[0]
+
+  result = quote do:
+    block:
+      `aliases_stmt`
+      `test_shapes`
+      `raw_ptrs_stmt`
+      let `size` = `alias0`.size
+      `strided_body`
+
+template reduceEachTemplate(use_openmp: static bool){.dirty.} =
+  var
+    params, loopBody, values, aliases, raw_ptrs: NimNode
+    aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
+    omp_params: NimNode
+
+  initForEach(
+        args,
+        params,
+        loopBody,
+        omp_params,
+        values, aliases, raw_ptrs,
+        aliases_stmt, raw_ptrs_stmt,
+        test_shapes
+  )
+
+  let
+    size = genSym(nskLet, "size_")
+    chunk_offset = newIdentNode("chunk_offset_")
+    chunk_size = newIdentNode("chunk_size_")
+  let contiguous_body = reduceContiguousImpl(
+    nb_chunks, chunk_offset, chunk_size,
+    values, raw_ptrs, size, loopBody,
+    use_openmp, omp_params
   )
   let strided_body = reduceStridedImpl(
-    chunk_offset, chunk_size, values, aliases, raw_ptrs, size, loopBody
-  )
+    nb_chunks, chunk_offset, chunk_size,
+    values, aliases, raw_ptrs, size, loopBody,
+    use_openmp, omp_params
+    )
   let alias0 = aliases[0]
   var test_C_Contiguous = newCall(ident"is_C_contiguous", alias0)
   for i in 1 ..< aliases.len:
@@ -158,16 +281,80 @@ macro reduceEach*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
       `raw_ptrs_stmt`
       let `size` = `alias0`.size
       if `test_C_Contiguous`:
-        omp_parallel_chunks(
-              `size`, `nb_chunks`,
-              `chunk_offset`, `chunk_size`,
-              omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
-              use_simd = true):
-          `contiguous_body`
+        `contiguous_body`
       else:
-        omp_parallel_chunks(
-              `size`, `nb_chunks`,
-              `chunk_offset`, `chunk_size`,
-              omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
-              use_simd = true):
-          `strided_body`
+        `strided_body`
+
+macro reduceEachContiguous*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
+  ## Format:
+  ##   var partial_sums{.align_variable.}: newSeq[int](omp_get_max_threads() * padding)
+  ##   var nb_chunks: Natural
+  ##   reduceEachContiguous nb_chunks, x in a, y in b, z in c, (1024, true):
+  ##      partial_sums[omp_get_thread_num() * padding] += y * z
+  ##
+  ## (1024, true) corresponds to omp_grain_size, use_simd
+  ## from omp_parallel_for
+  reduceEachContiguousTemplate(true)
+
+macro reduceEachContiguousSerial*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
+  ## Format:
+  ##   var nb_chunks: Natural
+  ##   reduceEachContiguous nb_chunks, x in a, y in b, z in c, (1024, true):
+  ##      result += y * z
+  ##
+  ## OpenMP parameters will be ignored
+  reduceEachContiguousTemplate(false)
+
+macro reduceEachStrided*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
+  ## Format:
+  ##   var partial_sums{.align_variable.}: newSeq[int](omp_get_max_threads() * padding)
+  ##   var nb_chunks: Natural
+  ##   reduceEachContiguous nb_chunks, x in a, y in b, z in c, (1024, true):
+  ##      partial_sums[omp_get_thread_num() * padding] += y * z
+  ##
+  ## The OpenMP minimal per-core grain size
+  ## is always scaled down by OMP_NON_CONTIGUOUS_SCALE_FACTOR (4 by default)
+  reduceEachStridedTemplate(true)
+
+macro reduceEachStridedSerial*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
+  ## Format:
+  ## Format:
+  ##   var nb_chunks: Natural
+  ##   reduceEachStridedSerial nb_chunks, x in a, y in b, z in c, (1024, true):
+  ##      result += y * z
+  ##
+  ## Strided iteration with serial execution. OpenMP params passed to it will be ignored
+  reduceEachStridedTemplate(false)
+
+macro reduceEach*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
+  ## Format:
+  ##   var partial_sums{.align_variable.}: newSeq[int](omp_get_max_threads() * padding)
+  ##   var nb_chunks: Natural
+  ##   reduceEach nb_chunks, x in a, y in b, z in c, (1024, true):
+  ##      partial_sums[omp_get_thread_num() * padding] += y * z
+  ##
+  ## (1024, true) corresponds to omp_grain_size, use_simd
+  ## from omp_parallel_for
+  ##
+  ## The iteration strategy is selected at runtime depending of
+  ## the tensors memory layout. If you know at compile-time that the tensors are
+  ## contiguous or strided, use reduceEachContiguous or reduceEachStrided instead.
+  ## Runtime selection requires duplicating the code body.
+  ##
+  ## If the tensors are non-contiguous, the OpenMP minimal per-core grain size
+  ## is scaled down by OMP_NON_CONTIGUOUS_SCALE_FACTOR (4 by default)
+  reduceEachTemplate(true)
+
+macro reduceEachSerial*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
+  ## Format:
+  ##   var nb_chunks: Natural
+  ##   reduceEachSerial nb_chunks, x in a, y in b, z in c, (1024, true):
+  ##      partial_sums += y * z
+  ##
+  ## OpenMP parameters will be ignored
+  ##
+  ## The iteration strategy is selected at runtime depending of
+  ## the tensors memory layout. If you know at compile-time that the tensors are
+  ## contiguous or strided, use reduceEachContiguousSerial or reduceEachStridedSerial instead.
+  ## Runtime selection requires duplicating the code body.
+  reduceEachTemplate(false)

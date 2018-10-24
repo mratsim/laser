@@ -99,7 +99,7 @@ template omp_parallel_for*(
       index: untyped,
       length: Natural,
       omp_grain_size: static Natural,
-      use_simd: static bool = true,
+      use_simd: static bool,
       body: untyped
       ) =
   ## Parallel loop
@@ -174,7 +174,7 @@ template omp_parallel_chunks*(
     length: Natural, nb_chunks: var Natural,
     chunk_offset, chunk_size: untyped,
     omp_grain_size: static Natural,
-    use_simd: static bool = true,
+    use_simd: static bool,
     body: untyped): untyped =
   ## Create a chunk for each thread. You can use:
   ## `for index in chunk_offset ..< chunk_size:` or

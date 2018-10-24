@@ -58,8 +58,8 @@ proc forEachContiguousImpl(
             `body`
     else:
       let
-        omp_grain_size = omp_params[1]
-        use_simd       = omp_params[2]
+        omp_grain_size = omp_params[0]
+        use_simd       = omp_params[1]
       result = quote do:
         omp_parallel_for(
           `index`, `size`,
@@ -147,9 +147,9 @@ proc forEachStridedImpl(
       omp_grain_size =  if omp_params.isNil: newLit( # scale grain_size down for strided operation
                           OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
                         ) else: newLit(
-                          omp_params[1].intVal div OMP_NON_CONTIGUOUS_SCALE_FACTOR
+                          omp_params[0].intVal div OMP_NON_CONTIGUOUS_SCALE_FACTOR
                         )
-      use_simd       = if omp_params.isNil: newLit true else: omp_params[2]
+      use_simd       = if omp_params.isNil: newLit true else: omp_params[1]
     result = quote do:
       var nb_chunks: Natural
       omp_parallel_chunks(
@@ -189,21 +189,6 @@ template forEachContiguousTemplate(use_openmp: static bool){.dirty.} =
       let `size` = `alias0`.size
       `body`
 
-macro forEachContiguous*(args: varargs[untyped]): untyped =
-  ## Format:
-  ## forEachContiguous x in a, y in b, z in c, (512, 1024, true):
-  ##    x += y * z
-  ## (1024, true) corresponds to omp_grain_size, use_simd
-  ## from omp_parallel_for
-  forEachContiguousTemplate(true)
-
-macro forEachContiguousSerial*(args: varargs[untyped]): untyped =
-  ## Format:
-  ## forEachContiguousSerial x in a, y in b, z in c:
-  ##    x += y * z
-  ## OpenMP parameters will be ignored
-  forEachContiguousTemplate(false)
-
 template forEachStridedTemplate(use_openmp: static bool){.dirty.} =
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
@@ -233,25 +218,6 @@ template forEachStridedTemplate(use_openmp: static bool){.dirty.} =
       `raw_ptrs_stmt`
       let `size` = `alias0`.size
       `body`
-
-macro forEachStrided*(args: varargs[untyped]): untyped =
-  ## Format:
-  ## forEachStrided x in a, y in b, z in c, (512, 1024, true):
-  ##    x += y * z
-  ## (1024, true) corresponds to omp_grain_size, use_simd
-  ## from omp_parallel_for
-  ##
-  ## The OpenMP minimal per-core grain size
-  ## is always scaled down by OMP_NON_CONTIGUOUS_SCALE_FACTOR (4 by default)
-  forEachStridedTemplate(true)
-
-macro forEachStridedSerial*(args: varargs[untyped]): untyped =
-  ## Format:
-  ## forEachStridedSerial x in a, y in b, z in c:
-  ##    x += y * z
-  ##
-  ## Strided iteration with serial execution. OpenMP params passed to it will be ignored
-  forEachStridedTemplate(false)
 
 template forEachTemplate(use_openmp: static bool) {.dirty.} =
   var
@@ -296,9 +262,44 @@ template forEachTemplate(use_openmp: static bool) {.dirty.} =
       else:
         `strided_body`
 
+
+macro forEachContiguous*(args: varargs[untyped]): untyped =
+  ## Format:
+  ## forEachContiguous x in a, y in b, z in c, (1024, true):
+  ##    x += y * z
+  ## (1024, true) corresponds to omp_grain_size, use_simd
+  ## from omp_parallel_for
+  forEachContiguousTemplate(true)
+
+macro forEachContiguousSerial*(args: varargs[untyped]): untyped =
+  ## Format:
+  ## forEachContiguousSerial x in a, y in b, z in c:
+  ##    x += y * z
+  ## OpenMP parameters will be ignored
+  forEachContiguousTemplate(false)
+
+macro forEachStrided*(args: varargs[untyped]): untyped =
+  ## Format:
+  ## forEachStrided x in a, y in b, z in c, (1024, true):
+  ##    x += y * z
+  ## (1024, true) corresponds to omp_grain_size, use_simd
+  ## from omp_parallel_for
+  ##
+  ## The OpenMP minimal per-core grain size
+  ## is always scaled down by OMP_NON_CONTIGUOUS_SCALE_FACTOR (4 by default)
+  forEachStridedTemplate(true)
+
+macro forEachStridedSerial*(args: varargs[untyped]): untyped =
+  ## Format:
+  ## forEachStridedSerial x in a, y in b, z in c:
+  ##    x += y * z
+  ##
+  ## Strided iteration with serial execution. OpenMP params passed to it will be ignored
+  forEachStridedTemplate(false)
+
 macro forEach*(args: varargs[untyped]): untyped =
   ## Format:
-  ## forEach x in a, y in b, z in c, (512, 1024, true):
+  ## forEach x in a, y in b, z in c, (1024, true):
   ##    x += y * z
   ## (1024, true) corresponds to omp_grain_size, use_simd
   ## from omp_parallel_for
