@@ -40,6 +40,8 @@ echo foo(a, b)
 #
 # This means that each thread will do the same work
 # Final result will be nb_threads * real_result
+#
+# See feature request: https://github.com/nim-lang/Nim/issues/9490
 
 # proc foo_alt[T](x, y: Tensor[T]): T =
 #   const
