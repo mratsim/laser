@@ -62,20 +62,27 @@ proc sum_kernel*(data: ptr UncheckedArray[float32], len: Natural): float32 =
                           # under a certain threshold we don't parallelize
                           # due to overhead
                           # i.e. we have a wasted seq alloc
-    if cpuinfo_has_x86_sse3():
-      omp_parallel_chunks_default(
-            len, nb_chunks, chunk_offset, chunk_size):
-        let p_chunk{.restrict.} = cast[ptr UncheckedArray[float32]](
-                                    data[chunk_offset].addr
-                                  )
-        partial_sums[omp_get_thread_num() * padding] = sum_sse3(p_chunk, chunk_size)
-    else:
+
+    template fallback(){.dirty.} =
       omp_parallel_chunks_default(
             len, nb_chunks, chunk_offset, chunk_size):
         let p_chunk{.restrict.} = cast[ptr UncheckedArray[float32]](
                                     data[chunk_offset].addr
                                   )
         partial_sums[omp_get_thread_num() * padding] = sum_fallback(p_chunk, chunk_size)
+
+    when defined(i386) or defined(amd_64):
+      if cpuinfo_has_x86_sse3():
+        omp_parallel_chunks_default(
+              len, nb_chunks, chunk_offset, chunk_size):
+          let p_chunk{.restrict.} = cast[ptr UncheckedArray[float32]](
+                                      data[chunk_offset].addr
+                                    )
+          partial_sums[omp_get_thread_num() * padding] = sum_sse3(p_chunk, chunk_size)
+      else:
+        fallback()
+    else:
+      fallback()
 
     for i in 0 ..< nb_chunks:
       result += partial_sums[i * padding]
