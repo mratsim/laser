@@ -55,7 +55,7 @@ proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
       var nb_chunks: Natural
       omp_parallel_chunks(
             size, nb_chunks, chunk_offset, chunk_size,
-            OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
+            OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
           dst.storage.raw_data[chunk_offset],
@@ -93,7 +93,7 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
       var nb_chunks: Natural
       omp_parallel_chunks(
             src.size, nb_chunks, chunk_offset, chunk_size,
-            OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
+            OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
           dst.storage.raw_data[chunk_offset].addr,
@@ -119,7 +119,7 @@ proc copyFromRaw*[T](dst: var Tensor[T], buffer: ptr T, len: Natural) =
     var nb_chunks: Natural
     omp_parallel_chunks(
             len, nb_chunks, chunk_offset, chunk_size,
-            OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
+            OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
             use_simd = false):
         copyMem(
           dst.storage.raw_data[chunk_offset].addr,
@@ -150,7 +150,7 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
     var nb_chunks: Natural
     omp_parallel_chunks(
           t.size, nb_chunks, chunk_offset, chunk_size,
-          OMP_MEMORY_BOUND_THRESHOLD * 4, OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
+          OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
           use_simd = false):
       zeroMem(
         t.storage.raw_data[chunk_offset].addr,

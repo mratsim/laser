@@ -58,13 +58,12 @@ proc forEachContiguousImpl(
             `body`
     else:
       let
-        omp_threshold  = omp_params[0]
         omp_grain_size = omp_params[1]
         use_simd       = omp_params[2]
       result = quote do:
         omp_parallel_for(
           `index`, `size`,
-          `omp_threshold`, `omp_grain_size`, `use_simd`):
+          `omp_grain_size`, `use_simd`):
             `body`
   else:
     result = quote do:
@@ -145,8 +144,6 @@ proc forEachStridedImpl(
 
   if use_openmp:
     let
-      omp_threshold  =  if omp_params.isNil: newLit OMP_MEMORY_BOUND_THRESHOLD
-                        else: omp_params[0]
       omp_grain_size =  if omp_params.isNil: newLit( # scale grain_size down for strided operation
                           OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
                         ) else: newLit(
@@ -157,7 +154,7 @@ proc forEachStridedImpl(
       var nb_chunks: Natural
       omp_parallel_chunks(
         `size`, nb_chunks, `chunk_offset`, `chunk_size`,
-        `omp_threshold`, `omp_grain_size`, `use_simd`):
+        `omp_grain_size`, `use_simd`):
           `stridedBody`
   else:
     result = stridedBody
@@ -196,7 +193,7 @@ macro forEachContiguous*(args: varargs[untyped]): untyped =
   ## Format:
   ## forEachContiguous x in a, y in b, z in c, (512, 1024, true):
   ##    x += y * z
-  ## (512, 1024, true) corresponds to omp_threshold, omp_grain_size, use_simd
+  ## (1024, true) corresponds to omp_grain_size, use_simd
   ## from omp_parallel_for
   forEachContiguousTemplate(true)
 
@@ -241,7 +238,7 @@ macro forEachStrided*(args: varargs[untyped]): untyped =
   ## Format:
   ## forEachStrided x in a, y in b, z in c, (512, 1024, true):
   ##    x += y * z
-  ## (512, 1024, true) corresponds to omp_threshold, omp_grain_size, use_simd
+  ## (1024, true) corresponds to omp_grain_size, use_simd
   ## from omp_parallel_for
   ##
   ## The OpenMP minimal per-core grain size
@@ -303,7 +300,7 @@ macro forEach*(args: varargs[untyped]): untyped =
   ## Format:
   ## forEach x in a, y in b, z in c, (512, 1024, true):
   ##    x += y * z
-  ## (512, 1024, true) corresponds to omp_threshold, omp_grain_size, use_simd
+  ## (1024, true) corresponds to omp_grain_size, use_simd
   ## from omp_parallel_for
   ##
   ## The iteration strategy is selected at runtime depending of

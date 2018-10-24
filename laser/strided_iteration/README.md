@@ -28,8 +28,8 @@ to allow dispatching to `forEachContiguous` or `forEachStrided`
 The code is carefully tuned to produce the most performant and compact iteration scheme. The `forEach` macro however still has to duplicate the code body to dispatch for contiguous and non-contiguous case.
 
 The iteration supports OpenMP and the following parameters (see [openmp.nim](../openmp.nim) file):
-  - omp_threshold: below this threshold, execution is always serial, default 512
-  - omp_grain_size: amount of work items per core, default 1024
+  - omp_grain_size: amount of work items per threads (including hyperthreading), default 1024
+                    below this threshold, execution is serial
   - use_simd: Tell the compiler to unroll the loop so that SIMD can be used
               i.e. when iterating on float32, AVX2 can work on 256-bit so loops
               will be unrolled by a factor 8

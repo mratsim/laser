@@ -161,7 +161,6 @@ macro reduceEach*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
         omp_parallel_chunks(
               `size`, `nb_chunks`,
               `chunk_offset`, `chunk_size`,
-              omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
               omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
               use_simd = true):
           `contiguous_body`
@@ -169,7 +168,6 @@ macro reduceEach*(nb_chunks: var Natural, args: varargs[untyped]): untyped =
         omp_parallel_chunks(
               `size`, `nb_chunks`,
               `chunk_offset`, `chunk_size`,
-              omp_threshold = OMP_MEMORY_BOUND_THRESHOLD,
               omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
               use_simd = true):
           `strided_body`

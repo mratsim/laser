@@ -2,7 +2,7 @@ import ../laser/strided_iteration/[reduce_each, foreach]
 import ../laser/tensor/[datatypes, allocator, initialization]
 import ../laser/[compiler_optim_hints, dynamic_stack_arrays]
 import ../laser/openmp
-import sequtils, macros
+import sequtils
 
 proc foo[T](x, y: Tensor[T]): T =
   const
