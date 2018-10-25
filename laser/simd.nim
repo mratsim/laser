@@ -61,12 +61,11 @@ when defined(i386) or defined(amd64):
     ##   A0
 
   ## AVX
-  when defined(amd64):
-    type
-      m256* {.importc: "__m256", x86_type.} = object
-        f0, f1, f2, f3, f4, f5, f6, f7: float32
-      m256d* {.importc: "__m256d", x86_type.} = object
-        f0, f1, f2, f3: float64
+  type
+    m256* {.importc: "__m256", x86_type.} = object
+      f0, f1, f2, f3, f4, f5, f6, f7: float32
+    m256d* {.importc: "__m256d", x86_type.} = object
+      f0, f1, f2, f3: float64
 
   func mm256_setzero_ps*(): m256 {.importc: "_mm256_setzero_ps", x86.}
     ## [float32 0, 0, 0, 0]
