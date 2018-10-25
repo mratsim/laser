@@ -9,7 +9,7 @@ import
   ./private/align_unroller
 
 when defined(i386) or defined(amd_64):
-  import ./sum_sse3
+  import ./reduction_sum_min_max_sse3
 
 func sum_fallback(data: ptr UncheckedArray[float32], len: Natural): float32 =
   ## Fallback kernel for sum reduction

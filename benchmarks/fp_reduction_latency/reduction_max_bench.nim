@@ -8,7 +8,8 @@
 import
   ../../laser/strided_iteration/foreach,
   ../../laser/tensor/[allocator, datatypes, initialization],
-  ../../laser/[compiler_optim_hints, dynamic_stack_arrays]
+  ../../laser/[compiler_optim_hints, dynamic_stack_arrays],
+  ../../laser/hpc_kernels/reduction_sum_min_max_sse3
 
 withCompilerOptimHints()
 
@@ -174,6 +175,11 @@ proc mainBench_5_accum_simple(a: Tensor[float32], nb_samples: int) =
     accum = max(accum, accum1)
     accum = max(accum, accum2)
 
+proc mainBench_packed_sse_prod(a: Tensor[float32], nb_samples: int) =
+  var accum = float32(-Inf)
+  bench("Max reduction - prod impl", accum):
+    accum = max(accum, max_sse3(a.storage.raw_data, a.size))
+
 when defined(fastmath):
   {.passC:"-ffast-math".}
 
@@ -186,6 +192,7 @@ when isMainModule:
   block: # All contiguous
     let
       a = randomTensor([10000, 1000], -1.0'f32 .. 1.0'f32)
+    mainBench_packed_sse_prod(a, 1000)
     mainBench_1_accum_simple(a, 1000)
     mainBench_1_accum_macro(a, 1000)
     mainBench_2_accum_simple(a, 1000)
@@ -193,72 +200,83 @@ when isMainModule:
     mainBench_4_accum_simple(a, 1000)
     mainBench_5_accum_simple(a, 1000)
 
-#### Bench - this is awfully slow ...
+#### Bench - naive is awfully slow ...
 
-# Warmup: 1.8282 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1938 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# Max reduction - prod impl - float32
+# Collected 1000 samples in 2.780 seconds
+# Average time: 2.776 ms
+# Stddev  time: 0.348 ms
+# Min     time: 2.432 ms
+# Max     time: 7.568 ms
+# Theoretical perf: 3602.164 MFLOP/s
+
+# Display sum of samples sums to make sure it's not optimized away
+# 0.9999996423721313
 
 # Reduction - 1 accumulator - simple iter - float32
-# Collected 1000 samples in 21.723 seconds
-# Average time: 21.719 ms
-# Stddev  time: 6.931 ms
-# Min     time: 19.716 ms
-# Max     time: 57.036 ms
-# Theoretical perf: 460.436 MFLOP/s
+# Collected 1000 samples in 20.024 seconds
+# Average time: 20.019 ms
+# Stddev  time: 0.611 ms
+# Min     time: 19.669 ms
+# Max     time: 28.292 ms
+# Theoretical perf: 499.515 MFLOP/s
 
 # Display sum of samples sums to make sure it's not optimized away
 # 0.9999996423721313
 
 # Reduction - 1 accumulator - macro iter - float32
-# Collected 1000 samples in 20.310 seconds
-# Average time: 20.306 ms
-# Stddev  time: 0.689 ms
-# Min     time: 19.696 ms
-# Max     time: 26.119 ms
-# Theoretical perf: 492.467 MFLOP/s
+# Collected 1000 samples in 20.452 seconds
+# Average time: 20.447 ms
+# Stddev  time: 1.382 ms
+# Min     time: 19.642 ms
+# Max     time: 31.142 ms
+# Theoretical perf: 489.063 MFLOP/s
 
 # Display sum of samples sums to make sure it's not optimized away
 # 0.9999996423721313
 
 # Reduction - 2 accumulators - simple iter - float32
-# Collected 1000 samples in 21.408 seconds
-# Average time: 21.404 ms
-# Stddev  time: 0.484 ms
-# Min     time: 21.165 ms
-# Max     time: 29.999 ms
-# Theoretical perf: 467.209 MFLOP/s
+# Collected 1000 samples in 21.111 seconds
+# Average time: 21.107 ms
+# Stddev  time: 1.972 ms
+# Min     time: 19.817 ms
+# Max     time: 31.056 ms
+# Theoretical perf: 473.785 MFLOP/s
 
 # Display sum of samples sums to make sure it's not optimized away
 # 0.9999996423721313
 
 # Reduction - 3 accumulators - simple iter - float32
-# Collected 1000 samples in 18.117 seconds
-# Average time: 18.112 ms
-# Stddev  time: 0.477 ms
-# Min     time: 17.841 ms
-# Max     time: 24.668 ms
-# Theoretical perf: 552.106 MFLOP/s
+# Collected 1000 samples in 18.397 seconds
+# Average time: 18.393 ms
+# Stddev  time: 0.747 ms
+# Min     time: 17.889 ms
+# Max     time: 25.060 ms
+# Theoretical perf: 543.690 MFLOP/s
 
 # Display sum of samples sums to make sure it's not optimized away
 # 0.9999996423721313
 
 # Reduction - 4 accumulators - simple iter - float32
-# Collected 1000 samples in 19.172 seconds
-# Average time: 19.168 ms
-# Stddev  time: 0.511 ms
-# Min     time: 18.925 ms
-# Max     time: 28.118 ms
-# Theoretical perf: 521.705 MFLOP/s
+# Collected 1000 samples in 18.173 seconds
+# Average time: 18.168 ms
+# Stddev  time: 0.724 ms
+# Min     time: 17.704 ms
+# Max     time: 26.864 ms
+# Theoretical perf: 550.413 MFLOP/s
 
 # Display sum of samples sums to make sure it's not optimized away
 # 0.9999994039535522
 
 # Reduction - 5 accumulators - simple iter - float32
-# Collected 1000 samples in 18.725 seconds
-# Average time: 18.721 ms
-# Stddev  time: 0.441 ms
-# Min     time: 18.483 ms
-# Max     time: 27.379 ms
-# Theoretical perf: 534.164 MFLOP/s
+# Collected 1000 samples in 18.444 seconds
+# Average time: 18.440 ms
+# Stddev  time: 1.286 ms
+# Min     time: 17.805 ms
+# Max     time: 29.549 ms
+# Theoretical perf: 542.298 MFLOP/s
 
 # Display sum of samples sums to make sure it's not optimized away
 # 0.9999996423721313
@@ -266,7 +284,7 @@ when isMainModule:
 
 #####
 
-# Assembly for FP32 max:
+# Assembly for naive FP32 max:
 # +0x00	pushq               %rbp
 # +0x01	movq                %rsp, %rbp
 # +0x04	movaps              %xmm1, %xmm2
@@ -288,4 +306,19 @@ when isMainModule:
 # +0xb3	        incq                %r15
 # +0xb6	        cmpq                %r15, %rbx
 # +0xb9	        jne                 "mainBench1_accum_simple_WC3Emwg71YNnFD8IeLSnQA+0xa0"
+
+# The SSE3 implementation hits memory bendwith bottleneck:
+
+# +0x67	nopw                (%rax,%rax)
+# +0x70	    maxps               (%rdi,%rcx,4), %xmm1
+# +0x74	    maxps               16(%rdi,%rcx,4), %xmm3
+# +0x79	    maxps               32(%rdi,%rcx,4), %xmm2
+# +0x7e	    maxps               48(%rdi,%rcx,4), %xmm4
+# +0x83	    maxps               64(%rdi,%rcx,4), %xmm1
+# +0x88	    maxps               80(%rdi,%rcx,4), %xmm3 # Bottleneck here
+# +0x8d	    maxps               96(%rdi,%rcx,4), %xmm2
+# +0x92	    maxps               112(%rdi,%rcx,4), %xmm4
+# +0x97	    addq                $32, %rcx
+# +0x9b	    addq                $2, %rdx
+# +0x9f	    jne                 "max_sse3_skqjc9ccvpz3qvNJidlNb9aw+0x70"
 

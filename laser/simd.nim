@@ -24,12 +24,32 @@ when defined(i386) or defined(amd64):
   # Reminder: x86 is little-endian, order is [low part, high part]
   func mm_setzero_ps*(): m128 {.importc: "_mm_setzero_ps", x86.}
     ## [float32 0, 0, 0, 0]
+  func mm_set1_ps*(a: float32): m128 {.importc: "_mm_set1_ps", x86.}
+    ## [a, a, a, a]
   func mm_load_ps*(aligned_data: ptr float32): m128 {.importc: "_mm_load_ps", x86.}
     ## Load 4 packed float32 in __m128. They must be aligned on 16-byte boundary.
+  func mm_load_ss*(aligned_data: ptr float32): m128 {.importc: "_mm_load_ss", x86.}
+    ## Load 1 float32 in __m128. in the lower word and zero the rest.
   func mm_add_ps*(a, b: m128): m128 {.importc: "_mm_add_ps", x86.}
     ## Vector addition
   func mm_add_ss*(a, b: m128): m128 {.importc: "_mm_add_ss", x86.}
     ## Low part addition + copy of a
+    ## Input:
+    ##   { A0, A1, A2, A3 }, { B0, B1, B2, B3 }
+    ## Result:
+    ##   { A0 + B0, A1, A2, A3 }
+  func mm_max_ps*(a, b: m128): m128 {.importc: "_mm_max_ps", x86.}
+    ## Vector maximum
+  func mm_max_ss*(a, b: m128): m128 {.importc: "_mm_max_ss", x86.}
+    ## Low part max + copy of a
+    ## Input:
+    ##   { A0, A1, A2, A3 }, { B0, B1, B2, B3 }
+    ## Result:
+    ##   { A0 + B0, A1, A2, A3 }
+  func mm_min_ps*(a, b: m128): m128 {.importc: "_mm_min_ps", x86.}
+    ## Vector min
+  func mm_min_ss*(a, b: m128): m128 {.importc: "_mm_min_ss", x86.}
+    ## Low part min + copy of a
     ## Input:
     ##   { A0, A1, A2, A3 }, { B0, B1, B2, B3 }
     ## Result:

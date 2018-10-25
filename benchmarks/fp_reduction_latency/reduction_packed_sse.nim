@@ -6,7 +6,7 @@ import
   ../../laser/tensor/[allocator, datatypes, initialization],
   ../../laser/[compiler_optim_hints, dynamic_stack_arrays],
   ../../laser/simd,
-  ../../laser/hpc_kernels/sum
+  ../../laser/hpc_kernels/reduction_sum_min_max
 
 withCompilerOptimHints()
 
