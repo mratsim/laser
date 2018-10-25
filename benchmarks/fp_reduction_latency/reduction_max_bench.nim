@@ -282,7 +282,7 @@ when isMainModule:
 # 0.9999996423721313
 
 
-#####
+##############################
 
 # Assembly for naive FP32 max:
 # +0x00	pushq               %rbp
@@ -307,7 +307,30 @@ when isMainModule:
 # +0xb6	        cmpq                %r15, %rbx
 # +0xb9	        jne                 "mainBench1_accum_simple_WC3Emwg71YNnFD8IeLSnQA+0xa0"
 
-# The SSE3 implementation hits memory bendwith bottleneck:
+##############################
+# With fastmath + march-native
+# max is properly detected bu we have a huge function call overhead
+
+# +0x00	pushq               %rbp
+# +0x01	movq                %rsp, %rbp
+# +0x04	vmaxss              %xmm1, %xmm0, %xmm0
+# +0x08	popq                %rbp
+# +0x09	retq
+# +0x0a	nopw                (%rax,%rax)
+
+# ------------------------------------------
+
+# +0x99	    nopl                (%rax)
+# +0xa0	        movq                120(%r12), %rax
+# +0xa5	        movq                (%rax), %rax
+# +0xa8	        vmovss              (%rax,%r15,4), %xmm1
+# +0xae	        callq               "max_FD6II0MuRlcOS7s9alzR0nA"
+# +0xb3	        addq                $1, %r15
+# +0xb7	        cmpq                %r15, %rbx
+# +0xba	        jne                 "mainBench1_accum_simple_WC3Emwg71YNnFD8IeLSnQA_2+0xa0"
+
+###########################################################
+# The SSE3 implementation hits memory bandwidth bottleneck:
 
 # +0x67	nopw                (%rax,%rax)
 # +0x70	    maxps               (%rdi,%rcx,4), %xmm1
