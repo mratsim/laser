@@ -45,7 +45,7 @@ when defined(i386) or defined(amd64):
     ## Input:
     ##   { A0, A1, A2, A3 }, { B0, B1, B2, B3 }
     ## Result:
-    ##   { A0 + B0, A1, A2, A3 }
+    ##   { max(A0,B0), A1, A2, A3 }
   func mm_min_ps*(a, b: m128): m128 {.importc: "_mm_min_ps", x86.}
     ## Vector min
   func mm_min_ss*(a, b: m128): m128 {.importc: "_mm_min_ss", x86.}
@@ -53,7 +53,7 @@ when defined(i386) or defined(amd64):
     ## Input:
     ##   { A0, A1, A2, A3 }, { B0, B1, B2, B3 }
     ## Result:
-    ##   { A0 + B0, A1, A2, A3 }
+    ##   { min(A0,B0), A1, A2, A3 }
 
   ##SSE3
   func mm_movehdup_ps*(a: m128): m128 {.importc: "_mm_movehdup_ps", x86.}

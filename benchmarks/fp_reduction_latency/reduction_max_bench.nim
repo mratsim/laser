@@ -201,6 +201,7 @@ when isMainModule:
     mainBench_5_accum_simple(a, 1000)
 
 #### Bench - naive is awfully slow ...
+# Issue opened in https://github.com/nim-lang/Nim/issues/9514
 
 # Warmup: 1.1938 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
