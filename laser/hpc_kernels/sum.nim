@@ -36,7 +36,7 @@ func sum_fallback(data: ptr UncheckedArray[float32], len: Natural): float32 =
 proc sum_kernel*(data: ptr UncheckedArray[float32], len: Natural): float32 =
   ## Does a sum reduction on a contiguous range of float32
   ## Warning:
-  ##   This kernel considers floating-point addition commutative
+  ##   This kernel considers floating-point addition associative
   ##   and will reorder additions.
 
   # Note that the kernel is memory-bandwith bound once the
