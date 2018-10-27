@@ -81,19 +81,29 @@ const OMP_NON_CONTIGUOUS_SCALE_FACTOR*{.intdefine.} = 4
 
 # ################################################################
 
-template attachGC(): untyped =
-  discard
-  # TODO: this creates too strange error messages
-  # when --threads is not on: https://github.com/nim-lang/Nim/issues/9489
-  # if(omp_get_thread_num()!=0):
-  #     setupForeignThreadGc()
+template attachGC*(): untyped =
+  ## If you are allocating reference types, sequences or strings
+  ## in a parallel section, you need to attach and detach
+  ## a GC for each thread. Those should be thread-local temporaries.
+  ##
+  ## This attaches the GC.
+  ##
+  ## Note: this creates too strange error messages
+  ## when --threads is not on: https://github.com/nim-lang/Nim/issues/9489
+  if(omp_get_thread_num()!=0):
+      setupForeignThreadGc()
 
-template detachGC(): untyped =
-  discard
-  # TODO: this creates too strange error messages
-  # when --threads is not on: https://github.com/nim-lang/Nim/issues/9489
-  # if(omp_get_thread_num()!=0):
-  #     teardownForeignThreadGc()
+template detachGC*(): untyped =
+  ## If you are allocating reference types, sequences or strings
+  ## in a parallel section, you need to attach and detach
+  ## a GC for each thread. Those should be thread-local temporaries.
+  ##
+  ## This detaches the GC.
+  ##
+  ## Note: this creates too strange error messages
+  ## when --threads is not on: https://github.com/nim-lang/Nim/issues/9489
+  if(omp_get_thread_num()!=0):
+      teardownForeignThreadGc()
 
 template omp_parallel_for*(
       index: untyped,
@@ -103,6 +113,11 @@ template omp_parallel_for*(
       body: untyped
       ) =
   ## Parallel loop
+  ##
+  ## Do not forget to use attachGC and detachGC if you are allocating
+  ## sequences, strings, or reference types.
+  ## Those should be thread-local temporaries.
+  ##
   ## Inputs:
   ##   - `index`, the iteration index, similar to
   ##     for `index` in 0 ..< length:
@@ -145,9 +160,7 @@ template omp_parallel_for*(
       "if(" & $omp_condition_csym & ")"
 
     for `index`{.inject.} in `||`(0, omp_size - 1, omp_annotation):
-      attachGC()
       block: body
-      detachGC()
 
 template omp_parallel_for_default*(
       index: untyped,
@@ -180,7 +193,6 @@ template omp_parallel_chunks*(
   ## `for index in chunk_offset ..< chunk_size:` or
   ## `zeroMem(foo[chunk_offset].addr, chunk_size)`
   ##
-  ##
   ## Splits the input `length` into chunks and do a parallel loop
   ## on each chunk. The number of chunks depends on the number of cores at runtime.
   ## `chunk_offset` and `chunk_size` should be passed as undeclared identifiers.
@@ -190,7 +202,11 @@ template omp_parallel_chunks*(
   ## Use omp_get_thread_num() to get the current thread number
   ##
   ## This is useful for non-contiguous processing as a replacement to omp_parallel_for
-  ## or when operating on (contiguous) ranges for example for memset or memcpy
+  ## or when operating on (contiguous) ranges for example for memset or memcpy.
+  ##
+  ## Do not forget to use attachGC and detachGC if you are allocating
+  ## sequences, strings, or reference types.
+  ## Those should be thread-local temporaries.
   when not defined(openmp):
     nb_chunks = 1
     const `chunk_offset`{.inject.} = 0
@@ -219,9 +235,7 @@ template omp_parallel_chunks*(
       let `chunk_offset`{.inject.} = whole_chunk_size * chunk_id
       let `chunk_size`{.inject.} =  if chunk_id < nb_chunks - 1: whole_chunk_size
                                     else: ompsize - chunk_offset
-      attachGC()
       block: body
-      detachGC()
 
 template omp_parallel_chunks_default*(
     length: Natural, nb_chunks: var Natural,
@@ -245,11 +259,14 @@ template omp_parallel_chunks_default*(
   )
 
 template omp_parallel*(body: untyped): untyped =
+  ## Starts an openMP parallel section
+  ##
+  ## Don't forget to use attachGC and detachGC if you are allocating
+  ## sequences, strings, or reference types.
+  ## Those should be thread-local temporaries.
   {.emit: "#pragma omp parallel".}
   block:
-    attachGC()
     body
-    detachGC()
 
 template omp_critical*(body: untyped): untyped =
   {.emit: "#pragma omp critical".}
