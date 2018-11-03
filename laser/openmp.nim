@@ -154,7 +154,7 @@ template omp_parallel_for*(
     let
       omp_size = length # make sure if length is computed it's only done once
       omp_condition {.exportc: "omp_condition_" &
-        omp_suffix(genNew = false).} = omp_grain_size * omp_get_max_threads() < omp_size
+        omp_suffix().} = omp_grain_size * omp_get_max_threads() < omp_size
 
     const omp_annotation = (when use_simd:"simd " else: "") &
       "if(" & $omp_condition_csym & ")"
@@ -184,10 +184,9 @@ template omp_parallel_for_default*(
     body)
 
 template omp_parallel_chunks*(
-    length: Natural, nb_chunks: var Natural,
+    length: Natural,
     chunk_offset, chunk_size: untyped,
     omp_grain_size: static Natural,
-    use_simd: static bool,
     body: untyped): untyped =
   ## Create a chunk for each thread. You can use:
   ## `for index in chunk_offset ..< chunk_size:` or
@@ -208,37 +207,28 @@ template omp_parallel_chunks*(
   ## sequences, strings, or reference types.
   ## Those should be thread-local temporaries.
   when not defined(openmp):
-    nb_chunks = 1
     const `chunk_offset`{.inject.} = 0
     let `chunk_size`{.inject.} = length
     block: body
   else:
-    const # Workaround to expose an unique symbol in C.
-      omp_condition_csym = "omp_condition_" & omp_suffix(genNew = true)
-
     let
       omp_size = length # make sure if length is computed it's only done once
       max_threads = omp_get_max_threads()
-      omp_condition {.exportc: "omp_condition_" &
-        omp_suffix(genNew = false).} = omp_grain_size * max_threads < omp_size
+      omp_condition = omp_grain_size * max_threads < omp_size
 
-    if omp_condition:
-      nb_chunks = max_threads
-    else:
-      nb_chunks = 1
-    let whole_chunk_size = omp_size div nb_chunks
-
-    const omp_annotation = (when use_simd:"simd " else: "") &
-      "if(" & $omp_condition_csym & ")"
-
-    for chunk_id in `||`(0, nb_chunks - 1, omp_annotation):
-      let `chunk_offset`{.inject.} = whole_chunk_size * chunk_id
-      let `chunk_size`{.inject.} =  if chunk_id < nb_chunks - 1: whole_chunk_size
+    {.emit: "#pragma omp parallel if (`omp_condition`)".}
+    block:
+      let
+        nb_chunks = omp_get_num_threads()
+        whole_chunk_size = omp_size div nb_chunks
+        thread_id = omp_get_thread_num()
+        `chunk_offset`{.inject.} = whole_chunk_size * thread_id
+        `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: whole_chunk_size
                                     else: ompsize - chunk_offset
       block: body
 
 template omp_parallel_chunks_default*(
-    length: Natural, nb_chunks: var Natural,
+    length: Natural,
     chunk_offset, chunk_size: untyped,
     body: untyped): untyped =
   ## This will be renamed omp_parallel_chunks once
@@ -249,12 +239,10 @@ template omp_parallel_chunks_default*(
   ##     contiguous copy or add operations. It's 1024 and can be changed
   ##     by passing `-d:OMP_MEMORY_BOUND_GRAIN_SIZE=123456` during compilation.
   ##     A value of 1 will always parallelize the loop.
-  ## - simd is used by default
   omp_parallel_chunks(
-    length, nb_chunks,
+    length,
     chunk_offset, chunk_size,
     omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
-    use_simd = true,
     body
   )
 
@@ -265,8 +253,7 @@ template omp_parallel*(body: untyped): untyped =
   ## sequences, strings, or reference types.
   ## Those should be thread-local temporaries.
   {.emit: "#pragma omp parallel".}
-  block:
-    body
+  block: body
 
 template omp_critical*(body: untyped): untyped =
   {.emit: "#pragma omp critical".}

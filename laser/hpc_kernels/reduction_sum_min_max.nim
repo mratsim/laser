@@ -48,41 +48,30 @@ proc sum_kernel*(data: ptr UncheckedArray[float32], len: Natural): float32 =
         return sum_sse3(data, len)
     return sum_fallback(data, len)
   else:
-    # To prevent false sharing we use a padding solution.
-    # Once https://github.com/nim-lang/Nim/pull/9493 is merged
-    # we can use `#pragma omp critical` instead which doesn't allocate
-    # but uses mutexes/locks. TODO: is allocation or locks more expensive?
+    # TODO: Fastest between a padded seq, a critical section, OMP atomics or CPU atomics?
+    let
+      max_threads = omp_get_max_threads()
+      omp_condition = OMP_MEMORY_BOUND_GRAIN_SIZE * max_threads < len
+      sse3 = cpuinfo_has_x86_sse3()
 
-    let cache_line_size = cpuinfo_get_l1d_caches().line_size
-    let padding = int min(cache_line_size div float32.sizeof.uint32, 1)
-
-    var
-      partial_sums = newSeq[float32](omp_get_max_threads() * padding)
-      nb_chunks: Natural  # Actual number of chunks used in the loop
-                          # under a certain threshold we don't parallelize
-                          # due to overhead
-                          # i.e. we have a wasted seq alloc
-
-    template fallback(){.dirty.} =
-      omp_parallel_chunks_default(
-            len, nb_chunks, chunk_offset, chunk_size):
+    {.emit: "#pragma omp parallel if (`omp_condition`)".}
+    block:
+      let
+        nb_chunks = omp_get_num_threads()
+        whole_chunk_size = len div nb_chunks
+        thread_id = omp_get_thread_num()
+        `chunk_offset`{.inject.} = whole_chunk_size * thread_id
+        `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: whole_chunk_size
+                                    else: len - chunk_offset
+      block:
         let p_chunk{.restrict.} = cast[ptr UncheckedArray[float32]](
                                     data[chunk_offset].addr
                                   )
-        partial_sums[omp_get_thread_num() * padding] = sum_fallback(p_chunk, chunk_size)
+        when defined(i386) or defined(amd_64):
+          let local_sum = if sse3: sum_sse3(p_chunk, chunk_size)
+                          else: sum_fallback(p_chunk, chunk_size)
+        else:
+          let local_sum = sum_fallback(p_chunk, chunk_size)
 
-    when defined(i386) or defined(amd_64):
-      if cpuinfo_has_x86_sse3():
-        omp_parallel_chunks_default(
-              len, nb_chunks, chunk_offset, chunk_size):
-          let p_chunk{.restrict.} = cast[ptr UncheckedArray[float32]](
-                                      data[chunk_offset].addr
-                                    )
-          partial_sums[omp_get_thread_num() * padding] = sum_sse3(p_chunk, chunk_size)
-      else:
-        fallback()
-    else:
-      fallback()
-
-    for i in 0 ..< nb_chunks:
-      result += partial_sums[i * padding]
+        {.emit: "#pragma omp atomic".}
+        {.emit: "`result` += `local_sum`;".}
