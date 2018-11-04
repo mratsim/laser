@@ -146,8 +146,7 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
   else:
     omp_parallel_chunks(
           t.size, chunk_offset, chunk_size,
-          OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
-          use_simd = false):
+          OMP_MEMORY_BOUND_GRAIN_SIZE * 4):
       zeroMem(
         t.storage.raw_data[chunk_offset].addr,
         chunk_size * sizeof(T)

@@ -119,10 +119,9 @@ proc forEachStridedImpl(
                         )
       use_simd       = if omp_params.isNil: newLit true else: omp_params[1]
     result = quote do:
-      var nb_chunks: Natural
       omp_parallel_chunks(
-        `size`, nb_chunks, `chunk_offset`, `chunk_size`,
-        `omp_grain_size`, `use_simd`):
+        `size`, `chunk_offset`, `chunk_size`,
+        `omp_grain_size`):
           `stridedBody`
   else:
     result = stridedBody

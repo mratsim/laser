@@ -85,7 +85,7 @@ template bench(name: string, body: untyped) {.dirty.}=
     printStats(name)
 
 proc mainBench_libImpl(a, b, c: Tensor, nb_samples: int) =
-  bench("Per tensor reference iteration"):
+  bench("Production implementation for tensor iteration"):
     forEach o in output, x in a, y in b, z in c:
       o = x + y - sin z
 
