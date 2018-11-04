@@ -219,6 +219,23 @@ template omp_parallel_for_default*(
         body
         )
 
+template omp_chunks*(
+    omp_size: Natural, #{lvalue} # TODO parameter constraint, pending https://github.com/nim-lang/Nim/issues/9620
+    chunk_offset, chunk_size: untyped,
+    body: untyped): untyped =
+  ## Internal proc
+  ## This is is the chunk part of omp_parallel_chunk
+  ## omp_size should be a lvalue (assigned value) and not
+  ## the result of a routine otherwise routine and its side-effect will be called multiple times
+  let
+    nb_chunks = omp_get_num_threads()
+    whole_chunk_size = omp_size div nb_chunks
+    thread_id = omp_get_thread_num()
+    `chunk_offset`{.inject.} = whole_chunk_size * thread_id
+    `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: whole_chunk_size
+                              else: omp_size - chunk_offset
+  block: body
+
 template omp_parallel_chunks*(
     length: Natural,
     chunk_offset, chunk_size: untyped,
@@ -254,14 +271,7 @@ template omp_parallel_chunks*(
 
     {.emit: "#pragma omp parallel if (`omp_condition`)".}
     block:
-      let
-        nb_chunks = omp_get_num_threads()
-        whole_chunk_size = omp_size div nb_chunks
-        thread_id = omp_get_thread_num()
-        `chunk_offset`{.inject.} = whole_chunk_size * thread_id
-        `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: whole_chunk_size
-                                    else: ompsize - chunk_offset
-      block: body
+      omp_chunks(omp_size, chunk_offset, chunk_size, body)
 
 template omp_parallel_chunks_default*(
     length: Natural,
