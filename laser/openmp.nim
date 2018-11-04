@@ -228,14 +228,14 @@ template omp_chunks*(
   ## omp_size should be a lvalue (assigned value) and not
   ## the result of a routine otherwise routine and its side-effect will be called multiple times
 
-  # Warning: The following chunking scheme can lead to severe load imbalance
+  # The following simple chunking scheme can lead to severe load imbalance
   #
   # `chunk_offset`{.inject.} = chunk_size * thread_id
   # `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: chunk_size
   #                           else: omp_size - chunk_offset
   #
   # For example dividing 40 items on 12 threads will lead to
-  # a base chunksize of 40/12 = 3 so work on the first 11 threads
+  # a base_chunk_size of 40/12 = 3 so work on the first 11 threads
   # will be 3 * 11 = 33, and the remainder 7 on the last thread.
   let
     nb_chunks = omp_get_num_threads()
@@ -247,6 +247,13 @@ template omp_chunks*(
     # 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 7 = 3*11 + 7 = 40
     # the following scheme will divide into
     # 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3 = 4*4 + 3*8 = 40
+    #
+    # This is compliant with OpenMP spec (page 60)
+    # http://www.openmp.org/mp-documents/openmp-4.5.pdf
+    # "When no chunk_size is specified, the iteration space is divided into chunks
+    # that are approximately equal in size, and at most one chunk is distributed to
+    # each thread. The size of the chunks is unspecified in this case."
+    # ---> chunks are the same ±1
 
     `chunk_offset`{.inject.} = block:
       if thread_id < remainder:
