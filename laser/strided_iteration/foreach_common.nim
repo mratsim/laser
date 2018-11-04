@@ -17,7 +17,6 @@ proc initForEach*(
         args: NimNode,
         params: var NimNode,
         loopBody: var NimNode,
-        omp_params: var NimNode,
         values, aliases, raw_ptrs: var NimNode,
         aliases_stmt, raw_ptrs_stmt: var NimNode,
         test_shapes: var NimNode
@@ -46,8 +45,6 @@ proc initForEach*(
         tensors.add arg[0][1]
       else:
         syntaxError()
-    elif getType(arg) is tuple:
-      omp_params = arg
     else:
       syntaxError()
 
