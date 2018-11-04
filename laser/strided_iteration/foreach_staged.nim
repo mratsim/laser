@@ -8,6 +8,7 @@
 
 import
   macros,
+  tables, sets,
   ./foreach_common,
   ../private/ast_utils,
   ../openmp
@@ -171,16 +172,116 @@ template forEachStagedTemplate(){.dirty.} =
             `strided_body`
           `after_loop_body`
 
-macro forEachStaged*(args: varargs[untyped]): untyped =
-  echo args.treerepr
+proc checkBlocks(bodies: NimNode) =
+  var counts = initCountTable[string](initialSize = 8)
+  let valid_blocks = [
+        "openmp_config", "iteration_kind",
+        "before_loop", "in_loop", "after_loop"
+      ].toSet
+  for node in bodies:
+    node.expectKind nnkCall
+    let section = $node[0]
+    assert section in valid_blocks, "Only the following sections are allowed: " & $valid_blocks
+    counts.inc section
+  for key, count in counts:
+    if count > 1:
+      error "\"" & key & "\" can only be defined once but is defined " & $count & " times."
 
+type IterKind = enum
+  Contiguous, Strided, Both
+
+proc parseBlocks(
+    use_openmp, use_simd, nowait: var NimNode,
+    omp_grain_size: var NimNode,
+    iter_kind: var IterKind,
+    before_loop_body, in_loop_body, after_loop_body: var NimNode,
+    dslBlock: NimNode
+  ) =
+  var params = [
+    "use_openmp", "use_simd", "nowait",
+    "omp_grain_size",
+    "iteration_kind",
+    "before_loop", "in_loop", "after_loop"
+  ].toOrderedSet # after_loop needs to be processed after nowait
+
+  ## Parsing
+  for blck in dslBlock:
+    blck[0].expectKind nnkIdent
+    blck[1].expectKind nnkStmtList
+    if eqIdent(blck[0], "openmp_config"):
+      for param in blck[1]:
+        param[1].expectKind nnkStmtList
+        if eqIdent(param[0], "use_openmp"):
+          let missing = missingOrExcl(params, $param[0])
+          assert missing.not, "`use_openmp` is defined more than once."
+          use_openmp = param[1]
+        elif eqIdent(param[0], "use_simd"):
+          let missing = missingOrExcl(params, $param[0])
+          assert missing.not, "`use_simd` is defined more than once."
+          use_simd = param[1]
+        elif eqIdent(param[0], "nowait"):
+          let missing = missingOrExcl(params, $param[0])
+          assert missing.not, "`nowait` is defined more than once."
+          nowait = param[1]
+        elif eqIdent(param[0], "omp_grain_size"):
+          let missing = missingOrExcl(params, $param[0])
+          assert missing.not, "`omp_grain_size` is defined more than once."
+          omp_grain_size = param[1]
+        else:
+          error "In \"openmp_config\" only the following parameters are allowed: use_openmp, use_simd, nowait, omp_grain_size"
+    elif eqIdent(blck[0], "iteration_kind"):
+      assert blck[1].len == 1
+      params.excl "iteration_kind"
+      if blck[1][0].kind in {nnkIdent, nnkSym}:
+        if blck[1][0].eqIdent("contiguous"):
+          iter_kind = Contiguous
+        elif blck[1][0].eqIdent("strided"):
+          iter_kind = Strided
+        else:
+          error "Invalid iteration kind " & $blck[1][0]
+      elif blck[1][0].kind == nnkCurly:
+        let valid_iter_kind = block:
+          blck[1][0].len == 2 and (
+            ($blck[1][0][0] == "contiguous" and $blck[1][0][1] == "strided") or
+            ($blck[1][0][0] == "serial" and $blck[1][0][0] == "contiguous")
+          )
+        assert valid_iter_kind, "Invalid iteration kind " & blck[1][0].repr
+      else:
+        error "Invalid iteration kind " & blck[1][0].repr
+    elif eqIdent(blck[0], "before_loop"):
+      params.excl "before_loop"
+      before_loop_body = blck[1]
+    elif eqIdent(blck[0], "in_loop"):
+      params.excl "in_loop"
+      before_loop_body = blck[1]
+    elif eqIdent(blck[0], "after_loop"):
+      params.excl "after_loop"
+      before_loop_body = blck[1]
+    else:
+      error "Invalid section " & $blck[0] # This should be caught by checkBlocks
+
+  ## Default values
+  for param in params:
+    case param
+    of "use_openmp": use_openmp = newLit true
+    of "use_simd": use_simd = newLit true
+    of "nowait": nowait = newLit false
+    of "omp_grain_size": omp_grain_size = newLit OMP_MEMORY_BOUND_GRAIN_SIZE
+    of "iteration_kind": iter_kind = Both
+    of "before_loop": before_loop_body = nnkDiscardStmt.newTree(newEmptyNode())
+    of "in_loop": error "`in_loop` section is required"
+    of "after_loop":
+      after_loop_body = nnkDiscardStmt.newTree(newEmptyNode())
+      nowait = newLit true # There is always a barrier after #pragma omp parallel, no need to double it.
+
+macro forEachStaged*(args: varargs[untyped]): untyped =
   var
-    params, bodies, values, aliases, raw_ptrs: NimNode
+    params, dslBlocks, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
     before_loop_body, in_loop_body, after_loop_body: NimNode
 
   params = args
-  bodies = params.pop()
+  dslBlocks = params.pop()
 
   initForEach(
         params,
@@ -188,6 +289,8 @@ macro forEachStaged*(args: varargs[untyped]): untyped =
         aliases_stmt, raw_ptrs_stmt,
         test_shapes
   )
+
+  checkBlocks dslBlocks
 
   result = nnkDiscardStmt.newTree(newEmptyNode())
 
