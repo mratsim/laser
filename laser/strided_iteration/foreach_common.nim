@@ -14,17 +14,13 @@ template isVar[T: object](x: T): bool =
   compiles(addr(x))
 
 proc initForEach*(
-        args: NimNode,
-        params: var NimNode,
-        loopBody: var NimNode,
+        params: NimNode,
         values, aliases, raw_ptrs: var NimNode,
         aliases_stmt, raw_ptrs_stmt: var NimNode,
         test_shapes: var NimNode
       ) =
 
   ### Parse the input
-  params = args
-  loopBody = params.pop()
   values = nnkBracket.newTree()
   var tensors = nnkBracket.newTree()
 

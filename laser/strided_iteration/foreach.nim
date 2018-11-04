@@ -108,10 +108,11 @@ template forEachContiguousTemplate(use_openmp: static bool){.dirty.} =
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
 
+  params = args
+  loopBody = params.pop()
+
   initForEach(
-        args,
         params,
-        loopBody,
         values, aliases, raw_ptrs,
         aliases_stmt, raw_ptrs_stmt,
         test_shapes
@@ -136,10 +137,11 @@ template forEachStridedTemplate(use_openmp: static bool){.dirty.} =
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
 
+  params = args
+  loopBody = params.pop()
+
   initForEach(
-        args,
         params,
-        loopBody,
         values, aliases, raw_ptrs,
         aliases_stmt, raw_ptrs_stmt,
         test_shapes
@@ -164,10 +166,11 @@ template forEachTemplate(use_openmp: static bool) {.dirty.} =
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
 
+  params = args
+  loopBody = params.pop()
+
   initForEach(
-        args,
         params,
-        loopBody,
         values, aliases, raw_ptrs,
         aliases_stmt, raw_ptrs_stmt,
         test_shapes
