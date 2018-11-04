@@ -91,7 +91,7 @@ template attachGC*(): untyped =
   ## Note: this creates too strange error messages
   ## when --threads is not on: https://github.com/nim-lang/Nim/issues/9489
   if(omp_get_thread_num()!=0):
-      setupForeignThreadGc()
+    setupForeignThreadGc()
 
 template detachGC*(): untyped =
   ## If you are allocating reference types, sequences or strings
@@ -103,16 +103,50 @@ template detachGC*(): untyped =
   ## Note: this creates too strange error messages
   ## when --threads is not on: https://github.com/nim-lang/Nim/issues/9489
   if(omp_get_thread_num()!=0):
-      teardownForeignThreadGc()
+    teardownForeignThreadGc()
+
+template omp_for*(
+    index: untyped,
+    length: Natural,
+    use_simd: static bool,
+    body: untyped
+  ) =
+  ## OpenMP for loop (not parallel)
+  ##
+  ## This must be used in an `omp_parallel` block
+  ## for parallelization.
+  ##
+  ## Inputs:
+  ##   - `index`, the iteration index, similar to
+  ##     for `index` in 0 ..< length:
+  ##       doSomething(`index`)
+  ##   - `length`, the number of elements to iterate on
+  ##   - `use_simd`, instruct the compiler to unroll the loops for `simd` use.
+  ##     For example, for float32:
+  ##     for i in 0..<16:
+  ##       x[i] += y[i]
+  ##     will be unrolled to take 128, 256 or 512-bit to use SSE, AVX or AVX512.
+  ##     for 256-bit AVX:
+  ##     for i in countup(0, 2, 8): # Step 8 by 8
+  ##       x[i]   += y[i]
+  ##       x[i+1] += y[i+1]
+  ##       x[i+2] += y[i+2]
+  ##       ...
+  when use_simd:
+    const omp_annotation = "for simd"
+  else:
+    const omp_annotation = "for"
+  for `index`{.inject.} in `||`(0, length-1, omp_annotation):
+    block: body
 
 template omp_parallel_for*(
-      index: untyped,
-      length: Natural,
-      omp_grain_size: static Natural,
-      use_simd: static bool,
-      body: untyped
-      ) =
-  ## Parallel loop
+    index: untyped,
+    length: Natural,
+    omp_grain_size: static Natural,
+    use_simd: static bool,
+    body: untyped
+  ) =
+  ## Parallel for loop
   ##
   ## Do not forget to use attachGC and detachGC if you are allocating
   ## sequences, strings, or reference types.
@@ -142,22 +176,23 @@ template omp_parallel_for*(
     ## When OpenMP is not defined we use this simple loop as fallback
     ## This way, the compiler will still be provided "simd" vectorization hints
     when use_simd:
-      for `index`{.inject.} in `||`(0, length-1, "simd"):
-        block: body
+      const omp_annotation = "parallel for simd"
     else:
-      for `index`{.inject.} in 0||(length-1):
-        block: body
+      const omp_annotation = "parallel for"
+    for `index`{.inject.} in `||`(0, length-1, omp_annotation):
+      block: body
   else:
-    const # Workaround to expose an unique symbol in C.
+    let omp_size = length # make sure if length is computed it's only done once
+
+    const # Workaround to expose an unique symbol in C. TODO Pending OpenMP interpolation: https://github.com/nim-lang/Nim/issues/9365
       omp_condition_csym = "omp_condition_" & omp_suffix(genNew = true)
+    let omp_condition {.exportc: "omp_condition_" & # We cannot use csym directly in exportc
+      omp_suffix().} = omp_grain_size * omp_get_max_threads() < omp_size
 
-    let
-      omp_size = length # make sure if length is computed it's only done once
-      omp_condition {.exportc: "omp_condition_" &
-        omp_suffix().} = omp_grain_size * omp_get_max_threads() < omp_size
-
-    const omp_annotation = (when use_simd:"simd " else: "") &
-      "if(" & $omp_condition_csym & ")"
+    const omp_annotation = block:
+      "parallel for " &
+        (when use_simd: "simd " else: "") &
+        "if(" & $omp_condition_csym & ")"
 
     for `index`{.inject.} in `||`(0, omp_size - 1, omp_annotation):
       block: body
@@ -177,11 +212,12 @@ template omp_parallel_for_default*(
   ##     A value of 1 will always parallelize the loop.
   ## - simd is used by default
   omp_parallel_for(
-    index,
-    length,
-    omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
-    use_simd = true,
-    body)
+        index,
+        length,
+        omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
+        use_simd = true,
+        body
+        )
 
 template omp_parallel_chunks*(
     length: Natural,
