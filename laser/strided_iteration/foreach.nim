@@ -51,8 +51,13 @@ proc forEachContiguousImpl(
                   to_replace = values
                   )
 
-  result = quote do:
-    omp_parallel_for_default(`index`, `size`):
+  if use_openmp:
+    result = quote do:
+      omp_parallel_for_default(`index`, `size`):
+          `body`
+  else:
+    result = quote do:
+      for `index` in 0 ..< `size`:
         `body`
 
 proc forEachStridedImpl(
@@ -97,11 +102,14 @@ proc forEachStridedImpl(
   let omp_grain_size = newLit( # scale grain_size down for strided operation
                         OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
                       )
-  result = quote do:
-    omp_parallel_chunks(
-      `size`, `chunk_offset`, `chunk_size`,
-      `omp_grain_size`):
-        `stridedBody`
+  if use_openmp:
+    result = quote do:
+      omp_parallel_chunks(
+        `size`, `chunk_offset`, `chunk_size`,
+        `omp_grain_size`):
+          `stridedBody`
+  else:
+    result = stridedBody
 
 template forEachContiguousTemplate(use_openmp: static bool){.dirty.} =
   var
