@@ -227,13 +227,38 @@ template omp_chunks*(
   ## This is is the chunk part of omp_parallel_chunk
   ## omp_size should be a lvalue (assigned value) and not
   ## the result of a routine otherwise routine and its side-effect will be called multiple times
+
+  # Warning: The following chunking scheme can lead to severe load imbalance
+  #
+  # `chunk_offset`{.inject.} = chunk_size * thread_id
+  # `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: chunk_size
+  #                           else: omp_size - chunk_offset
+  #
+  # For example dividing 40 items on 12 threads will lead to
+  # a base chunksize of 40/12 = 3 so work on the first 11 threads
+  # will be 3 * 11 = 33, and the remainder 7 on the last thread.
   let
     nb_chunks = omp_get_num_threads()
-    whole_chunk_size = omp_size div nb_chunks
+    base_chunk_size = omp_size div nb_chunks
+    remainder = omp_size mod nb_chunks
     thread_id = omp_get_thread_num()
-    `chunk_offset`{.inject.} = whole_chunk_size * thread_id
-    `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: whole_chunk_size
-                              else: omp_size - chunk_offset
+
+    # Instead of dividing 40 work items on 12 cores into:
+    # 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 7 = 3*11 + 7 = 40
+    # the following scheme will divide into
+    # 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3 = 4*4 + 3*8 = 40
+
+    `chunk_offset`{.inject.} = block:
+      if thread_id < remainder:
+        (base_chunk_size + 1) * thread_id
+      else:
+        base_chunk_size * thread_id + remainder
+    `chunk_size`{.inject.} = block:
+      if thread_id < remainder:
+        base_chunk_size + 1
+      else:
+        base_chunk_size
+
   block: body
 
 template omp_parallel_chunks*(
