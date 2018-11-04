@@ -101,20 +101,20 @@ template stridedChunkOffset*(){.dirty.} =
 
 template stridedBodyTemplate*(){.dirty.} =
   quote do:
-      # Initialisation
-      `init_strided_iteration`
+    # Initialisation
+    `init_strided_iteration`
 
-      # Iterator loop
-      for _ in 0 ..< `chunk_size`:
-        # Apply computation
-        `body`
+    # Iterator loop
+    for _ in 0 ..< `chunk_size`:
+      # Apply computation
+      `body`
 
-        # Next position
-        for `k` in countdown(`alias0`.rank - 1, 0):
-          if `coord`[`k`] < `alias0`.shape[`k`] - 1:
-            `coord`[`k`] += 1
-            `increment_iter_pos`
-            break
-          else:
-            `coord`[`k`] = 0
-            `apply_backstrides`
+      # Next position
+      for `k` in countdown(`alias0`.rank - 1, 0):
+        if `coord`[`k`] < `alias0`.shape[`k`] - 1:
+          `coord`[`k`] += 1
+          `increment_iter_pos`
+          break
+        else:
+          `coord`[`k`] = 0
+          `apply_backstrides`

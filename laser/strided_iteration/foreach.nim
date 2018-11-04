@@ -111,7 +111,7 @@ proc forEachStridedImpl(
   else:
     result = stridedBody
 
-template forEachContiguousTemplate(use_openmp: static bool){.dirty.} =
+template forEachSimpleTemplate(contiguous, use_openmp: static bool){.dirty.} =
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
@@ -127,38 +127,14 @@ template forEachContiguousTemplate(use_openmp: static bool){.dirty.} =
   )
 
   let size = genSym(nskLet, "size_")
-  let body = forEachContiguousImpl(
-    values, raw_ptrs, size, loopBody, use_openmp
-    )
-  let alias0 = aliases[0]
-
-  result = quote do:
-    block:
-      `aliases_stmt`
-      `test_shapes`
-      `raw_ptrs_stmt`
-      let `size` = `alias0`.size
-      `body`
-
-template forEachStridedTemplate(use_openmp: static bool){.dirty.} =
-  var
-    params, loopBody, values, aliases, raw_ptrs: NimNode
-    aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
-
-  params = args
-  loopBody = params.pop()
-
-  initForEach(
-        params,
-        values, aliases, raw_ptrs,
-        aliases_stmt, raw_ptrs_stmt,
-        test_shapes
-  )
-
-  let size = genSym(nskLet, "size_")
-  let body = forEachStridedImpl(
-    values, aliases, raw_ptrs, size, loopBody, use_openmp
-  )
+  let body =  if contiguous:
+                forEachContiguousImpl(
+                  values, raw_ptrs, size, loopBody, use_openmp
+                )
+              else:
+                forEachStridedImpl(
+                  values, aliases, raw_ptrs, size, loopBody, use_openmp
+                )
   let alias0 = aliases[0]
 
   result = quote do:
@@ -223,13 +199,13 @@ macro forEachContiguous*(args: varargs[untyped]): untyped =
   ## Compiler will also be hinted to unroll loop for SIMD vectorization.
   ##
   ## Use ``forEachStaged`` to fine-tune those defaults.
-  forEachContiguousTemplate(true)
+  forEachSimpleTemplate(contiguous = true, use_openmp = true)
 
 macro forEachContiguousSerial*(args: varargs[untyped]): untyped =
   ## Format:
   ## forEachContiguousSerial x in a, y in b, z in c:
   ##    x += y * z
-  forEachContiguousTemplate(false)
+  forEachSimpleTemplate(contiguous = true, use_openmp = false)
 
 macro forEachStrided*(args: varargs[untyped]): untyped =
   ## Format:
@@ -241,13 +217,13 @@ macro forEachStrided*(args: varargs[untyped]): untyped =
   ##   1024/4 = 256 elementwise operations to process per cores.
   ##
   ## Use ``forEachStaged`` to fine-tune this default.
-  forEachStridedTemplate(true)
+  forEachSimpleTemplate(contiguous = false, use_openmp = true)
 
 macro forEachStridedSerial*(args: varargs[untyped]): untyped =
   ## Format:
   ## forEachStridedSerial x in a, y in b, z in c:
   ##    x += y * z
-  forEachStridedTemplate(false)
+  forEachSimpleTemplate(contiguous = false, use_openmp = false)
 
 macro forEach*(args: varargs[untyped]): untyped =
   ## Format:
