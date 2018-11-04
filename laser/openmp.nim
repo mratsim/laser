@@ -243,28 +243,25 @@ template omp_chunks*(
     remainder = omp_size mod nb_chunks
     thread_id = omp_get_thread_num()
 
-    # Instead of dividing 40 work items on 12 cores into:
-    # 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 7 = 3*11 + 7 = 40
-    # the following scheme will divide into
-    # 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3 = 4*4 + 3*8 = 40
-    #
-    # This is compliant with OpenMP spec (page 60)
-    # http://www.openmp.org/mp-documents/openmp-4.5.pdf
-    # "When no chunk_size is specified, the iteration space is divided into chunks
-    # that are approximately equal in size, and at most one chunk is distributed to
-    # each thread. The size of the chunks is unspecified in this case."
-    # ---> chunks are the same ±1
+  # Instead of dividing 40 work items on 12 cores into:
+  # 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 7 = 3*11 + 7 = 40
+  # the following scheme will divide into
+  # 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3 = 4*4 + 3*8 = 40
+  #
+  # This is compliant with OpenMP spec (page 60)
+  # http://www.openmp.org/mp-documents/openmp-4.5.pdf
+  # "When no chunk_size is specified, the iteration space is divided into chunks
+  # that are approximately equal in size, and at most one chunk is distributed to
+  # each thread. The size of the chunks is unspecified in this case."
+  # ---> chunks are the same ±1
 
-    `chunk_offset`{.inject.} = block:
-      if thread_id < remainder:
-        (base_chunk_size + 1) * thread_id
-      else:
-        base_chunk_size * thread_id + remainder
-    `chunk_size`{.inject.} = block:
-      if thread_id < remainder:
-        base_chunk_size + 1
-      else:
-        base_chunk_size
+  var `chunk_offset`{.inject.}, `chunk_size`{.inject.}: Natural
+  if thread_id < remainder:
+    chunk_offset = (base_chunk_size + 1) * thread_id
+    chunk_size = base_chunk_size + 1
+  else:
+    chunk_offset = base_chunk_size * thread_id + remainder
+    chunk_size = base_chunk_size
 
   block: body
 
