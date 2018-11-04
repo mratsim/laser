@@ -19,7 +19,7 @@ template omp_parallel_threshold(size, threshold: Natural, body: untyped) =
 
 proc forEachStagedContiguousImpl(
   values, raw_ptrs, size, loopBody: NimNode,
-  use_simd: static bool,
+  use_simd, nowait: static bool,
   ): NimNode =
   # Build the body of a contiguous iterator
   # Whether this is parallelized or not should be
@@ -37,14 +37,14 @@ proc forEachStagedContiguousImpl(
 
   result = getAST(
     omp_for,
-    index, size, use_simd, loopBody
+    index, size, use_simd, nowait, loopBody
   )
 
 proc forEachStagedStridedImpl(
   values, aliases,
   raw_ptrs, size,
   loopBody: NimNode,
-  use_openmp: static bool
+  use_openmp, nowait: static bool
   ): NimNode =
   # Build the parallel body of a strided iterator
 
@@ -80,22 +80,25 @@ proc forEachStagedStridedImpl(
   let stridedBody = stridedBodyTemplate()
 
   if use_openmp:
-    result = getAST(
+    result = newStmtList()
+    result.add getAST(
       omp_chunks,
       size, chunk_offset, chunk_size,
       stridedBody
     )
+    if nowait:
+      result.add getAST(omp_barrier)
   else:
     result = stridedBody
 
 template forEachStagedSimpleTemplate(contiguous: static bool){.dirty.} =
   let body =  if contiguous:
                 forEachStagedContiguousImpl(
-                  values, raw_ptrs, size, in_loop_body, use_simd
+                  values, raw_ptrs, size, in_loop_body, use_simd, nowait
                 )
               else:
                 forEachStagedStridedImpl(
-                  values, aliases, raw_ptrs, size, in_loop_body, use_openmp
+                  values, aliases, raw_ptrs, size, in_loop_body, use_openmp, nowait
                 )
   let alias0 = aliases[0]
 
@@ -167,3 +170,40 @@ template forEachStagedTemplate(){.dirty.} =
           else:
             `strided_body`
           `after_loop_body`
+
+macro forEachStaged*(args: varargs[untyped]): untyped =
+  echo args.treerepr
+
+  var
+    params, bodies, values, aliases, raw_ptrs: NimNode
+    aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
+    before_loop_body, in_loop_body, after_loop_body: NimNode
+
+  params = args
+  bodies = params.pop()
+
+  initForEach(
+        params,
+        values, aliases, raw_ptrs,
+        aliases_stmt, raw_ptrs_stmt,
+        test_shapes
+  )
+
+  result = nnkDiscardStmt.newTree(newEmptyNode())
+
+var r = 0
+
+forEachStaged xi in x, yi in y:
+  openmp_config:
+    use_openmp: true
+    omp_grain_size: 1024
+    use_simd: true
+    nowait: true
+  iteration_kind:
+    {contiguous, strided}
+  before_loop:
+    var partial_sum = 0
+  in_loop:
+    a = xi + yi
+  after_loop:
+    r += partial_sum

@@ -108,7 +108,7 @@ template detachGC*(): untyped =
 template omp_for*(
     index: untyped,
     length: Natural,
-    use_simd: static bool,
+    use_simd, nowait: static bool,
     body: untyped
   ) =
   ## OpenMP for loop (not parallel)
@@ -132,10 +132,10 @@ template omp_for*(
   ##       x[i+1] += y[i+1]
   ##       x[i+2] += y[i+2]
   ##       ...
-  when use_simd:
-    const omp_annotation = "for simd"
-  else:
-    const omp_annotation = "for"
+  const omp_annotation = block:
+    "for " &
+      (when simd: "simd " else: "") &
+      (when nowait: "nowait " else: "")
   for `index`{.inject.} in `||`(0, length-1, omp_annotation):
     block: body
 
@@ -308,3 +308,18 @@ template omp_critical*(body: untyped): untyped =
 template omp_master*(body: untyped): untyped =
   {.emit: "#pragma omp master".}
   block: body
+
+template omp_barrier*(): untyped =
+  {.emit: "#pragma omp barrier".}
+
+import macros
+macro omp_flush*(variables: varargs[untyped]): untyped =
+  var listvars = "("
+  for i, variable in variables:
+    if i == 0:
+      listvars.add "`" & $variable & "`"
+    else:
+      listvars.add ",`" & $variable & "`"
+  listvars.add ')'
+  result = quote do:
+    {.emit: "#pragma omp flush " & `listvars`.}
