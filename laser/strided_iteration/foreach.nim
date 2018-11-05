@@ -227,7 +227,7 @@ macro forEachStridedSerial*(args: varargs[untyped]): untyped =
 
 macro forEach*(args: varargs[untyped]): untyped =
   ## Format:
-  ## forEach x in a, y in b, z in c, (1024, true):
+  ## forEach x in a, y in b, z in c:
   ##    x += y * z
   ##
   ## The iteration strategy is selected at runtime depending of
