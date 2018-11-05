@@ -102,6 +102,11 @@ template forEachStagedSimpleTemplate(contiguous: static bool){.dirty.} =
                   values, aliases, raw_ptrs, size, in_loop_body, use_openmp, nowait
                 )
   let alias0 = aliases[0]
+  var scaled_grain_size = newIdentNode("scaled_grain_size_")
+  if contiguous:
+    scaled_grain_size = newLit omp_grain_size
+  else:
+    scaled_grain_size = newLit(omp_grain_size div OMP_NON_CONTIGUOUS_SCALE_FACTOR)
 
   if use_openmp:
     result = quote do:
@@ -110,7 +115,7 @@ template forEachStagedSimpleTemplate(contiguous: static bool){.dirty.} =
         `test_shapes`
         `raw_ptrs_stmt`
         let `size` = `alias0`.size
-        let over_threshold = `omp_grain_size` * omp_get_max_threads() < `size`
+        let over_threshold = `scaled_grain_size` * omp_get_max_threads() < `size`
         omp_parallel_if(over_threshold):
           `before_loop_body`
           `body`
@@ -150,7 +155,12 @@ template forEachStagedTemplate(){.dirty.} =
         `raw_ptrs_stmt`
         let `size` = `alias0`.size
         let is_C_contiguous = `test_C_Contiguous`
-        let over_threshold = `omp_grain_size` * omp_get_max_threads() < `size`
+        let over_threshold = block:
+          if is_C_contiguous:
+            `omp_grain_size` * omp_get_max_threads() < `size`
+          else:
+            (`omp_grain_size` div OMP_NON_CONTIGUOUS_SCALE_FACTOR) *
+              omp_get_max_threads() < `size`
         omp_parallel_if(over_threshold):
           `before_loop_body`
           if is_C_contiguous:
