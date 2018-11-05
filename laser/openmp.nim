@@ -105,10 +105,24 @@ template detachGC*(): untyped =
   if(omp_get_thread_num()!=0):
     teardownForeignThreadGc()
 
+template omp_parallel*(body: untyped): untyped =
+  ## Starts an openMP parallel section
+  ##
+  ## Don't forget to use attachGC and detachGC if you are allocating
+  ## sequences, strings, or reference types.
+  ## Those should be thread-local temporaries.
+  {.emit: "#pragma omp parallel".}
+  block: body
+
+template omp_parallel_if*(condition: bool, body: untyped) =
+  let predicate = condition # Make symbol valid and ensure it's lvalue
+  {.emit: "#pragma omp parallel if (`predicate`)".}
+  block: body
+
 template omp_for*(
     index: untyped,
     length: Natural,
-    use_simd: static bool,
+    use_simd, nowait: static bool,
     body: untyped
   ) =
   ## OpenMP for loop (not parallel)
@@ -132,10 +146,10 @@ template omp_for*(
   ##       x[i+1] += y[i+1]
   ##       x[i+2] += y[i+2]
   ##       ...
-  when use_simd:
-    const omp_annotation = "for simd"
-  else:
-    const omp_annotation = "for"
+  const omp_annotation = block:
+    "for " &
+      (when use_simd: "simd " else: "") &
+      (when nowait: "nowait " else: "")
   for `index`{.inject.} in `||`(0, length-1, omp_annotation):
     block: body
 
@@ -219,6 +233,52 @@ template omp_parallel_for_default*(
         body
         )
 
+template omp_chunks*(
+    omp_size: Natural, #{lvalue} # TODO parameter constraint, pending https://github.com/nim-lang/Nim/issues/9620
+    chunk_offset, chunk_size: untyped,
+    body: untyped): untyped =
+  ## Internal proc
+  ## This is is the chunk part of omp_parallel_chunk
+  ## omp_size should be a lvalue (assigned value) and not
+  ## the result of a routine otherwise routine and its side-effect will be called multiple times
+
+  # The following simple chunking scheme can lead to severe load imbalance
+  #
+  # `chunk_offset`{.inject.} = chunk_size * thread_id
+  # `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: chunk_size
+  #                           else: omp_size - chunk_offset
+  #
+  # For example dividing 40 items on 12 threads will lead to
+  # a base_chunk_size of 40/12 = 3 so work on the first 11 threads
+  # will be 3 * 11 = 33, and the remainder 7 on the last thread.
+  let
+    nb_chunks = omp_get_num_threads()
+    base_chunk_size = omp_size div nb_chunks
+    remainder = omp_size mod nb_chunks
+    thread_id = omp_get_thread_num()
+
+  # Instead of dividing 40 work items on 12 cores into:
+  # 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 7 = 3*11 + 7 = 40
+  # the following scheme will divide into
+  # 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3 = 4*4 + 3*8 = 40
+  #
+  # This is compliant with OpenMP spec (page 60)
+  # http://www.openmp.org/mp-documents/openmp-4.5.pdf
+  # "When no chunk_size is specified, the iteration space is divided into chunks
+  # that are approximately equal in size, and at most one chunk is distributed to
+  # each thread. The size of the chunks is unspecified in this case."
+  # ---> chunks are the same ±1
+
+  var `chunk_offset`{.inject.}, `chunk_size`{.inject.}: Natural
+  if thread_id < remainder:
+    chunk_offset = (base_chunk_size + 1) * thread_id
+    chunk_size = base_chunk_size + 1
+  else:
+    chunk_offset = base_chunk_size * thread_id + remainder
+    chunk_size = base_chunk_size
+
+  block: body
+
 template omp_parallel_chunks*(
     length: Natural,
     chunk_offset, chunk_size: untyped,
@@ -247,21 +307,11 @@ template omp_parallel_chunks*(
     let `chunk_size`{.inject.} = length
     block: body
   else:
-    let
-      omp_size = length # make sure if length is computed it's only done once
-      max_threads = omp_get_max_threads()
-      omp_condition = omp_grain_size * max_threads < omp_size
+    let omp_size = length # make sure if length is computed it's only done once
+    let over_threshold = omp_grain_size * omp_get_max_threads() < omp_size
 
-    {.emit: "#pragma omp parallel if (`omp_condition`)".}
-    block:
-      let
-        nb_chunks = omp_get_num_threads()
-        whole_chunk_size = omp_size div nb_chunks
-        thread_id = omp_get_thread_num()
-        `chunk_offset`{.inject.} = whole_chunk_size * thread_id
-        `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: whole_chunk_size
-                                    else: ompsize - chunk_offset
-      block: body
+    omp_parallel_if(over_threshold):
+      omp_chunks(omp_size, chunk_offset, chunk_size, body)
 
 template omp_parallel_chunks_default*(
     length: Natural,
@@ -282,15 +332,6 @@ template omp_parallel_chunks_default*(
     body
   )
 
-template omp_parallel*(body: untyped): untyped =
-  ## Starts an openMP parallel section
-  ##
-  ## Don't forget to use attachGC and detachGC if you are allocating
-  ## sequences, strings, or reference types.
-  ## Those should be thread-local temporaries.
-  {.emit: "#pragma omp parallel".}
-  block: body
-
 template omp_critical*(body: untyped): untyped =
   {.emit: "#pragma omp critical".}
   block: body
@@ -298,3 +339,18 @@ template omp_critical*(body: untyped): untyped =
 template omp_master*(body: untyped): untyped =
   {.emit: "#pragma omp master".}
   block: body
+
+template omp_barrier*(): untyped =
+  {.emit: "#pragma omp barrier".}
+
+import macros
+macro omp_flush*(variables: varargs[untyped]): untyped =
+  var listvars = "("
+  for i, variable in variables:
+    if i == 0:
+      listvars.add "`" & $variable & "`"
+    else:
+      listvars.add ",`" & $variable & "`"
+  listvars.add ')'
+  result = quote do:
+    {.emit: "#pragma omp flush " & `listvars`.}

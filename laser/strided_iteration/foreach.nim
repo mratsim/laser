@@ -37,7 +37,7 @@ export omp_suffix # Pending https://github.com/nim-lang/Nim/issues/9365 or 9366
 
 proc forEachContiguousImpl(
   values, raw_ptrs, size, loopBody: NimNode,
-  use_openmp: static bool, omp_params: NimNode,
+  use_openmp: static bool,
   ): NimNode =
   # Build the parallel body of a contiguous iterator
 
@@ -52,19 +52,9 @@ proc forEachContiguousImpl(
                   )
 
   if use_openmp:
-    if omp_params.isNil:
-      result = quote do:
-        omp_parallel_for_default(`index`, `size`):
-            `body`
-    else:
-      let
-        omp_grain_size = omp_params[0]
-        use_simd       = omp_params[1]
-      result = quote do:
-        omp_parallel_for(
-          `index`, `size`,
-          `omp_grain_size`, `use_simd`):
-            `body`
+    result = quote do:
+      omp_parallel_for_default(`index`, `size`):
+          `body`
   else:
     result = quote do:
       for `index` in 0 ..< `size`:
@@ -74,8 +64,7 @@ proc forEachStridedImpl(
   values, aliases,
   raw_ptrs, size,
   loopBody: NimNode,
-  use_openmp: static bool,
-  omp_params: NimNode,
+  use_openmp: static bool
   ): NimNode =
   # Build the parallel body of a strided iterator
 
@@ -110,14 +99,10 @@ proc forEachStridedImpl(
   let body = loopBody.replaceNodes(replacements = elems_strided, to_replace = values)
   let stridedBody = stridedBodyTemplate()
 
+  let omp_grain_size = newLit( # scale grain_size down for strided operation
+                        OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
+                      )
   if use_openmp:
-    let
-      omp_grain_size =  if omp_params.isNil: newLit( # scale grain_size down for strided operation
-                          OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR
-                        ) else: newLit(
-                          omp_params[0].intVal div OMP_NON_CONTIGUOUS_SCALE_FACTOR
-                        )
-      use_simd       = if omp_params.isNil: newLit true else: omp_params[1]
     result = quote do:
       omp_parallel_chunks(
         `size`, `chunk_offset`, `chunk_size`,
@@ -126,56 +111,30 @@ proc forEachStridedImpl(
   else:
     result = stridedBody
 
-template forEachContiguousTemplate(use_openmp: static bool){.dirty.} =
+template forEachSimpleTemplate(contiguous, use_openmp: static bool){.dirty.} =
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
-    omp_params: NimNode
+
+  params = args
+  loopBody = params.pop()
 
   initForEach(
-        args,
         params,
-        loopBody,
-        omp_params,
         values, aliases, raw_ptrs,
         aliases_stmt, raw_ptrs_stmt,
         test_shapes
   )
 
   let size = genSym(nskLet, "size_")
-  let body = forEachContiguousImpl(
-    values, raw_ptrs, size, loopBody, use_openmp, omp_params
-    )
-  let alias0 = aliases[0]
-
-  result = quote do:
-    block:
-      `aliases_stmt`
-      `test_shapes`
-      `raw_ptrs_stmt`
-      let `size` = `alias0`.size
-      `body`
-
-template forEachStridedTemplate(use_openmp: static bool){.dirty.} =
-  var
-    params, loopBody, values, aliases, raw_ptrs: NimNode
-    aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
-    omp_params: NimNode
-
-  initForEach(
-        args,
-        params,
-        loopBody,
-        omp_params,
-        values, aliases, raw_ptrs,
-        aliases_stmt, raw_ptrs_stmt,
-        test_shapes
-  )
-
-  let size = genSym(nskLet, "size_")
-  let body = forEachStridedImpl(
-    values, aliases, raw_ptrs, size, loopBody, use_openmp, omp_params
-  )
+  let body =  if contiguous:
+                forEachContiguousImpl(
+                  values, raw_ptrs, size, loopBody, use_openmp
+                )
+              else:
+                forEachStridedImpl(
+                  values, aliases, raw_ptrs, size, loopBody, use_openmp
+                )
   let alias0 = aliases[0]
 
   result = quote do:
@@ -190,13 +149,12 @@ template forEachTemplate(use_openmp: static bool) {.dirty.} =
   var
     params, loopBody, values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
-    omp_params: NimNode
+
+  params = args
+  loopBody = params.pop()
 
   initForEach(
-        args,
         params,
-        loopBody,
-        omp_params,
         values, aliases, raw_ptrs,
         aliases_stmt, raw_ptrs_stmt,
         test_shapes
@@ -204,10 +162,10 @@ template forEachTemplate(use_openmp: static bool) {.dirty.} =
 
   let size = genSym(nskLet, "size_")
   let contiguous_body = forEachContiguousImpl(
-    values, raw_ptrs, size, loopBody, use_openmp, omp_params
+    values, raw_ptrs, size, loopBody, use_openmp
   )
   let strided_body = forEachStridedImpl(
-    values, aliases, raw_ptrs, size, loopBody, use_openmp, omp_params
+    values, aliases, raw_ptrs, size, loopBody, use_openmp
   )
   let alias0 = aliases[0]
   var test_C_Contiguous = newCall(ident"is_C_contiguous", alias0)
@@ -232,52 +190,63 @@ template forEachTemplate(use_openmp: static bool) {.dirty.} =
 
 macro forEachContiguous*(args: varargs[untyped]): untyped =
   ## Format:
-  ## forEachContiguous x in a, y in b, z in c, (1024, true):
+  ## forEachContiguous x in a, y in b, z in c:
   ##    x += y * z
-  ## (1024, true) corresponds to omp_grain_size, use_simd
-  ## from omp_parallel_for
-  forEachContiguousTemplate(true)
+  ##
+  ## The threshold for parallelization by default is
+  ## OMP_MEMORY_BOUND_GRAIN_SIZE = 1024 elementwise operations to process per cores.
+  ##
+  ## Compiler will also be hinted to unroll loop for SIMD vectorization.
+  ##
+  ## Use ``forEachStaged`` to fine-tune those defaults.
+  forEachSimpleTemplate(contiguous = true, use_openmp = true)
 
 macro forEachContiguousSerial*(args: varargs[untyped]): untyped =
   ## Format:
   ## forEachContiguousSerial x in a, y in b, z in c:
   ##    x += y * z
-  ## OpenMP parameters will be ignored
-  forEachContiguousTemplate(false)
+  forEachSimpleTemplate(contiguous = true, use_openmp = false)
 
 macro forEachStrided*(args: varargs[untyped]): untyped =
   ## Format:
-  ## forEachStrided x in a, y in b, z in c, (1024, true):
+  ## forEachStrided x in a, y in b, z in c:
   ##    x += y * z
-  ## (1024, true) corresponds to omp_grain_size, use_simd
-  ## from omp_parallel_for
   ##
-  ## The OpenMP minimal per-core grain size
-  ## is always scaled down by OMP_NON_CONTIGUOUS_SCALE_FACTOR (4 by default)
-  forEachStridedTemplate(true)
+  ## The threshold for parallelization by default is
+  ## OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR =
+  ##   1024/4 = 256 elementwise operations to process per cores.
+  ##
+  ## Use ``forEachStaged`` to fine-tune this default.
+  forEachSimpleTemplate(contiguous = false, use_openmp = true)
 
 macro forEachStridedSerial*(args: varargs[untyped]): untyped =
   ## Format:
   ## forEachStridedSerial x in a, y in b, z in c:
   ##    x += y * z
-  ##
-  ## Strided iteration with serial execution. OpenMP params passed to it will be ignored
-  forEachStridedTemplate(false)
+  forEachSimpleTemplate(contiguous = false, use_openmp = false)
 
 macro forEach*(args: varargs[untyped]): untyped =
   ## Format:
   ## forEach x in a, y in b, z in c, (1024, true):
   ##    x += y * z
-  ## (1024, true) corresponds to omp_grain_size, use_simd
-  ## from omp_parallel_for
   ##
   ## The iteration strategy is selected at runtime depending of
   ## the tensors memory layout. If you know at compile-time that the tensors are
   ## contiguous or strided, use forEachContiguous or forEachStrided instead.
   ## Runtime selection requires duplicating the code body.
   ##
-  ## If the tensors are non-contiguous, the OpenMP minimal per-core grain size
-  ## is scaled down by OMP_NON_CONTIGUOUS_SCALE_FACTOR (4 by default)
+  ## In the contiguous case:
+  ##   The threshold for parallelization by default is
+  ##   OMP_MEMORY_BOUND_GRAIN_SIZE = 1024 elementwise operations to process per cores.
+  ##
+  ##   Compiler will also be hinted to unroll loop for SIMD vectorization.
+  ##
+  ## Otherwise if tensor is strided:
+  ##   The threshold for parallelization by default is
+  ##   OMP_MEMORY_BOUND_GRAIN_SIZE div OMP_NON_CONTIGUOUS_SCALE_FACTOR =
+  ##     1024/4 = 256 elementwise operations to process per cores.
+  ##
+  ## Use ``forEachStaged`` to fine-tune this default.
   forEachTemplate(true)
 
 macro forEachSerial*(args: varargs[untyped]): untyped =
