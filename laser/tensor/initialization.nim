@@ -54,8 +54,7 @@ proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
     if src.is_C_contiguous:
       omp_parallel_chunks(
             size, chunk_offset, chunk_size,
-            OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
-            use_simd = false):
+            OMP_MEMORY_BOUND_GRAIN_SIZE * 4):
         copyMem(
           dst.storage.raw_data[chunk_offset],
           src.storage.raw_data[chunk_offset],
@@ -91,8 +90,7 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
       assert dst.shape == src.shape
       omp_parallel_chunks(
             src.size, chunk_offset, chunk_size,
-            OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
-            use_simd = false):
+            OMP_MEMORY_BOUND_GRAIN_SIZE * 4):
         copyMem(
           dst.storage.raw_data[chunk_offset].addr,
           src.storage.raw_data[chunk_offset].unsafeAddr,
@@ -116,8 +114,7 @@ proc copyFromRaw*[T](dst: var Tensor[T], buffer: ptr T, len: Natural) =
     let buf{.restrict.} = cast[ptr UncheckedArray[T]](buffer)
     omp_parallel_chunks(
             len, chunk_offset, chunk_size,
-            OMP_MEMORY_BOUND_GRAIN_SIZE * 4,
-            use_simd = false):
+            OMP_MEMORY_BOUND_GRAIN_SIZE * 4):
         copyMem(
           dst.storage.raw_data[chunk_offset].addr,
           buf[chunk_offset].unsafeAddr,
