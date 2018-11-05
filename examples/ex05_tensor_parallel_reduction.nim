@@ -1,27 +1,76 @@
-import ../laser/strided_iteration/[reduce_each, foreach]
+import ../laser/strided_iteration/[foreach, foreach_staged]
 import ../laser/tensor/[datatypes, allocator, initialization]
 import ../laser/[compiler_optim_hints, dynamic_stack_arrays]
-import ../laser/openmp
+import ../laser/[openmp, cpuinfo]
 import sequtils
 
-proc foo[T](x, y: Tensor[T]): T =
-  const
-    max_threads = 22
-    cache_line = 64
-    padding = cache_line div sizeof(T)
-  # We support up to 22 simultaneous threads
-  # We pad the value by 64 bytes to avoid
-  # false sharing/cache invalidation
-  withCompilerOptimHints()
-  var partial_reduce{.align_variable.}: array[max_threads * padding, T]
+proc reduction_localsum_critical[T](x, y: Tensor[T]): T =
+  forEachStaged xi in x, yi in y:
+    openmp_config:
+      use_openmp: true
+      use_simd: false
+      nowait: true
+      omp_grain_size: OMP_MEMORY_BOUND_GRAIN_SIZE
+    iteration_kind:
+      {contiguous, strided} # Default, "contiguous", "strided" are also possible
+    before_loop:
+      var local_sum = 0.T
+    in_loop:
+      local_sum += xi + yi
+    after_loop:
+      omp_critical:
+        result += local_sum
 
-  var nb_chunks: Natural
-  reduceEach nb_chunks, xi in x, yi in y:
-    partial_reduce[omp_get_thread_num() * padding] += xi + yi
+proc reduction_localsum_omp_atomic[T](x, y: Tensor[T]): T =
+  forEachStaged xi in x, yi in y:
+    openmp_config:
+      use_simd: false
+      nowait: true
+    iteration_kind:
+      contiguous
+    before_loop:
+      var local_sum = 0.T
+    in_loop:
+      local_sum += xi + yi
+    after_loop:
+      {.emit: "#pragma omp atomic".}
+      {.emit: "`result` += `local_sum`;".}
 
-  for idx in 0 ..< nb_chunks:
-    result += partial_reduce[idx * padding]
-  echo "foo partial_reduce: ", partial_reduce
+proc reduction_localsum_system_atomic[T](x, y: Tensor[T]): T =
+  forEachStaged xi in x, yi in y:
+    openmp_config:
+      use_simd: false
+      nowait: true
+    iteration_kind:
+      contiguous
+    before_loop:
+      var local_sum = 0.T
+    in_loop:
+      local_sum += xi + yi
+    after_loop:
+      result.atomicInc local_sum
+
+proc reduction_padding[T](x, y: Tensor[T]): T =
+  let cache_line_size = int cpuinfo_get_l1d_caches().line_size
+  let padding = cache_line_size div sizeof(T)
+  var buffer: seq[T]
+
+  forEachStaged xi in x, yi in y:
+    openmp_config:
+      use_simd: false
+      nowait: true
+    iteration_kind:
+      contiguous
+    before_loop:
+      omp_master:
+        buffer = newSeq[T](omp_get_num_threads() * padding)
+      omp_barrier()
+      omp_flush(buffer)
+    in_loop:
+      buffer[omp_get_thread_num() * padding] += xi + yi
+
+  for idx in countup(0, buffer.len - 1, padding):
+    result += buffer[idx]
 
 proc toTensor[T](s: seq[T]): Tensor[T] =
   var size: int
@@ -32,29 +81,7 @@ proc toTensor[T](s: seq[T]): Tensor[T] =
 let a = toSeq(1..10001).toTensor
 let b = toSeq(-10000 .. 0).toTensor
 
-echo foo(a, b)
-
-# The following doesn't work because Nim OpenMP clause
-# uses "#pragma omp parallel for" directly
-# instead of "#pragma omp for"
-#
-# This means that each thread will do the same work
-# Final result will be nb_threads * real_result
-#
-# See feature request: https://github.com/nim-lang/Nim/issues/9490
-
-# proc foo_alt[T](x, y: Tensor[T]): T =
-#   const
-#     max_threads = 22
-#     cache_line = 64
-#     padding = cache_line div sizeof(T)
-#   withCompilerOptimHints()
-#   var nb_chunks: Natural
-#   omp_parallel:
-#     var local_sum = T(0)
-#     reduceEach nb_chunks, xi in x, yi in y:
-#       local_sum += xi + yi
-#     omp_critical:
-#       result += local_sum
-#
-# echo foo_alt(a, b)
+echo reduction_localsum_critical(a, b)
+echo reduction_localsum_omp_atomic(a, b)
+echo reduction_localsum_system_atomic(a, b)
+echo reduction_padding(a, b)
