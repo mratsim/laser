@@ -191,7 +191,7 @@ type IterKind = enum
   Contiguous, Strided, Both
 
 proc parseBlocks(
-    use_openmp, use_simd, nowait: var bool,
+    use_openmp, use_simd, nowait: var NimNode,
     omp_grain_size: var NimNode,
     iter_kind: var IterKind,
     before_loop_body, in_loop_body, after_loop_body: var NimNode,
@@ -214,15 +214,15 @@ proc parseBlocks(
         if eqIdent(param[0], "use_openmp"):
           let missing = missingOrExcl(params, $param[0])
           assert missing.not, "`use_openmp` is defined more than once."
-          use_openmp = param[1].boolVal
+          use_openmp = param[1]
         elif eqIdent(param[0], "use_simd"):
           let missing = missingOrExcl(params, $param[0])
           assert missing.not, "`use_simd` is defined more than once."
-          use_simd = param[1].boolVal
+          use_simd = param[1]
         elif eqIdent(param[0], "nowait"):
           let missing = missingOrExcl(params, $param[0])
           assert missing.not, "`nowait` is defined more than once."
-          nowait = param[1].boolVal
+          nowait = param[1]
         elif eqIdent(param[0], "omp_grain_size"):
           let missing = missingOrExcl(params, $param[0])
           assert missing.not, "`omp_grain_size` is defined more than once."
@@ -263,9 +263,9 @@ proc parseBlocks(
   ## Default values
   for param in params:
     case param
-    of "use_openmp": use_openmp = true
-    of "use_simd": use_simd = true
-    of "nowait": nowait = false
+    of "use_openmp": use_openmp = newLit true
+    of "use_simd": use_simd = newLit true
+    of "nowait": nowait = newLit false
     of "omp_grain_size": omp_grain_size = newLit OMP_MEMORY_BOUND_GRAIN_SIZE
     of "iteration_kind": iter_kind = Both
     of "before_loop":
@@ -277,28 +277,15 @@ proc parseBlocks(
       after_loop_body = nnkStmtList.newTree(
                             nnkDiscardStmt.newTree(newEmptyNode())
                         )
-      nowait = true # There is always a barrier after #pragma omp parallel, no need to double it.
+      nowait = newLit true # There is always a barrier after #pragma omp parallel, no need to double it.
 
-macro forEachStaged*(args: varargs[untyped]): untyped =
-  var
-    params, dslBlocks: NimNode
-
-    use_openmp, use_simd, nowait: bool
-    omp_grain_size: NimNode
-    iteration_kind: IterKind
-    before_loop_body, in_loop_body, after_loop_body: NimNode
-
-  params = args
-  dslBlocks = params.pop()
-
-  checkBlocks dslBlocks
-  parseBlocks(
-    use_openmp, use_simd, nowait,
-    omp_grain_size,
-    iteration_kind,
-    before_loop_body, in_loop_body, after_loop_body,
-    dslBlocks
-  )
+macro forEachStagedAux(
+    use_openmp, use_simd, nowait: static bool,
+    omp_grain_size: static Natural,
+    iteration_kind: static IterKind,
+    before_loop_body, in_loop_body, after_loop_body: untyped,
+    params: varargs[untyped]
+  ): untyped =
 
   var
     values, aliases, raw_ptrs: NimNode
@@ -316,3 +303,33 @@ macro forEachStaged*(args: varargs[untyped]): untyped =
   of Contiguous: forEachStagedSimpleTemplate(contiguous = true)
   of Strided: forEachStagedSimpleTemplate(contiguous = false)
   of Both: forEachStagedTemplate()
+
+macro forEachStaged*(args: varargs[untyped]): untyped =
+  var
+    params, dslBlocks: NimNode
+
+    use_openmp, use_simd, nowait: NimNode
+    omp_grain_size: NimNode
+    iteration_kind: IterKind
+    before_loop_body, in_loop_body, after_loop_body: NimNode
+
+  params = args
+  dslBlocks = params.pop()
+
+  checkBlocks dslBlocks
+  parseBlocks(
+    use_openmp, use_simd, nowait,
+    omp_grain_size,
+    iteration_kind,
+    before_loop_body, in_loop_body, after_loop_body,
+    dslBlocks
+  )
+
+  result = quote do:
+    forEachStagedAux(
+      `use_openmp`, `use_simd`, `nowait`,
+      `omp_grain_size`,
+      IterKind(`iteration_kind`),
+      `before_loop_body`, `in_loop_body`, `after_loop_body`,
+      `params`
+    )
