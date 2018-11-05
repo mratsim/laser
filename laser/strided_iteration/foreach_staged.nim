@@ -20,7 +20,7 @@ template omp_parallel_threshold(size, threshold: Natural, body: untyped) =
 
 proc forEachStagedContiguousImpl(
   values, raw_ptrs, size, loopBody: NimNode,
-  use_simd, nowait: static bool,
+  use_simd, nowait: bool,
   ): NimNode =
   # Build the body of a contiguous iterator
   # Whether this is parallelized or not should be
@@ -32,20 +32,18 @@ proc forEachStagedContiguousImpl(
     elems_contiguous.add nnkBracketExpr.newTree(raw_ptr, index)
 
   let body = loopBody.replaceNodes(
-                  replacements = elems_contiguous,
-                  to_replace = values
+                    replacements = elems_contiguous,
+                    to_replace = values
                   )
 
-  result = getAST(
-    omp_for,
-    index, size, use_simd, nowait, loopBody
-  )
+  result = quote do:
+    omp_for(`index`, `size`, `use_simd`, `nowait`, `body`)
 
 proc forEachStagedStridedImpl(
   values, aliases,
   raw_ptrs, size,
   loopBody: NimNode,
-  use_openmp, nowait: static bool
+  use_openmp, nowait: bool
   ): NimNode =
   # Build the parallel body of a strided iterator
 
@@ -82,13 +80,13 @@ proc forEachStagedStridedImpl(
 
   if use_openmp:
     result = newStmtList()
-    result.add getAST(
-      omp_chunks,
-      size, chunk_offset, chunk_size,
-      stridedBody
-    )
+    result.add quote do:
+      omp_chunks(
+        `size`, `chunk_offset`, `chunk_size`,
+        `stridedBody`
+      )
     if nowait:
-      result.add getAST(omp_barrier)
+      result.add getAST(omp_barrier())
   else:
     result = stridedBody
 
@@ -128,10 +126,10 @@ template forEachStagedSimpleTemplate(contiguous: static bool){.dirty.} =
 
 template forEachStagedTemplate(){.dirty.} =
   let contiguous_body = forEachStagedContiguousImpl(
-                          values, raw_ptrs, size, in_loop_body, use_simd
+                          values, raw_ptrs, size, in_loop_body, use_simd, nowait
                         )
   let strided_body =  forEachStagedStridedImpl(
-                        values, aliases, raw_ptrs, size, in_loop_body, use_openmp
+                        values, aliases, raw_ptrs, size, in_loop_body, use_openmp, nowait
                       )
 
   let alias0 = aliases[0]
@@ -172,13 +170,13 @@ template forEachStagedTemplate(){.dirty.} =
             `strided_body`
           `after_loop_body`
 
-proc checkBlocks(bodies: NimNode) =
+proc checkBlocks(blocks: NimNode) =
   var counts = initCountTable[string](initialSize = 8)
   let valid_blocks = [
         "openmp_config", "iteration_kind",
         "before_loop", "in_loop", "after_loop"
       ].toSet
-  for node in bodies:
+  for node in blocks:
     node.expectKind nnkCall
     let section = $node[0]
     assert section in valid_blocks, "Only the following sections are allowed: " & $valid_blocks
@@ -195,7 +193,7 @@ proc parseBlocks(
     omp_grain_size: var NimNode,
     iter_kind: var IterKind,
     before_loop_body, in_loop_body, after_loop_body: var NimNode,
-    dslBlock: NimNode
+    dslBlocks: NimNode
   ) =
   var params = [
     "use_openmp", "use_simd", "nowait",
@@ -205,7 +203,7 @@ proc parseBlocks(
   ].toOrderedSet # after_loop needs to be processed after nowait
 
   ## Parsing
-  for blck in dslBlock:
+  for blck in dslBlocks:
     blck[0].expectKind nnkIdent
     blck[1].expectKind nnkStmtList
     if eqIdent(blck[0], "openmp_config"):
@@ -268,20 +266,28 @@ proc parseBlocks(
     of "nowait": nowait = newLit false
     of "omp_grain_size": omp_grain_size = newLit OMP_MEMORY_BOUND_GRAIN_SIZE
     of "iteration_kind": iter_kind = Both
-    of "before_loop": before_loop_body = nnkDiscardStmt.newTree(newEmptyNode())
+    of "before_loop":
+      before_loop_body =  nnkStmtList.newTree(
+                            nnkDiscardStmt.newTree(newEmptyNode())
+                          )
     of "in_loop": error "`in_loop` section is required"
     of "after_loop":
-      after_loop_body = nnkDiscardStmt.newTree(newEmptyNode())
+      after_loop_body = nnkStmtList.newTree(
+                            nnkDiscardStmt.newTree(newEmptyNode())
+                        )
       nowait = newLit true # There is always a barrier after #pragma omp parallel, no need to double it.
 
-macro forEachStaged*(args: varargs[untyped]): untyped =
+macro forEachStagedAux(
+    use_openmp, use_simd, nowait: static bool,
+    omp_grain_size: static Natural,
+    iteration_kind: static IterKind,
+    before_loop_body, in_loop_body, after_loop_body: untyped,
+    params: varargs[untyped]
+  ): untyped =
+  ## Macro helper for typed param resolution
   var
-    params, dslBlocks, values, aliases, raw_ptrs: NimNode
+    values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
-    before_loop_body, in_loop_body, after_loop_body: NimNode
-
-  params = args
-  dslBlocks = params.pop()
 
   initForEach(
         params,
@@ -290,23 +296,37 @@ macro forEachStaged*(args: varargs[untyped]): untyped =
         test_shapes
   )
 
+  let size = genSym(nskLet, "size_")
+  case iteration_kind
+  of Contiguous: forEachStagedSimpleTemplate(contiguous = true)
+  of Strided: forEachStagedSimpleTemplate(contiguous = false)
+  of Both: forEachStagedTemplate()
+
+macro forEachStaged*(args: varargs[untyped]): untyped =
+  var
+    params, dslBlocks: NimNode
+
+    use_openmp, use_simd, nowait, omp_grain_size: NimNode
+    iteration_kind: IterKind
+    before_loop_body, in_loop_body, after_loop_body: NimNode
+
+  params = args
+  dslBlocks = params.pop()
+
   checkBlocks dslBlocks
+  parseBlocks(
+    use_openmp, use_simd, nowait,
+    omp_grain_size,
+    iteration_kind,
+    before_loop_body, in_loop_body, after_loop_body,
+    dslBlocks
+  )
 
-  result = nnkDiscardStmt.newTree(newEmptyNode())
-
-var r = 0
-
-forEachStaged xi in x, yi in y:
-  openmp_config:
-    use_openmp: true
-    omp_grain_size: 1024
-    use_simd: true
-    nowait: true
-  iteration_kind:
-    {contiguous, strided}
-  before_loop:
-    var partial_sum = 0
-  in_loop:
-    a = xi + yi
-  after_loop:
-    r += partial_sum
+  result = quote do:
+    forEachStagedAux(
+            `use_openmp`, `use_simd`, `nowait`,
+            `omp_grain_size`,
+            IterKind(`iteration_kind`),
+            `before_loop_body`, `in_loop_body`, `after_loop_body`,
+            `params`
+          )

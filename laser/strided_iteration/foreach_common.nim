@@ -77,7 +77,7 @@ proc initForEach*(
     test_shapes.add quote do:
       assert `alias0`.shape == `alias_i`.shape
 
-template stridedVarsSetup*(){.dirty.} =
+template stridedVarsSetup*(): untyped {.dirty.} =
   for i, alias in aliases:
     let iter_pos_i = gensym(nskVar, "iter" & $i & "_pos_")
     iter_pos.add iter_pos_i
@@ -90,7 +90,7 @@ template stridedVarsSetup*(){.dirty.} =
       `iter_pos_i` -= `alias`.strides[`k`] * (`alias`.shape[`k`]-1)
 
 
-template stridedChunkOffset*(){.dirty.} =
+template stridedChunkOffset*(): untyped {.dirty.} =
   quote do:
     if `chunk_offset` != 0:
       var accum_size = 1
@@ -99,7 +99,7 @@ template stridedChunkOffset*(){.dirty.} =
         `iter_start_offset`
         accum_size *= `alias0`.shape[`j`]
 
-template stridedBodyTemplate*(){.dirty.} =
+template stridedBodyTemplate*(): untyped {.dirty.} =
   quote do:
     # Initialisation
     `init_strided_iteration`
