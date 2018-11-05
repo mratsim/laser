@@ -48,7 +48,7 @@ proc reduction_localsum_system_atomic[T](x, y: Tensor[T]): T =
     in_loop:
       local_sum += xi + yi
     after_loop:
-      result.atomicInc local_sum
+      result.atomicInc local_sum # This requires --threads:on
 
 proc reduction_padding[T](x, y: Tensor[T]): T =
   let cache_line_size = int cpuinfo_get_l1d_caches().line_size
