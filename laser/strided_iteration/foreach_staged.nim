@@ -14,10 +14,6 @@ import
   ../openmp
 export omp_suffix
 
-template omp_parallel_threshold(size, threshold: Natural, body: untyped) =
-  {.emit: "#pragma omp parallel if (`size` < `threshold`)".}
-  block: body
-
 proc forEachStagedContiguousImpl(
   values, raw_ptrs, size, loopBody: NimNode,
   use_simd, nowait: bool,
@@ -36,8 +32,14 @@ proc forEachStagedContiguousImpl(
                     to_replace = values
                   )
 
+  let # quote do, doesn't interpolate properly to static
+      # We get "undeclared identifier contiguousIndex_" otherwise
+    use_simd_node = newLit use_simd
+    nowait_node = newLit nowait
+
   result = quote do:
-    omp_for(`index`, `size`, `use_simd`, `nowait`, `body`)
+    omp_for(`index`, `size`, `use_simd_node`, `nowait_node`):
+      `body`
 
 proc forEachStagedStridedImpl(
   values, aliases,
@@ -108,10 +110,11 @@ template forEachStagedSimpleTemplate(contiguous: static bool){.dirty.} =
         `test_shapes`
         `raw_ptrs_stmt`
         let `size` = `alias0`.size
-        `before_loop_body`
-        `body`
-        `after_loop_body`
-
+        let over_threshold = `omp_grain_size` * omp_get_max_threads() < `size`
+        omp_parallel_if(over_threshold):
+          `before_loop_body`
+          `body`
+          `after_loop_body`
   else:
     result = quote do:
       block:
@@ -119,10 +122,9 @@ template forEachStagedSimpleTemplate(contiguous: static bool){.dirty.} =
         `test_shapes`
         `raw_ptrs_stmt`
         let `size` = `alias0`.size
-        omp_parallel_threshold(size, omp_threshold):
-          `before_loop_body`
-          `body`
-          `after_loop_body`
+        `before_loop_body`
+        `body`
+        `after_loop_body`
 
 template forEachStagedTemplate(){.dirty.} =
   let contiguous_body = forEachStagedContiguousImpl(
@@ -147,13 +149,15 @@ template forEachStagedTemplate(){.dirty.} =
         `test_shapes`
         `raw_ptrs_stmt`
         let `size` = `alias0`.size
-        `before_loop_body`
-        if `test_C_Contiguous`:
-          `contiguous_body`
-        else:
-          `strided_body`
-        `after_loop_body`
-
+        let is_C_contiguous = `test_C_Contiguous`
+        let over_threshold = `omp_grain_size` * omp_get_max_threads() < `size`
+        omp_parallel_if(over_threshold):
+          `before_loop_body`
+          if is_C_contiguous:
+            `contiguous_body`
+          else:
+            `strided_body`
+          `after_loop_body`
   else:
     result = quote do:
       block:
@@ -161,14 +165,12 @@ template forEachStagedTemplate(){.dirty.} =
         `test_shapes`
         `raw_ptrs_stmt`
         let `size` = `alias0`.size
-        let is_C_contiguous = `test_C_Contiguous`
-        omp_parallel_threshold(size, omp_threshold):
-          `before_loop_body`
-          if is_C_contiguous:
-            `contiguous_body`
-          else:
-            `strided_body`
-          `after_loop_body`
+        `before_loop_body`
+        if `test_C_Contiguous`:
+          `contiguous_body`
+        else:
+          `strided_body`
+        `after_loop_body`
 
 proc checkBlocks(blocks: NimNode) =
   var counts = initCountTable[string](initialSize = 8)
@@ -189,7 +191,7 @@ type IterKind = enum
   Contiguous, Strided, Both
 
 proc parseBlocks(
-    use_openmp, use_simd, nowait: var NimNode,
+    use_openmp, use_simd, nowait: var bool,
     omp_grain_size: var NimNode,
     iter_kind: var IterKind,
     before_loop_body, in_loop_body, after_loop_body: var NimNode,
@@ -212,15 +214,15 @@ proc parseBlocks(
         if eqIdent(param[0], "use_openmp"):
           let missing = missingOrExcl(params, $param[0])
           assert missing.not, "`use_openmp` is defined more than once."
-          use_openmp = param[1]
+          use_openmp = param[1].boolVal
         elif eqIdent(param[0], "use_simd"):
           let missing = missingOrExcl(params, $param[0])
           assert missing.not, "`use_simd` is defined more than once."
-          use_simd = param[1]
+          use_simd = param[1].boolVal
         elif eqIdent(param[0], "nowait"):
           let missing = missingOrExcl(params, $param[0])
           assert missing.not, "`nowait` is defined more than once."
-          nowait = param[1]
+          nowait = param[1].boolVal
         elif eqIdent(param[0], "omp_grain_size"):
           let missing = missingOrExcl(params, $param[0])
           assert missing.not, "`omp_grain_size` is defined more than once."
@@ -251,19 +253,19 @@ proc parseBlocks(
       before_loop_body = blck[1]
     elif eqIdent(blck[0], "in_loop"):
       params.excl "in_loop"
-      before_loop_body = blck[1]
+      in_loop_body = blck[1]
     elif eqIdent(blck[0], "after_loop"):
       params.excl "after_loop"
-      before_loop_body = blck[1]
+      after_loop_body = blck[1]
     else:
       error "Invalid section " & $blck[0] # This should be caught by checkBlocks
 
   ## Default values
   for param in params:
     case param
-    of "use_openmp": use_openmp = newLit true
-    of "use_simd": use_simd = newLit true
-    of "nowait": nowait = newLit false
+    of "use_openmp": use_openmp = true
+    of "use_simd": use_simd = true
+    of "nowait": nowait = false
     of "omp_grain_size": omp_grain_size = newLit OMP_MEMORY_BOUND_GRAIN_SIZE
     of "iteration_kind": iter_kind = Both
     of "before_loop":
@@ -275,16 +277,29 @@ proc parseBlocks(
       after_loop_body = nnkStmtList.newTree(
                             nnkDiscardStmt.newTree(newEmptyNode())
                         )
-      nowait = newLit true # There is always a barrier after #pragma omp parallel, no need to double it.
+      nowait = true # There is always a barrier after #pragma omp parallel, no need to double it.
 
-macro forEachStagedAux(
-    use_openmp, use_simd, nowait: static bool,
-    omp_grain_size: static Natural,
-    iteration_kind: static IterKind,
-    before_loop_body, in_loop_body, after_loop_body: untyped,
-    params: varargs[untyped]
-  ): untyped =
-  ## Macro helper for typed param resolution
+macro forEachStaged*(args: varargs[untyped]): untyped =
+  var
+    params, dslBlocks: NimNode
+
+    use_openmp, use_simd, nowait: bool
+    omp_grain_size: NimNode
+    iteration_kind: IterKind
+    before_loop_body, in_loop_body, after_loop_body: NimNode
+
+  params = args
+  dslBlocks = params.pop()
+
+  checkBlocks dslBlocks
+  parseBlocks(
+    use_openmp, use_simd, nowait,
+    omp_grain_size,
+    iteration_kind,
+    before_loop_body, in_loop_body, after_loop_body,
+    dslBlocks
+  )
+
   var
     values, aliases, raw_ptrs: NimNode
     aliases_stmt, raw_ptrs_stmt, test_shapes: NimNode
@@ -301,32 +316,3 @@ macro forEachStagedAux(
   of Contiguous: forEachStagedSimpleTemplate(contiguous = true)
   of Strided: forEachStagedSimpleTemplate(contiguous = false)
   of Both: forEachStagedTemplate()
-
-macro forEachStaged*(args: varargs[untyped]): untyped =
-  var
-    params, dslBlocks: NimNode
-
-    use_openmp, use_simd, nowait, omp_grain_size: NimNode
-    iteration_kind: IterKind
-    before_loop_body, in_loop_body, after_loop_body: NimNode
-
-  params = args
-  dslBlocks = params.pop()
-
-  checkBlocks dslBlocks
-  parseBlocks(
-    use_openmp, use_simd, nowait,
-    omp_grain_size,
-    iteration_kind,
-    before_loop_body, in_loop_body, after_loop_body,
-    dslBlocks
-  )
-
-  result = quote do:
-    forEachStagedAux(
-            `use_openmp`, `use_simd`, `nowait`,
-            `omp_grain_size`,
-            IterKind(`iteration_kind`),
-            `before_loop_body`, `in_loop_body`, `after_loop_body`,
-            `params`
-          )

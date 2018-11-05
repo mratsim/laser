@@ -105,6 +105,20 @@ template detachGC*(): untyped =
   if(omp_get_thread_num()!=0):
     teardownForeignThreadGc()
 
+template omp_parallel*(body: untyped): untyped =
+  ## Starts an openMP parallel section
+  ##
+  ## Don't forget to use attachGC and detachGC if you are allocating
+  ## sequences, strings, or reference types.
+  ## Those should be thread-local temporaries.
+  {.emit: "#pragma omp parallel".}
+  block: body
+
+template omp_parallel_if*(condition: bool, body: untyped) =
+  let predicate = condition # Make symbol valid and ensure it's lvalue
+  {.emit: "#pragma omp parallel if (`predicate`)".}
+  block: body
+
 template omp_for*(
     index: untyped,
     length: Natural,
@@ -134,7 +148,7 @@ template omp_for*(
   ##       ...
   const omp_annotation = block:
     "for " &
-      (when simd: "simd " else: "") &
+      (when use_simd: "simd " else: "") &
       (when nowait: "nowait " else: "")
   for `index`{.inject.} in `||`(0, length-1, omp_annotation):
     block: body
@@ -293,13 +307,10 @@ template omp_parallel_chunks*(
     let `chunk_size`{.inject.} = length
     block: body
   else:
-    let
-      omp_size = length # make sure if length is computed it's only done once
-      max_threads = omp_get_max_threads()
-      omp_condition = omp_grain_size * max_threads < omp_size
+    let omp_size = length # make sure if length is computed it's only done once
+    let over_threshold = omp_grain_size * omp_get_max_threads() < omp_size
 
-    {.emit: "#pragma omp parallel if (`omp_condition`)".}
-    block:
+    omp_parallel_if(over_threshold):
       omp_chunks(omp_size, chunk_offset, chunk_size, body)
 
 template omp_parallel_chunks_default*(
@@ -320,15 +331,6 @@ template omp_parallel_chunks_default*(
     omp_grain_size = OMP_MEMORY_BOUND_GRAIN_SIZE,
     body
   )
-
-template omp_parallel*(body: untyped): untyped =
-  ## Starts an openMP parallel section
-  ##
-  ## Don't forget to use attachGC and detachGC if you are allocating
-  ## sequences, strings, or reference types.
-  ## Those should be thread-local temporaries.
-  {.emit: "#pragma omp parallel".}
-  block: body
 
 template omp_critical*(body: untyped): untyped =
   {.emit: "#pragma omp critical".}
