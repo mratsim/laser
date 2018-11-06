@@ -55,10 +55,10 @@ proc conv2d_direct*[T](
             # Entering conv kernel region
             for hK in 0 ..< kH:
               let row = ih + hK - pH
-              if 0 <= row and row < H:     # Check if within row boundaries
+              if row <% H:     # Unsigned '<' does 0 < row < H.
                 for wK in 0 ..< kW:
                   let col = iw + wK - pW
-                  if 0 <= col and col < W: # Check if within column boundaries
+                  if col <% W: # Unsigned '<' does 0 < row < H.
                     let iidx = col + W * (row + H * (ci + C_in * n))  # idata[n][ci][row][col]
                     let kidx = wK + kW * (hK + kH * (ci + C_in * co)) # kdata[co][ci][hk][wk]
                     odata[oidx] += idata[iidx] * kdata[kidx]
