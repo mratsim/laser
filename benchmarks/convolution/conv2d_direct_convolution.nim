@@ -43,25 +43,34 @@ proc conv2d_direct*[T](
   let odata = cast[ptr UncheckedArray[T]](oim[0].addr)
   let idata = cast[ptr UncheckedArray[T]](iim[0].unsafeaddr)
 
-  for n in 0||(N - 1):
-    for co in `||`(0,C_out-1, "simd"):
+  const arithmetic_intensity = 12 # number of FLOP per byte for the convolution
+  const flop_per_elem = arithmetic_intensity div sizeof(T)
+  let parallelize = OMP_MEMORY_BOUND_GRAIN_SIZE div flop_per_elem < outH * outW
+
+  for n in 0 ..< N-1:
+    for co in 0 ..< C_out:
       for ci in 0 ..< C_in:
-        for oh in 0 ..< outH:              # output height
-          let ih = sH * oh                 # input height
-          for ow in 0 ..< outW:            # output width
-            let iw = sH * ow               # input width
-            # The following should be loop hoisted by the compiler
-            let oidx = ow + outW * (oh + outH * (co + C_out * n)) # odata[n][co][oh][ow]
-            # Entering conv kernel region
-            for hK in 0 ..< kH:
-              let row = ih + hK - pH
-              if row <% H:     # Unsigned '<' does 0 < row < H.
-                for wK in 0 ..< kW:
-                  let col = iw + wK - pW
-                  if col <% W: # Unsigned '<' does 0 < row < H.
-                    let iidx = col + W * (row + H * (ci + C_in * n))  # idata[n][ci][row][col]
-                    let kidx = wK + kW * (hK + kH * (ci + C_in * co)) # kdata[co][ci][hk][wk]
-                    odata[oidx] += idata[iidx] * kdata[kidx]
+        # We parallelize over the image height to deal with cases
+        # where we have a single image or a low number of channels
+
+        # We assume no false sharing with a proper grain size
+        omp_parallel_if(parallelize):
+          omp_for(oh, outH, use_simd = true, nowait=true):                  # output height
+            let ih = sH * oh                                                # input height
+            for ow in 0 ..< outW:                                           # output width
+              let iw = sH * ow                                              # input width
+              # The following should be loop hoisted by the compiler
+              let oidx = ow + outW * (oh + outH * (co + C_out * n))         # odata[n][co][oh][ow]
+              # Entering conv kernel region
+              for krow in 0 ..< kH:
+                let row = ih + krow - pH
+                if row <% H:     # Unsigned '<' does 0 < row < H.
+                  for kcol in 0 ..< kW:
+                    let col = iw + kcol - pW
+                    if col <% W: # Unsigned '<' does 0 < row < H.
+                      let iidx = col + W * (row + H * (ci + C_in * n))      # idata[n][ci][row][col]
+                      let kidx = kcol + kW * (krow + kH * (ci + C_in * co)) # kdata[co][ci][krow][kcol]
+                      odata[oidx] += idata[iidx] * kdata[kidx]
 
 when isMainModule:
   block:
