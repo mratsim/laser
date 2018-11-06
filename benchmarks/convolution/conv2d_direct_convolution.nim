@@ -5,30 +5,24 @@ import
   ./conv2d_common,
   ../../laser/openmp
 
-proc conv2d_direct[T](
-    oim: var seq[Image[T]],     # Output images
-    iim: seq[Image[T]],         # Input images
-    ishape: ImageShape,         # Shape of a single image
-    kernel: seq[T],             # filter kernel
-    kshape: KernelShape,        # kernel shape (should be const)
-    padding: Padding,           # Padding (should be const)
-    strides: Strides            # Strides (should be const)
+proc conv2d_direct*[T](
+    oim: var Tensor[T],     # Output images
+    iim: Tensor[T],         # Input images
+    ishape: TensorShape,    # Shape of a single image
+    kernel: Tensor[T],      # filter kernel
+    kshape: KernelShape,    # kernel shape (should be const)
+    padding: Padding,       # Padding (should be const)
+    strides: Strides        # Strides (should be const)
   ) =
   ## oim must be zero-initialized
   # Reminder: convolution deep learning == cross-correlation signal processing
 
-  assert oim.len == iim.len
   assert ishape.c == kshape.c_in
   let out_shape = conv2d_out_shape(ishape, kshape, padding, strides)
-  when compileOption("boundChecks"):
-    let expected_osize = out_shape.c * out_shape.h * out_shape.w
-    let expected_isize = ishape.c    * ishape.h    * ishape.w
-    for i in 0 ..< oim.len:
-      assert oim[i].len == expected_osize
-      assert iim[i].len == expected_isize
+  assert oim.len == out_shape.n * out_shape.c * out_shape.h * out_shape.w
 
   let
-    N = iim.len
+    N = ishape.n
     H = ishape.h
     W = ishape.w
     outH = out_shape.h
@@ -46,9 +40,10 @@ proc conv2d_direct[T](
     sH = strides.h
     sW = strides.w
 
+  let odata = cast[ptr UncheckedArray[T]](oim[0].addr)
+  let idata = cast[ptr UncheckedArray[T]](iim[0].unsafeaddr)
+
   for n in 0||(N - 1):
-    let odata = cast[ptr UncheckedArray[T]](oim[n][0].addr)
-    let idata = cast[ptr UncheckedArray[T]](iim[n][0].unsafeaddr)
     for co in `||`(0,C_out-1, "simd"):
       for ci in 0 ..< C_in:
         for oh in 0 ..< outH:              # output height
@@ -64,8 +59,8 @@ proc conv2d_direct[T](
                 for wK in 0 ..< kW:
                   let col = iw + wK - pW
                   if 0 <= col and col < W: # Check if within column boundaries
-                    let iidx = col + W * (row + H * (ci + n * C_in)) #idata[n][ci][row][col]
-                    let kidx = wK + kW * (hK + kH * (ci + C_in * co))
+                    let iidx = col + W * (row + H * (ci + C_in * n))  # idata[n][ci][row][col]
+                    let kidx = wK + kW * (hK + kH * (ci + C_in * co)) # kdata[co][ci][hk][wk]
                     odata[oidx] += idata[iidx] * kdata[kidx]
 
 when isMainModule:
@@ -73,18 +68,18 @@ when isMainModule:
     let img =  [[1, 2, 0, 0],
                 [5, 3, 0, 4],
                 [0, 0, 0, 7],
-                [9, 3, 0, 0]].toflatSeq()
-    let ishape: ImageShape = (1, 4, 4)
-    let imgs = @[img]
+                [9, 3, 0, 0]].toTensor()
+    let ishape: TensorShape = (1, 1, 4, 4)
 
     let kernel = [[1, 1, 1],
                   [1, 1, 0],
-                  [1, 0, 0]].toflatSeq()
+                  [1, 0, 0]].toTensor()
     const kshape: KernelShape = (1, 1, 3, 3)
+
     let target = [[1,  8,  5,  0],
                   [8, 11,  5,  4],
                   [8, 17, 10, 11],
-                  [9, 12, 10,  7]].toflatSeq()
+                  [9, 12, 10,  7]].toTensor()
 
     let
       padding = (1, 1)
@@ -96,16 +91,112 @@ when isMainModule:
                       padding,
                       strides
                     )
-    var output = @[newSeq[int](out_shape.c * out_shape.h * out_shape.w)]
+    var output = newSeq[int](out_shape.n * out_shape.c * out_shape.h * out_shape.w)
     echo "Output shape: " & $out_shape
 
     conv2d_direct(
       output,
-      imgs, ishape,
+      img, ishape,
       kernel, kshape,
       padding,
       strides
     )
 
-    echo output[0].toString(out_shape)
-    doAssert target == output[0]
+    echo output.toString(out_shape)
+    doAssert target == output
+
+  block:
+    let input = [
+      [
+        [
+          [2, 2, 0, 2, 1],
+          [0, 1, 1, 0, 2],
+          [1, 2, 1, 2, 1],
+          [2, 2, 0, 0, 2],
+          [2, 1, 1, 1, 2]
+        ], [
+          [2, 0, 1, 1, 1],
+          [2, 2, 0, 0, 2],
+          [2, 2, 1, 0, 0],
+          [1, 1, 2, 2, 0],
+          [2, 1, 1, 1, 0]
+        ], [
+          [0, 1, 2, 2, 0],
+          [1, 1, 1, 1, 0],
+          [2, 1, 2, 2, 0],
+          [0, 2, 2, 2, 1],
+          [0, 0, 2, 2, 1]
+        ]
+      ]].toTensor()
+    let ishape = (1, 3, 5, 5)
+
+    let kernel =
+      [
+        [
+          [
+            [-1, -1, -1],
+            [ 1,  0,  1],
+            [ 0, -1,  0]
+          ], [
+            [ 1,  0, -1],
+            [ 1, -1,  1],
+            [ 0,  1,  0]
+          ], [
+            [ 0,  0,  1],
+            [-1, -1, -1],
+            [-1,  0,  0]
+          ]
+        ], [
+          [
+            [ 0,  1,  0],
+            [ 1, -1, -1],
+            [ 1,  1, -1]
+          ], [
+            [-1,  0,  1],
+            [-1, -1,  1],
+            [ 1,  1,  0]
+          ], [
+            [ 0,  1,  1],
+            [-1,  1, -1],
+            [-1, -1,  0]
+          ]
+        ]
+      ].toTensor()
+    let kshape = (2, 3, 3, 3)
+
+    let target =
+      [
+        [
+          [ 1, -3, -1],
+          [-4,  1, -6],
+          [-3, -2, -1]
+        ],[
+          [-7,  1,  0],
+          [ 3, -3,  2],
+          [ 1,  3, -2]
+        ]
+      ].toTensor()
+
+    let
+      padding = (1, 1)
+      strides = (2, 2)
+
+    let out_shape = conv2d_out_shape(
+                      ishape,
+                      kshape,
+                      padding,
+                      strides
+                    )
+    var output = newSeq[int](out_shape.n * out_shape.c * out_shape.h * out_shape.w)
+    echo "Output shape: " & $out_shape
+
+    conv2d_direct(
+      output,
+      input, ishape,
+      kernel, kshape,
+      padding,
+      strides
+    )
+
+    echo output.toString(out_shape)
+    doAssert target == output
