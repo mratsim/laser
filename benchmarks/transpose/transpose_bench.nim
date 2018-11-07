@@ -51,8 +51,9 @@ import
   ../../laser/compiler_optim_hints
 
 const
-  M     =  2000
-  N     =  1000
+  M     =  4000
+  N     =  2000
+  NbSamples = 250
 
 const
   ashape: MatrixShape = (M, N)
@@ -174,7 +175,7 @@ proc benchCacheBlocking(a: seq[float32], nb_samples: int) =
 
   let pa{.restrict.} = a[0].unsafeAddr
   let po{.restrict.} = output[0].addr
-  const blck = 32
+  const blck = 64
 
   bench("Cache blocking"):
     discard
@@ -195,7 +196,7 @@ proc benchCacheBlockingExchanged(a: seq[float32], nb_samples: int) =
 
   let pa{.restrict.} = a[0].unsafeAddr
   let po{.restrict.} = output[0].addr
-  const blck = 32
+  const blck = 64
 
   bench("Cache blocking - input row iteration"):
     discard
@@ -205,7 +206,51 @@ proc benchCacheBlockingExchanged(a: seq[float32], nb_samples: int) =
     for (int j = 0; j < `N`; j+=`blck`)
       for (int i = 0; i < `M`; ++i)
         for (int b = 0; b < `blck` && j+b<`N`; ++b)
-          `po`[j+i*`M` + b] = `pa`[i+(j+b)*`N`];
+          `po`[i+(j+b)*`M`] = `pa`[j+b+i*`N`];
+    """.}
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
+proc bench2Dtiling(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa{.restrict.} = a[0].unsafeAddr
+  let po{.restrict.} = output[0].addr
+  const blck = 128
+
+  bench("2D Tiling"):
+    discard
+  do:
+    {.emit: """
+    #pragma omp parallel for simd collapse(2)
+    for (int i = 0; i < `M`; i+=`blck`)
+      for (int j = 0; j < `M`; j+=`blck`)
+        for (int jj = j; jj<j+`blck` && jj<`N`; jj++)
+          for (int ii = i; ii<i+`blck` && ii<`M`; ii++)
+            `po`[ii+jj*`M`] = `pa`[jj+ii*`N`];
+    """.}
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
+proc bench2DtilingExchanged(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa{.restrict.} = a[0].unsafeAddr
+  let po{.restrict.} = output[0].addr
+  const blck = 128
+
+  bench("2D Tiling - input row iteration"):
+    discard
+  do:
+    {.emit: """
+    #pragma omp parallel for simd collapse(2)
+    for (int j = 0; j < `N`; j+=`blck`)
+      for (int i = 0; i < `M`; i+=`blck`)
+        for (int jj = j; jj<j+`blck` && jj<`N`; jj++)
+          for (int ii = i; ii<i+`blck` && ii<`M`; ii++)
+            `po`[ii+jj*`M`] = `pa`[jj+ii*`N`];
     """.}
     # echo a.toString((M, N))
     # echo output.toString((N, M))
@@ -245,15 +290,17 @@ when isMainModule:
   block:
     let a = newSeqWith(M*N, float32 rand(1.0))
 
-    # benchBLAS(a, nb_samples = 1000)
-    benchForEachStrided(a, nb_samples = 1000)
-    benchNaive(a, nb_samples = 1000)
-    benchNaiveExchanged(a, nb_samples = 1000)
-    benchCollapsed(a, nb_samples = 1000)
-    benchCollapsedExchanged(a, nb_samples = 1000)
-    benchCacheBlocking(a, nb_samples = 1000)
-    benchCacheBlockingExchanged(a, nb_samples = 1000)
-    # benchCacheOblivious(a, nb_samples = 1000)
+    # benchBLAS(a, NbSamples)
+    benchForEachStrided(a, NbSamples)
+    benchNaive(a, NbSamples)
+    benchNaiveExchanged(a, NbSamples)
+    benchCollapsed(a, NbSamples)
+    benchCollapsedExchanged(a, NbSamples)
+    benchCacheBlocking(a, NbSamples)
+    benchCacheBlockingExchanged(a, NbSamples)
+    bench2Dtiling(a, NbSamples)
+    bench2DtilingExchanged(a, NbSamples)
+    # benchCacheOblivious(a, NbSamples)
 
 
 ## With OpenMP
