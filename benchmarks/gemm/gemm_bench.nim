@@ -96,7 +96,7 @@ when isMainModule:
   echo &"Required bytes:                {req_bytes.float / float(10^6):>9.3f} MB"
   echo &"Arithmetic intensity:          {req_ops.float / req_bytes.float:>9.3f} FLOP/byte"
   block:
-    let a  = newSeqWith(M*K, float32 rand(1.0))
+    let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
 
     benchBLAS(a, b, nb_samples = 20)

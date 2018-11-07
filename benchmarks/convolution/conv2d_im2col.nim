@@ -121,25 +121,32 @@ proc conv2d_im2col*(
     outH = oshape.h
     outW = oshape.w
 
+    is1x1 = kH*kW == 1
+
   for n in 0 ..< B:
     let ioffset = n * C_in * H * W
     let pinput{.restrict.} = cast[ptr UncheckedArray[float32]](input[ioffset].unsafeAddr)
-    im2col(
-      pworkspace,
-      oshape,
-      pinput,
-      ishape,
-      kshape,
-      padding,
-      strides,
-    )
+    if not is1x1:
+      im2col(
+        pworkspace,
+        oshape,
+        pinput,
+        ishape,
+        kshape,
+        padding,
+        strides,
+      )
     for g in 0 ..< groups:
       let koffset = g * kH * kW * C_in_per_group * C_out_per_group
       let woffset = g * (kH * kW * C_in_per_group) * (outH * outW)
       let ooffset = (n * C_out + g * C_out_per_group) * (outH * outW)
 
       let pkernel{.restrict.} = kernel[koffset].unsafeAddr
-      let lpworkspace{.restrict.} = pworkspace + woffset
+      let lpworkspace{.restrict.} = block:
+        if is1x1:
+          pinput[0].addr
+        else:
+          pworkspace + woffset
       let poutput{.restrict.} = output[ooffset].addr
 
       let M = C_out_per_group
