@@ -239,7 +239,7 @@ proc bench2DtilingExchanged(a: seq[float32], nb_samples: int) =
 
   let pa{.restrict.} = a[0].unsafeAddr
   let po{.restrict.} = output[0].addr
-  const blck = 128
+  const blck = 64
 
   bench("2D Tiling - input row iteration"):
     discard
@@ -251,6 +251,51 @@ proc bench2DtilingExchanged(a: seq[float32], nb_samples: int) =
         for (int jj = j; jj<j+`blck` && jj<`N`; jj++)
           for (int ii = i; ii<i+`blck` && ii<`M`; ii++)
             `po`[ii+jj*`M`] = `pa`[jj+ii*`N`];
+    """.}
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
+proc benchCacheBlockingPrefetch(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa{.restrict.} = a[0].unsafeAddr
+  let po{.restrict.} = output[0].addr
+  const blck = 32
+
+  bench("Cache blocking with Prefetch"):
+    discard
+  do:
+    {.emit: """
+    #pragma omp parallel for simd
+    for (int i = 0; i < `M`; i+=`blck`)
+      for (int j = 0; j < `N`; ++j)
+        for (int b = 0; b < `blck` && i+b<`M`; ++b)
+          `po`[i+j*`M` + b] = `pa`[j+(i+b)*`N`];
+      __builtin_prefetch(&`pa`[(i+1)*`N`], 0, 1); // Prefetch read with low temporal locality
+    """.}
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
+proc bench2DtilingExchangedPrefetch(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa{.restrict.} = a[0].unsafeAddr
+  let po{.restrict.} = output[0].addr
+  const blck = 32
+
+  bench("2D Tiling + Prefetch - input row iteration"):
+    discard
+  do:
+    {.emit: """
+    #pragma omp parallel for simd collapse(2)
+    for (int j = 0; j < `N`; j+=`blck`)
+      for (int i = 0; i < `M`; i+=`blck`)
+        for (int jj = j; jj<j+`blck` && jj<`N`; jj++)
+          for (int ii = i; ii<i+`blck` && ii<`M`; ii++)
+            `po`[ii+jj*`M`] = `pa`[jj+ii*`N`];
+        __builtin_prefetch(&`pa`[(i+1)*`N`], 0, 1); // Prefetch read with low temporal locality
     """.}
     # echo a.toString((M, N))
     # echo output.toString((N, M))
@@ -300,93 +345,278 @@ when isMainModule:
     benchCacheBlockingExchanged(a, NbSamples)
     bench2Dtiling(a, NbSamples)
     bench2DtilingExchanged(a, NbSamples)
+    benchCacheBlockingPrefetch(a, NbSamples)
+    bench2DtilingExchangedPrefetch(a, NbSamples)
     # benchCacheOblivious(a, NbSamples)
 
 
 ## With OpenMP
 ## Note - OpenMP is faster when iterating on input row in inner loop
 ##        but in serial case its input col in inner loop that is faster
-# Warmup: 1.2854 s, result 224 (displayed to avoid compiler optimizing warmup away)
+## Prefetch helps a lot in serial case but doesn't at all with OpenMP
+## Maybe due to prefetching on the wrong CPU
 
-# A matrix shape: (M: 2000, N: 1000)
-# Output shape: (M: 1000, N: 2000)
-# Required number of operations:     2.000 millions
-# Required bytes:                    8.000 MB
+########################################################################
+# OpenMP
+
+# Warmup: 1.1952 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A matrix shape: (M: 4000, N: 2000)
+# Output shape: (M: 2000, N: 4000)
+# Required number of operations:     8.000 millions
+# Required bytes:                   32.000 MB
 # Arithmetic intensity:              0.250 FLOP/byte
 
 # Laser ForEachStrided
-# Collected 1000 samples in 6.032 seconds
-# Average time: 5.898 ms
-# Stddev  time: 1.797 ms
-# Min     time: 4.310 ms
-# Max     time: 19.655 ms
-# Perf:         0.339 GFLOP/s
+# Collected 250 samples in 6.231 seconds
+# Average time: 24.342 ms
+# Stddev  time: 1.587 ms
+# Min     time: 21.526 ms
+# Max     time: 34.755 ms
+# Perf:         0.329 GFLOP/s
 
 # Display output[1] to make sure it's not optimized away
-# 0.03930548205971718
+# 0.7808474898338318
 
 # Naive transpose
-# Collected 1000 samples in 3.126 seconds
-# Average time: 3.124 ms
-# Stddev  time: 0.356 ms
-# Min     time: 2.786 ms
-# Max     time: 8.169 ms
-# Perf:         0.640 GFLOP/s
+# Collected 250 samples in 4.728 seconds
+# Average time: 18.909 ms
+# Stddev  time: 1.739 ms
+# Min     time: 15.022 ms
+# Max     time: 34.356 ms
+# Perf:         0.423 GFLOP/s
 
 # Display output[1] to make sure it's not optimized away
-# 0.03930548205971718
+# 0.7808474898338318
 
 # Naive transpose - input row iteration
-# Collected 1000 samples in 4.025 seconds
-# Average time: 4.023 ms
-# Stddev  time: 0.639 ms
-# Min     time: 2.410 ms
-# Max     time: 15.384 ms
-# Perf:         0.497 GFLOP/s
+# Collected 250 samples in 5.440 seconds
+# Average time: 21.759 ms
+# Stddev  time: 1.470 ms
+# Min     time: 17.792 ms
+# Max     time: 33.235 ms
+# Perf:         0.368 GFLOP/s
 
 # Display output[1] to make sure it's not optimized away
-# 0.03930548205971718
+# 0.7808474898338318
 
 # Collapsed OpenMP
-# Collected 1000 samples in 3.296 seconds
-# Average time: 3.295 ms
-# Stddev  time: 0.466 ms
-# Min     time: 2.915 ms
-# Max     time: 11.437 ms
-# Perf:         0.607 GFLOP/s
+# Collected 250 samples in 4.706 seconds
+# Average time: 18.821 ms
+# Stddev  time: 1.339 ms
+# Min     time: 16.527 ms
+# Max     time: 31.409 ms
+# Perf:         0.425 GFLOP/s
 
 # Display output[1] to make sure it's not optimized away
-# 0.03930548205971718
+# 0.7808474898338318
 
 # Collapsed OpenMP - input row iteration
-# Collected 1000 samples in 5.331 seconds
-# Average time: 5.329 ms
-# Stddev  time: 0.734 ms
-# Min     time: 3.883 ms
-# Max     time: 15.519 ms
-# Perf:         0.375 GFLOP/s
+# Collected 250 samples in 5.939 seconds
+# Average time: 23.754 ms
+# Stddev  time: 1.973 ms
+# Min     time: 19.449 ms
+# Max     time: 40.228 ms
+# Perf:         0.337 GFLOP/s
 
 # Display output[1] to make sure it's not optimized away
-# 0.03930548205971718
+# 0.7808474898338318
 
 # Cache blocking
-# Collected 1000 samples in 2.324 seconds
-# Average time: 2.322 ms
-# Stddev  time: 0.380 ms
-# Min     time: 1.962 ms
-# Max     time: 6.669 ms
-# Perf:         0.861 GFLOP/s
+# Collected 250 samples in 2.224 seconds
+# Average time: 8.891 ms
+# Stddev  time: 0.818 ms
+# Min     time: 8.397 ms
+# Max     time: 16.753 ms
+# Perf:         0.900 GFLOP/s
 
 # Display output[1] to make sure it's not optimized away
-# 0.03930548205971718
+# 0.7808474898338318
 
 # Cache blocking - input row iteration
-# Collected 1000 samples in 2.051 seconds
-# Average time: 2.050 ms
-# Stddev  time: 0.407 ms
-# Min     time: 1.723 ms
-# Max     time: 10.078 ms
-# Perf:         0.976 GFLOP/s
+# Collected 250 samples in 3.051 seconds
+# Average time: 12.203 ms
+# Stddev  time: 1.734 ms
+# Min     time: 10.663 ms
+# Max     time: 24.437 ms
+# Perf:         0.656 GFLOP/s
 
 # Display output[1] to make sure it's not optimized away
-# 0.03930548205971718
+# 0.7808474898338318
+
+# 2D Tiling
+# Collected 250 samples in 2.510 seconds
+# Average time: 10.038 ms
+# Stddev  time: 1.097 ms
+# Min     time: 8.659 ms
+# Max     time: 21.243 ms
+# Perf:         0.797 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# 2D Tiling - input row iteration
+# Collected 250 samples in 1.903 seconds
+# Average time: 7.612 ms
+# Stddev  time: 0.845 ms
+# Min     time: 7.056 ms
+# Max     time: 14.593 ms
+# Perf:         1.051 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# Cache blocking with Prefetch
+# Collected 250 samples in 2.360 seconds
+# Average time: 9.437 ms
+# Stddev  time: 1.074 ms
+# Min     time: 8.664 ms
+# Max     time: 16.393 ms
+# Perf:         0.848 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# 2D Tiling + Prefetch - input row iteration
+# Collected 250 samples in 1.990 seconds
+# Average time: 7.960 ms
+# Stddev  time: 0.720 ms
+# Min     time: 7.399 ms
+# Max     time: 14.150 ms
+# Perf:         1.005 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+########################################################################
+# Serial
+########################################################################
+
+# Warmup: 1.4231 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A matrix shape: (M: 4000, N: 2000)
+# Output shape: (M: 2000, N: 4000)
+# Required number of operations:     8.000 millions
+# Required bytes:                   32.000 MB
+# Arithmetic intensity:              0.250 FLOP/byte
+
+# Laser ForEachStrided
+# Collected 250 samples in 9.150 seconds
+# Average time: 36.039 ms
+# Stddev  time: 6.383 ms
+# Min     time: 34.098 ms
+# Max     time: 75.195 ms
+# Perf:         0.222 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# Naive transpose
+# Collected 250 samples in 7.037 seconds
+# Average time: 28.147 ms
+# Stddev  time: 1.580 ms
+# Min     time: 26.689 ms
+# Max     time: 33.603 ms
+# Perf:         0.284 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# Naive transpose - input row iteration
+# Collected 250 samples in 8.782 seconds
+# Average time: 35.129 ms
+# Stddev  time: 1.069 ms
+# Min     time: 34.082 ms
+# Max     time: 44.597 ms
+# Perf:         0.228 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# Collapsed OpenMP
+# Collected 250 samples in 6.935 seconds
+# Average time: 27.741 ms
+# Stddev  time: 1.085 ms
+# Min     time: 26.723 ms
+# Max     time: 37.929 ms
+# Perf:         0.288 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# Collapsed OpenMP - input row iteration
+# Collected 250 samples in 8.872 seconds
+# Average time: 35.486 ms
+# Stddev  time: 1.247 ms
+# Min     time: 34.120 ms
+# Max     time: 44.905 ms
+# Perf:         0.225 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# Cache blocking
+# Collected 250 samples in 3.121 seconds
+# Average time: 12.485 ms
+# Stddev  time: 0.961 ms
+# Min     time: 12.018 ms
+# Max     time: 24.380 ms
+# Perf:         0.641 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# Cache blocking - input row iteration
+# Collected 250 samples in 5.073 seconds
+# Average time: 20.292 ms
+# Stddev  time: 0.997 ms
+# Min     time: 19.466 ms
+# Max     time: 30.588 ms
+# Perf:         0.394 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# 2D Tiling
+# Collected 250 samples in 3.339 seconds
+# Average time: 13.355 ms
+# Stddev  time: 0.748 ms
+# Min     time: 12.172 ms
+# Max     time: 19.928 ms
+# Perf:         0.599 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# 2D Tiling - input row iteration
+# Collected 250 samples in 3.335 seconds
+# Average time: 13.342 ms
+# Stddev  time: 0.654 ms
+# Min     time: 12.950 ms
+# Max     time: 21.406 ms
+# Perf:         0.600 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# Cache blocking with Prefetch
+# Collected 250 samples in 2.541 seconds
+# Average time: 10.164 ms
+# Stddev  time: 0.792 ms
+# Min     time: 9.741 ms
+# Max     time: 18.762 ms
+# Perf:         0.787 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
+
+# 2D Tiling + Prefetch - input row iteration
+# Collected 250 samples in 3.360 seconds
+# Average time: 13.441 ms
+# Stddev  time: 0.864 ms
+# Min     time: 13.025 ms
+# Max     time: 21.967 ms
+# Perf:         0.595 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.7808474898338318
