@@ -1,3 +1,6 @@
+# Apache v2 License
+# Mamy Ratsimbazafy
+
 # ##########################################
 # Benchmarking tools
 import random, times, stats, strformat, math, sequtils
@@ -22,8 +25,8 @@ template printStats(name: string, output: openarray) {.dirty.} =
   echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
   echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
   echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GFLOP/s"
-  echo "\nDisplay output[0] to make sure it's not optimized away"
-  echo output[0] # Prevents compiler from optimizing stuff away
+  echo "\nDisplay output[1] to make sure it's not optimized away"
+  echo output[1] # Prevents compiler from optimizing stuff away
 
 template bench(name: string, initialisation, body: untyped) {.dirty.}=
   block: # Actual bench
@@ -80,14 +83,30 @@ proc benchNaive(a: seq[float32], nb_samples: int) =
   var output = newSeq[float32](out_size)
   withCompilerOptimHints()
 
-  let pa = cast[ptr UncheckedArray[float32]](a[0].unsafeAddr)
-  let po = cast[ptr UncheckedArray[float32]](output[0].addr)
+  let pa{.restrict.} = cast[ptr UncheckedArray[float32]](a[0].unsafeAddr)
+  let po{.restrict.} = cast[ptr UncheckedArray[float32]](output[0].addr)
 
   bench("Naive transpose"):
     discard
   do:
     for i in `||`(0, M-1, "parallel for simd"):
       for j in 0 ..< N:
+        po[i+j*M] = pa[j+i*N]
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
+proc benchNaiveExchanged(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa{.restrict.} = cast[ptr UncheckedArray[float32]](a[0].unsafeAddr)
+  let po{.restrict.} = cast[ptr UncheckedArray[float32]](output[0].addr)
+
+  bench("Naive transpose - input row iteration"):
+    discard
+  do:
+    for j in `||`(0, N-1, "parallel for simd"):
+      for i in 0 ..< M:
         po[i+j*M] = pa[j+i*N]
     # echo a.toString((M, N))
     # echo output.toString((N, M))
@@ -114,8 +133,8 @@ proc benchCollapsed(a: seq[float32], nb_samples: int) =
   var output = newSeq[float32](out_size)
   withCompilerOptimHints()
 
-  let pa = a[0].unsafeAddr
-  let po = output[0].addr
+  let pa{.restrict.} = a[0].unsafeAddr
+  let po{.restrict.} = output[0].addr
 
   bench("Collapsed OpenMP"):
     discard
@@ -129,6 +148,66 @@ proc benchCollapsed(a: seq[float32], nb_samples: int) =
     # echo a.toString((M, N))
     # echo output.toString((N, M))
 
+proc benchCollapsedExchanged(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa{.restrict.} = a[0].unsafeAddr
+  let po{.restrict.} = output[0].addr
+
+  bench("Collapsed OpenMP - input row iteration"):
+    discard
+  do:
+    {.emit: """
+    #pragma omp parallel for simd collapse(2)
+    for (int j = 0; j < `N`; j++)
+      for (int i = 0; i < `M`; i++)
+        `po`[i+j*`M`] = `pa`[j+i*`N`];
+    """.}
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
+proc benchCacheBlocking(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa{.restrict.} = a[0].unsafeAddr
+  let po{.restrict.} = output[0].addr
+  const blck = 32
+
+  bench("Cache blocking"):
+    discard
+  do:
+    {.emit: """
+    #pragma omp parallel for simd
+    for (int i = 0; i < `N`; i+=`blck`)
+      for (int j = 0; j < `M`; ++j)
+        for (int b = 0; b < `blck` && i+b<`N`; ++b)
+          `po`[i+j*`M` + b] = `pa`[j+(i+b)*`N`];
+    """.}
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
+proc benchCacheBlockingExchanged(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa{.restrict.} = a[0].unsafeAddr
+  let po{.restrict.} = output[0].addr
+  const blck = 32
+
+  bench("Cache blocking - input row iteration"):
+    discard
+  do:
+    {.emit: """
+    #pragma omp parallel for simd
+    for (int j = 0; j < `M`; j+=`blck`)
+      for (int i = 0; i < `N`; ++i)
+        for (int b = 0; b < `blck` && j+b<`M`; ++b)
+          `po`[j+i*`M` + b] = `pa`[i+(j+b)*`N`];
+    """.}
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
 # ###########################################
 
 when defined(fast_math):
@@ -152,9 +231,13 @@ when isMainModule:
     # benchBLAS(a, nb_samples = 1000)
     benchForEachStrided(a, nb_samples = 1000)
     benchNaive(a, nb_samples = 1000)
+    benchNaiveExchanged(a, nb_samples = 1000)
     benchCollapsed(a, nb_samples = 1000)
+    benchCollapsedExchanged(a, nb_samples = 1000)
+    benchCacheBlocking(a, nb_samples = 1000)
+    benchCacheBlockingExchanged(a, nb_samples = 1000)
 
-# Warmup: 1.2263 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1959 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 2000, N: 1000)
 # Output shape: (M: 1000, N: 2000)
@@ -163,34 +246,34 @@ when isMainModule:
 # Arithmetic intensity:              0.250 FLOP/byte
 
 # Laser ForEachStrided
-# Collected 1000 samples in 6.838 seconds
-# Average time: 6.701 ms
-# Stddev  time: 1.445 ms
-# Min     time: 4.335 ms
-# Max     time: 16.569 ms
-# Perf:         0.298 GFLOP/s
+# Collected 1000 samples in 5.399 seconds
+# Average time: 5.272 ms
+# Stddev  time: 0.479 ms
+# Min     time: 4.353 ms
+# Max     time: 13.638 ms
+# Perf:         0.379 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 1.564622351679645e-07
 
 # Naive transpose
-# Collected 1000 samples in 3.089 seconds
-# Average time: 3.087 ms
-# Stddev  time: 0.334 ms
-# Min     time: 2.766 ms
-# Max     time: 7.715 ms
-# Perf:         0.648 GFLOP/s
+# Collected 1000 samples in 3.237 seconds
+# Average time: 3.235 ms
+# Stddev  time: 0.662 ms
+# Min     time: 2.781 ms
+# Max     time: 10.299 ms
+# Perf:         0.618 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 1.564622351679645e-07
 
 # Collapsed OpenMP
-# Collected 1000 samples in 3.236 seconds
-# Average time: 3.234 ms
-# Stddev  time: 0.327 ms
-# Min     time: 2.939 ms
-# Max     time: 8.375 ms
-# Perf:         0.618 GFLOP/s
+# Collected 1000 samples in 3.251 seconds
+# Average time: 3.249 ms
+# Stddev  time: 0.409 ms
+# Min     time: 2.929 ms
+# Max     time: 11.542 ms
+# Perf:         0.616 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 1.564622351679645e-07

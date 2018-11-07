@@ -1,4 +1,7 @@
+# Apache v2 License
+# Mamy Ratsimbazafy
 
+# ##########################################
 import
   ../../laser/strided_iteration/foreach,
   ../../laser/tensor/[datatypes, initialization],
