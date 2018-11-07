@@ -47,7 +47,7 @@ proc conv2d_direct*[T](
   const flop_per_elem = arithmetic_intensity div sizeof(T)
   let parallelize = OMP_MEMORY_BOUND_GRAIN_SIZE div flop_per_elem < outH * outW
 
-  for n in 0 ..< N-1:
+  for n in 0 ..< N:
     for co in 0 ..< C_out:
       for ci in 0 ..< C_in:
         # We parallelize over the image height to deal with cases
@@ -73,132 +73,7 @@ proc conv2d_direct*[T](
                       odata[oidx] += idata[iidx] * kdata[kidx]
 
 when isMainModule:
-  block:
-    let img =  [[1, 2, 0, 0],
-                [5, 3, 0, 4],
-                [0, 0, 0, 7],
-                [9, 3, 0, 0]].toTensor()
-    let ishape: TensorShape = (1, 1, 4, 4)
-
-    let kernel = [[1, 1, 1],
-                  [1, 1, 0],
-                  [1, 0, 0]].toTensor()
-    const kshape: KernelShape = (1, 1, 3, 3)
-
-    let target = [[1,  8,  5,  0],
-                  [8, 11,  5,  4],
-                  [8, 17, 10, 11],
-                  [9, 12, 10,  7]].toTensor()
-
-    let
-      padding = (1, 1)
-      strides = (1, 1)
-
-    let out_shape = conv2d_out_shape(
-                      ishape,
-                      kshape,
-                      padding,
-                      strides
-                    )
-    var output = newSeq[int](out_shape.n * out_shape.c * out_shape.h * out_shape.w)
-    echo "Output shape: " & $out_shape
-
-    conv2d_direct(
-      output,
-      img, ishape,
-      kernel, kshape,
-      padding,
-      strides
-    )
-
-    echo output.toString(out_shape)
-    doAssert target == output
-
-  block:
-    let input = [
-      [
-        [
-          [2, 2, 0, 2, 1],
-          [0, 1, 1, 0, 2],
-          [1, 2, 1, 2, 1],
-          [2, 2, 0, 0, 2],
-          [2, 1, 1, 1, 2]
-        ], [
-          [2, 0, 1, 1, 1],
-          [2, 2, 0, 0, 2],
-          [2, 2, 1, 0, 0],
-          [1, 1, 2, 2, 0],
-          [2, 1, 1, 1, 0]
-        ], [
-          [0, 1, 2, 2, 0],
-          [1, 1, 1, 1, 0],
-          [2, 1, 2, 2, 0],
-          [0, 2, 2, 2, 1],
-          [0, 0, 2, 2, 1]
-        ]
-      ]].toTensor()
-    let ishape = (1, 3, 5, 5)
-
-    let kernel =
-      [
-        [
-          [
-            [-1, -1, -1],
-            [ 1,  0,  1],
-            [ 0, -1,  0]
-          ], [
-            [ 1,  0, -1],
-            [ 1, -1,  1],
-            [ 0,  1,  0]
-          ], [
-            [ 0,  0,  1],
-            [-1, -1, -1],
-            [-1,  0,  0]
-          ]
-        ], [
-          [
-            [ 0,  1,  0],
-            [ 1, -1, -1],
-            [ 1,  1, -1]
-          ], [
-            [-1,  0,  1],
-            [-1, -1,  1],
-            [ 1,  1,  0]
-          ], [
-            [ 0,  1,  1],
-            [-1,  1, -1],
-            [-1, -1,  0]
-          ]
-        ]
-      ].toTensor()
-    let kshape = (2, 3, 3, 3)
-
-    let target =
-      [
-        [
-          [ 1, -3, -1],
-          [-4,  1, -6],
-          [-3, -2, -1]
-        ],[
-          [-7,  1,  0],
-          [ 3, -3,  2],
-          [ 1,  3, -2]
-        ]
-      ].toTensor()
-
-    let
-      padding = (1, 1)
-      strides = (2, 2)
-
-    let out_shape = conv2d_out_shape(
-                      ishape,
-                      kshape,
-                      padding,
-                      strides
-                    )
-    var output = newSeq[int](out_shape.n * out_shape.c * out_shape.h * out_shape.w)
-    echo "Output shape: " & $out_shape
-
+  conv_impl_check(output, input, ishape, kernel, kshape, padding, strides):
     conv2d_direct(
       output,
       input, ishape,
@@ -206,6 +81,3 @@ when isMainModule:
       padding,
       strides
     )
-
-    echo output.toString(out_shape)
-    doAssert target == output
