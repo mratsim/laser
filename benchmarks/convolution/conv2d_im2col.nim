@@ -3,7 +3,7 @@
 
 import
   ./conv2d_common,
-  ./blas,
+  ../blas,
   ../../laser/openmp,
   ../../laser/compiler_optim_hints
 
