@@ -43,7 +43,8 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 import
   ./transpose_common, # ../blas,
   ./transpose_naive_tensor,
-  ../../laser/dynamic_stack_arrays
+  ../../laser/dynamic_stack_arrays,
+  ../../laser/compiler_optim_hints
 
 const
   M     =  2000
@@ -75,6 +76,22 @@ let out_size = out_shape.M * out_shape.N
 #       output[0].unsafeAddr, N,
 #     )
 
+proc benchNaive(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa = cast[ptr UncheckedArray[float32]](a[0].unsafeAddr)
+  let po = cast[ptr UncheckedArray[float32]](output[0].addr)
+
+  bench("Naive transpose"):
+    discard
+  do:
+    for i in `||`(0, M-1, "parallel for simd"):
+      for j in 0 ..< N:
+        po[i+j*M] = pa[j+i*N]
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
 proc benchForEachStrided(a: seq[float32], nb_samples: int) =
   var output = newSeq[float32](out_size)
 
@@ -90,6 +107,25 @@ proc benchForEachStrided(a: seq[float32], nb_samples: int) =
   do:
     # Main work
     transpose_naive_forEach(to, ti)
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
+proc benchCollapsed(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  withCompilerOptimHints()
+
+  let pa = a[0].unsafeAddr
+  let po = output[0].addr
+
+  bench("Collapsed OpenMP"):
+    discard
+  do:
+    {.emit: """
+    #pragma omp parallel for simd collapse(2)
+    for (int i = 0; i < `M`; i++)
+      for (int j = 0; j < `N`; j++)
+        `po`[i+j*`M`] = `pa`[j+i*`N`];
+    """.}
     # echo a.toString((M, N))
     # echo output.toString((N, M))
 
@@ -115,3 +151,46 @@ when isMainModule:
 
     # benchBLAS(a, nb_samples = 1000)
     benchForEachStrided(a, nb_samples = 1000)
+    benchNaive(a, nb_samples = 1000)
+    benchCollapsed(a, nb_samples = 1000)
+
+# Warmup: 1.2263 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A matrix shape: (M: 2000, N: 1000)
+# Output shape: (M: 1000, N: 2000)
+# Required number of operations:     2.000 millions
+# Required bytes:                    8.000 MB
+# Arithmetic intensity:              0.250 FLOP/byte
+
+# Laser ForEachStrided
+# Collected 1000 samples in 6.838 seconds
+# Average time: 6.701 ms
+# Stddev  time: 1.445 ms
+# Min     time: 4.335 ms
+# Max     time: 16.569 ms
+# Perf:         0.298 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 1.564622351679645e-07
+
+# Naive transpose
+# Collected 1000 samples in 3.089 seconds
+# Average time: 3.087 ms
+# Stddev  time: 0.334 ms
+# Min     time: 2.766 ms
+# Max     time: 7.715 ms
+# Perf:         0.648 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 1.564622351679645e-07
+
+# Collapsed OpenMP
+# Collected 1000 samples in 3.236 seconds
+# Average time: 3.234 ms
+# Stddev  time: 0.327 ms
+# Min     time: 2.939 ms
+# Max     time: 8.375 ms
+# Perf:         0.618 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 1.564622351679645e-07
