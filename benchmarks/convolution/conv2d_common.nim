@@ -137,138 +137,41 @@ when isMainModule:
 # #######################################
 
 template conv_impl_check*(
-    output,
-    img, ishape,
+    output, oshape,
+    input, ishape,
     kernel, kshape,
     padding,
     strides,
     conv_call_body: untyped) =
   block:
-    let input{.inject.} = [[1, 2, 0, 0],
-                          [5, 3, 0, 4],
-                          [0, 0, 0, 7],
-                          [9, 3, 0, 0]].toTensor()
+    let input{.inject.} = [[float32 1, 2, 0, 0],
+                          [float32 5, 3, 0, 4],
+                          [float32 0, 0, 0, 7],
+                          [float32 9, 3, 0, 0]].toTensor()
     let ishape{.inject.}: TensorShape = (1, 1, 4, 4)
 
-    let kernel{.inject.} = [[1, 1, 1],
-                            [1, 1, 0],
-                            [1, 0, 0]].toTensor()
+    let kernel{.inject.} = [[float32 1, 1, 1],
+                            [float32 1, 1, 0],
+                            [float32 1, 0, 0]].toTensor()
     const kshape{.inject.}: KernelShape = (1, 1, 3, 3)
 
-    let target = [[1,  8,  5,  0],
-                  [8, 11,  5,  4],
-                  [8, 17, 10, 11],
-                  [9, 12, 10,  7]].toTensor()
+    let target = [[float32 1,  8,  5,  0],
+                  [float32 8, 11,  5,  4],
+                  [float32 8, 17, 10, 11],
+                  [float32 9, 12, 10,  7]].toTensor()
 
     let
       padding{.inject.} = (1, 1)
       strides{.inject.} = (1, 1)
 
-    let out_shape = conv2d_out_shape(
+    let oshape{.inject.} = conv2d_out_shape(
                       ishape,
                       kshape,
                       padding,
                       strides
                     )
-    var output{.inject.} = newSeq[int](out_shape.n * out_shape.c * out_shape.h * out_shape.w)
-    echo "Output shape: " & $out_shape
-
-    conv_call_body
-    # conv2d_direct(
-    #   output,
-    #   img, ishape,
-    #   kernel, kshape,
-    #   padding,
-    #   strides
-    # )
-
-    echo output.toString(out_shape)
-    doAssert target == output
-
-  block:
-    let input{.inject.} = [
-      [
-        [
-          [2, 2, 0, 2, 1],
-          [0, 1, 1, 0, 2],
-          [1, 2, 1, 2, 1],
-          [2, 2, 0, 0, 2],
-          [2, 1, 1, 1, 2]
-        ], [
-          [2, 0, 1, 1, 1],
-          [2, 2, 0, 0, 2],
-          [2, 2, 1, 0, 0],
-          [1, 1, 2, 2, 0],
-          [2, 1, 1, 1, 0]
-        ], [
-          [0, 1, 2, 2, 0],
-          [1, 1, 1, 1, 0],
-          [2, 1, 2, 2, 0],
-          [0, 2, 2, 2, 1],
-          [0, 0, 2, 2, 1]
-        ]
-      ]].toTensor()
-    let ishape{.inject.} = (1, 3, 5, 5)
-
-    let kernel{.inject.} =
-      [
-        [
-          [
-            [-1, -1, -1],
-            [ 1,  0,  1],
-            [ 0, -1,  0]
-          ], [
-            [ 1,  0, -1],
-            [ 1, -1,  1],
-            [ 0,  1,  0]
-          ], [
-            [ 0,  0,  1],
-            [-1, -1, -1],
-            [-1,  0,  0]
-          ]
-        ], [
-          [
-            [ 0,  1,  0],
-            [ 1, -1, -1],
-            [ 1,  1, -1]
-          ], [
-            [-1,  0,  1],
-            [-1, -1,  1],
-            [ 1,  1,  0]
-          ], [
-            [ 0,  1,  1],
-            [-1,  1, -1],
-            [-1, -1,  0]
-          ]
-        ]
-      ].toTensor()
-    let kshape{.inject.} = (2, 3, 3, 3)
-
-    let target =
-      [
-        [
-          [ 1, -3, -1],
-          [-4,  1, -6],
-          [-3, -2, -1]
-        ],[
-          [-7,  1,  0],
-          [ 3, -3,  2],
-          [ 1,  3, -2]
-        ]
-      ].toTensor()
-
-    let
-      padding{.inject.} = (1, 1)
-      strides{.inject.} = (2, 2)
-
-    let out_shape = conv2d_out_shape(
-                      ishape,
-                      kshape,
-                      padding,
-                      strides
-                    )
-    var output{.inject.} = newSeq[int](out_shape.n * out_shape.c * out_shape.h * out_shape.w)
-    echo "Output shape: " & $out_shape
+    var output{.inject.} = newSeq[float32](oshape.n * oshape.c * oshape.h * oshape.w)
+    echo "Output shape: " & $oshape
 
     conv_call_body
     # conv2d_direct(
@@ -279,5 +182,102 @@ template conv_impl_check*(
     #   strides
     # )
 
-    echo output.toString(out_shape)
+    echo output.toString(oshape)
+    doAssert target == output
+
+  block:
+    let input{.inject.} = [
+      [
+        [
+          [float32 2, 2, 0, 2, 1],
+          [float32 0, 1, 1, 0, 2],
+          [float32 1, 2, 1, 2, 1],
+          [float32 2, 2, 0, 0, 2],
+          [float32 2, 1, 1, 1, 2]
+        ], [
+          [float32 2, 0, 1, 1, 1],
+          [float32 2, 2, 0, 0, 2],
+          [float32 2, 2, 1, 0, 0],
+          [float32 1, 1, 2, 2, 0],
+          [float32 2, 1, 1, 1, 0]
+        ], [
+          [float32 0, 1, 2, 2, 0],
+          [float32 1, 1, 1, 1, 0],
+          [float32 2, 1, 2, 2, 0],
+          [float32 0, 2, 2, 2, 1],
+          [float32 0, 0, 2, 2, 1]
+        ]
+      ]].toTensor()
+    let ishape{.inject.} = (1, 3, 5, 5)
+
+    let kernel{.inject.} =
+      [
+        [
+          [
+            [float32 -1, -1, -1],
+            [float32  1,  0,  1],
+            [float32  0, -1,  0]
+          ], [
+            [float32  1,  0, -1],
+            [float32  1, -1,  1],
+            [float32  0,  1,  0]
+          ], [
+            [float32  0,  0,  1],
+            [float32 -1, -1, -1],
+            [float32 -1,  0,  0]
+          ]
+        ], [
+          [
+            [float32  0,  1,  0],
+            [float32  1, -1, -1],
+            [float32  1,  1, -1]
+          ], [
+            [float32 -1,  0,  1],
+            [float32 -1, -1,  1],
+            [float32  1,  1,  0]
+          ], [
+            [float32  0,  1,  1],
+            [float32 -1,  1, -1],
+            [float32 -1, -1,  0]
+          ]
+        ]
+      ].toTensor()
+    let kshape{.inject.} = (2, 3, 3, 3)
+
+    let target =
+      [
+        [
+          [float32  1, -3, -1],
+          [float32 -4,  1, -6],
+          [float32 -3, -2, -1]
+        ],[
+          [float32 -7,  1,  0],
+          [float32  3, -3,  2],
+          [float32  1,  3, -2]
+        ]
+      ].toTensor()
+
+    let
+      padding{.inject.} = (1, 1)
+      strides{.inject.} = (2, 2)
+
+    let oshape{.inject.} = conv2d_out_shape(
+                      ishape,
+                      kshape,
+                      padding,
+                      strides
+                    )
+    var output{.inject.} = newSeq[float32](oshape.n * oshape.c * oshape.h * oshape.w)
+    echo "Output shape: " & $oshape
+
+    conv_call_body
+    # conv2d_direct(
+    #   output,
+    #   input, ishape,
+    #   kernel, kshape,
+    #   padding,
+    #   strides
+    # )
+
+    echo output.toString(oshape)
     doAssert target == output

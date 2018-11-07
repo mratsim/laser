@@ -73,7 +73,7 @@ proc conv2d_direct*[T](
                       odata[oidx] += idata[iidx] * kdata[kidx]
 
 when isMainModule:
-  conv_impl_check(output, input, ishape, kernel, kshape, padding, strides):
+  conv_impl_check(output, oshape, input, ishape, kernel, kshape, padding, strides):
     conv2d_direct(
       output,
       input, ishape,
