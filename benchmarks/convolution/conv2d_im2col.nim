@@ -19,31 +19,38 @@ func im2col_workspace_size*(
   result = ishape.c * kshape.kH * kshape.kW *
               out_shape.h * out_shape.w
 
-func `+=`[T](p: var ptr (T or UncheckedArray[T]), offset: int) {.inline.}=
-  # Pointer arithmetic
-  {.emit: "`p` += `offset`;".}
+# Note on pointer arithmetic for `+=`:
+#   - Emitting with interpolation in a template requires
+#     symbols to be defined locally
+#   - Using a func instead would be tricky as well as
+#     var param are passed by hidden pointer and `+=`
+#     will increment the hidden pointer instead of what we want
 
 func `+`[T](p: ptr (T or UncheckedArray[T]), offset: int): type(p) {.inline.}=
   # Pointer arithmetic
   {.emit: "`result` = `p` + `offset`;".}
 
+template `+=`[T](p: var ptr (T or UncheckedArray[T]), offset: int) =
+  # Pointer arithmetic
+  const psym = p.astToStr()
+  const osym = offset.astToStr()
+  # {.emit: "`p` += `offset`;".}
+  {.emit: psym & " += " & osym & ";".}
+
 withCompilerOptimHints()
 
 func im2col*[T](
-      pworkspace: ptr UncheckedArray[T], # Mutated
-      oshape: TensorShape,               # Note: shape of final output, not the im2col buffer
+      pworkspace: ptr T,            # Mutated
+      oshape: TensorShape,          # Note: shape of final output, not the im2col buffer
       pinput: ptr UncheckedArray[T];
       ishape: TensorShape,
       kshape: KernelShape,
       padding: Padding,
       strides: Strides
     ) =
-  # TODO - restrict and other optim hints
-  var
-    pworkspace{.restrict.} = pworkspace
-    oworkspace = 0
-    pinput{.restrict.} = pinput
-
+  var # local pointer, emit doesn't properly work with shadowing
+    lpworkspace{.restrict.} = pworkspace
+    lpinput{.restrict.} = pinput
   let
     C = ishape.c
     H = ishape.h
@@ -60,23 +67,23 @@ func im2col*[T](
   # We reorganize data into [C_in * kH * kW, outH * outW] matrix
   let channel_size = H * W
   for _ in 0 ..< C:
-    pinput += channel_size
+    lpinput += channel_size
     for krow in 0 ..< kH:
       for kcol in 0 ..< kW:
         var row = -pH + krow # * dilation
         for _ in 0 ..< outH:
           if not(row <% H):  # Unsigned '<' does 0 < row < H.
             for _ in 0 ..< outW:
-              pworkspace[oworkspace] = 0.T
-              oworkspace += 1
+              lpworkspace[] = 0.T
+              lpworkspace += 1
           else:
             var col = -pW + kcol # * dilation
             for _ in 0 ..< outW:
               if col <% W:
-                pworkspace[oworkspace] = pinput[row * W + col]
+                lpworkspace[] = pinput[row * W + col]
               else:
-                pworkspace[oworkspace] = 0
-              oworkspace += 1
+                lpworkspace[] = 0
+              lpworkspace += 1
               col += sW
           row += sH
 
@@ -89,7 +96,7 @@ proc conv2d_im2col*(
     kshape: KernelShape,         # kernel shape (should be const)
     padding: Padding,            # Padding (should be const)
     strides: Strides,            # Strides (should be const)
-    workspace: ptr UncheckedArray[float32] # Workspace buffer, can be reused between batches
+    pworkspace: ptr float32      # Workspace buffer, can be reused between batches
   ) =
   ## output must be zero-initialized
   ## workspace is a buffer of minimal size that can hold
@@ -118,7 +125,7 @@ proc conv2d_im2col*(
     let ioffset = n * C_in * H * W
     let pinput{.restrict.} = cast[ptr UncheckedArray[float32]](input[ioffset].unsafeAddr)
     im2col(
-      workspace,
+      pworkspace,
       oshape,
       pinput,
       ishape,
@@ -132,7 +139,7 @@ proc conv2d_im2col*(
       let ooffset = (n * C_out + g * C_out_per_group) * (outH * outW)
 
       let pkernel{.restrict.} = kernel[koffset].unsafeAddr
-      let pworkspace{.restrict.} = workspace[woffset].addr
+      let lpworkspace{.restrict.} = pworkspace + woffset
       let poutput{.restrict.} = output[ooffset].addr
 
       let M = C_out_per_group
@@ -147,7 +154,7 @@ proc conv2d_im2col*(
       gemm(rowMajor, noTranspose, noTranspose,
         M, N, K,
         alpha, pkernel, K,
-        pworkspace, N,
+        lpworkspace, N,
         beta, poutput, N
       )
 
@@ -156,7 +163,7 @@ when isMainModule:
 
     let buffer_size = im2col_workspace_size(ishape, kshape, padding, strides)
     var workspace = newSeq[float32](buffer_size)
-    let pworkspace = cast[ptr UncheckedArray[float32]](workspace[0].addr)
+    let pworkspace = workspace[0].addr
 
     conv2d_im2col(
       output, oshape,
