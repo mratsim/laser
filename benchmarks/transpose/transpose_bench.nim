@@ -46,6 +46,7 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 import
   ./transpose_common, # ../blas,
   ./transpose_naive_tensor,
+  ./transpose_divide_conquer,
   ../../laser/dynamic_stack_arrays,
   ../../laser/compiler_optim_hints
 
@@ -180,9 +181,9 @@ proc benchCacheBlocking(a: seq[float32], nb_samples: int) =
   do:
     {.emit: """
     #pragma omp parallel for simd
-    for (int i = 0; i < `N`; i+=`blck`)
-      for (int j = 0; j < `M`; ++j)
-        for (int b = 0; b < `blck` && i+b<`N`; ++b)
+    for (int i = 0; i < `M`; i+=`blck`)
+      for (int j = 0; j < `N`; ++j)
+        for (int b = 0; b < `blck` && i+b<`M`; ++b)
           `po`[i+j*`M` + b] = `pa`[j+(i+b)*`N`];
     """.}
     # echo a.toString((M, N))
@@ -201,13 +202,29 @@ proc benchCacheBlockingExchanged(a: seq[float32], nb_samples: int) =
   do:
     {.emit: """
     #pragma omp parallel for simd
-    for (int j = 0; j < `M`; j+=`blck`)
-      for (int i = 0; i < `N`; ++i)
-        for (int b = 0; b < `blck` && j+b<`M`; ++b)
+    for (int j = 0; j < `N`; j+=`blck`)
+      for (int i = 0; i < `M`; ++i)
+        for (int b = 0; b < `blck` && j+b<`N`; ++b)
           `po`[j+i*`M` + b] = `pa`[i+(j+b)*`N`];
     """.}
     # echo a.toString((M, N))
     # echo output.toString((N, M))
+
+# TODO buggy
+# proc benchCacheOblivious(a: seq[float32], nb_samples: int) =
+#   var output = newSeq[float32](out_size)
+#
+#   let a_ptr{.restrict.} = cast[ptr UncheckedArray[float32]](a.unsafeAddr)
+#   let o_ptr{.restrict.} = cast[ptr UncheckedArray[float32]](output.addr)
+#
+#   bench("Cache oblivious recursive"):
+#     discard
+#   do:
+#     # Main work
+#     transpose_cache_oblivious(o_ptr, a_ptr, M, N)
+#     # echo a.toString((M, N))
+#     # echo output.toString((N, M))
+
 # ###########################################
 
 when defined(fast_math):
@@ -236,8 +253,13 @@ when isMainModule:
     benchCollapsedExchanged(a, nb_samples = 1000)
     benchCacheBlocking(a, nb_samples = 1000)
     benchCacheBlockingExchanged(a, nb_samples = 1000)
+    # benchCacheOblivious(a, nb_samples = 1000)
 
-# Warmup: 1.1959 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+## With OpenMP
+## Note - OpenMP is faster when iterating on input row in inner loop
+##        but in serial case its input col in inner loop that is faster
+# Warmup: 1.2854 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 2000, N: 1000)
 # Output shape: (M: 1000, N: 2000)
@@ -246,34 +268,78 @@ when isMainModule:
 # Arithmetic intensity:              0.250 FLOP/byte
 
 # Laser ForEachStrided
-# Collected 1000 samples in 5.399 seconds
-# Average time: 5.272 ms
-# Stddev  time: 0.479 ms
-# Min     time: 4.353 ms
-# Max     time: 13.638 ms
-# Perf:         0.379 GFLOP/s
+# Collected 1000 samples in 6.032 seconds
+# Average time: 5.898 ms
+# Stddev  time: 1.797 ms
+# Min     time: 4.310 ms
+# Max     time: 19.655 ms
+# Perf:         0.339 GFLOP/s
 
-# Display output[0] to make sure it's not optimized away
-# 1.564622351679645e-07
+# Display output[1] to make sure it's not optimized away
+# 0.03930548205971718
 
 # Naive transpose
-# Collected 1000 samples in 3.237 seconds
-# Average time: 3.235 ms
-# Stddev  time: 0.662 ms
-# Min     time: 2.781 ms
-# Max     time: 10.299 ms
-# Perf:         0.618 GFLOP/s
+# Collected 1000 samples in 3.126 seconds
+# Average time: 3.124 ms
+# Stddev  time: 0.356 ms
+# Min     time: 2.786 ms
+# Max     time: 8.169 ms
+# Perf:         0.640 GFLOP/s
 
-# Display output[0] to make sure it's not optimized away
-# 1.564622351679645e-07
+# Display output[1] to make sure it's not optimized away
+# 0.03930548205971718
+
+# Naive transpose - input row iteration
+# Collected 1000 samples in 4.025 seconds
+# Average time: 4.023 ms
+# Stddev  time: 0.639 ms
+# Min     time: 2.410 ms
+# Max     time: 15.384 ms
+# Perf:         0.497 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.03930548205971718
 
 # Collapsed OpenMP
-# Collected 1000 samples in 3.251 seconds
-# Average time: 3.249 ms
-# Stddev  time: 0.409 ms
-# Min     time: 2.929 ms
-# Max     time: 11.542 ms
-# Perf:         0.616 GFLOP/s
+# Collected 1000 samples in 3.296 seconds
+# Average time: 3.295 ms
+# Stddev  time: 0.466 ms
+# Min     time: 2.915 ms
+# Max     time: 11.437 ms
+# Perf:         0.607 GFLOP/s
 
-# Display output[0] to make sure it's not optimized away
-# 1.564622351679645e-07
+# Display output[1] to make sure it's not optimized away
+# 0.03930548205971718
+
+# Collapsed OpenMP - input row iteration
+# Collected 1000 samples in 5.331 seconds
+# Average time: 5.329 ms
+# Stddev  time: 0.734 ms
+# Min     time: 3.883 ms
+# Max     time: 15.519 ms
+# Perf:         0.375 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.03930548205971718
+
+# Cache blocking
+# Collected 1000 samples in 2.324 seconds
+# Average time: 2.322 ms
+# Stddev  time: 0.380 ms
+# Min     time: 1.962 ms
+# Max     time: 6.669 ms
+# Perf:         0.861 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.03930548205971718
+
+# Cache blocking - input row iteration
+# Collected 1000 samples in 2.051 seconds
+# Average time: 2.050 ms
+# Stddev  time: 0.407 ms
+# Min     time: 1.723 ms
+# Max     time: 10.078 ms
+# Perf:         0.976 GFLOP/s
+
+# Display output[1] to make sure it's not optimized away
+# 0.03930548205971718
