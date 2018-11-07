@@ -32,7 +32,8 @@ import
   macros,
   ./foreach_common,
   ../private/ast_utils,
-  ../openmp
+  ../openmp,
+  ../compiler_optim_hints
 export omp_suffix # Pending https://github.com/nim-lang/Nim/issues/9365 or 9366
 
 proc forEachContiguousImpl(

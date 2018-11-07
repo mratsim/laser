@@ -11,7 +11,8 @@ import
   tables, sets,
   ./foreach_common,
   ../private/ast_utils,
-  ../openmp
+  ../openmp,
+  ../compiler_optim_hints
 export omp_suffix
 
 proc forEachStagedContiguousImpl(

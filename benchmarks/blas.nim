@@ -18,7 +18,7 @@ proc gemm*(ORDER: OrderType, TRANSA, TRANSB: TransposeType, M, N, K: int, ALPHA:
   A: ptr float64, LDA: int, B: ptr float64, LDB: int, BETA: float64, C: ptr float64, LDC: int)
   {. dynlib: blas, importc: "cblas_dgemm" .}
 
-proc omatcopy*(ORDER: OrderType, TRANS: TransposeType,
-              rows: int, cols: int, scale_factor: float32,
-              a: ptr float32, lda: int,
-              b: ptr float32, ldb: int){. dynlib: blas, importc: "cblas_somatcopy" .}
+# proc omatcopy*(ORDER: OrderType, TRANS: TransposeType,
+#               rows: int, cols: int, scale_factor: float32,
+#               a: ptr float32, lda: int,
+#               b: ptr float32, ldb: int){. dynlib: blas, importc: "cblas_somatcopy" .}

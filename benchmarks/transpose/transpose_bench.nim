@@ -40,7 +40,10 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 
 # #############################################
 # Params
-import ./transpose_common, ../blas
+import
+  ./transpose_common, # ../blas,
+  ./transpose_naive_tensor,
+  ../../laser/dynamic_stack_arrays
 
 const
   M     =  2000
@@ -72,6 +75,24 @@ let out_size = out_shape.M * out_shape.N
 #       output[0].unsafeAddr, N,
 #     )
 
+proc benchForEachStrided(a: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+
+  var ti = a.buildTensorView(M, N)
+  ti.shape = ti.shape.reversed()
+  ti.strides = ti.strides.reversed()
+
+  var to = output.buildTensorView(N, M)
+
+  bench("Laser ForEachStrided"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    zeroMem(output[0].addr, out_size) # We zero memory between computation
+  do:
+    # Main work
+    transpose_naive_forEach(to, ti)
+    # echo a.toString((M, N))
+    # echo output.toString((N, M))
+
 # ###########################################
 
 when defined(fast_math):
@@ -93,3 +114,4 @@ when isMainModule:
     let a = newSeqWith(M*N, float32 rand(1.0))
 
     # benchBLAS(a, nb_samples = 1000)
+    benchForEachStrided(a, nb_samples = 1000)
