@@ -67,7 +67,6 @@ func im2col*[T](
   # We reorganize data into [C_in * kH * kW, outH * outW] matrix
   let channel_size = H * W
   for _ in 0 ..< C:
-    lpinput += channel_size
     for krow in 0 ..< kH:
       for kcol in 0 ..< kW:
         var row = -pH + krow # * dilation
@@ -80,12 +79,13 @@ func im2col*[T](
             var col = -pW + kcol # * dilation
             for _ in 0 ..< outW:
               if col <% W:
-                lpworkspace[] = pinput[row * W + col]
+                lpworkspace[] = lpinput[row * W + col]
               else:
                 lpworkspace[] = 0
               lpworkspace += 1
               col += sW
           row += sH
+    lpinput += channel_size
 
 proc conv2d_im2col*(
     output: var Tensor[float32], # Output tensor
