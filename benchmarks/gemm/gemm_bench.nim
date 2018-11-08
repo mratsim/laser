@@ -43,7 +43,10 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 
 # #############################################
 # Params
-import ./gemm_common, ../blas
+import
+  ./gemm_common,
+  ../blas,
+  ./arraymancer/blas_l3_gemm
 
 const
   M     =  224
@@ -62,9 +65,9 @@ let out_size = out_shape.M * out_shape.N
 
 # #############################################
 
-proc benchBLAS(a, b: seq[float32], nb_samples: int) =
+proc benchOpenBLAS(a, b: seq[float32], nb_samples: int) =
   var output = newSeq[float32](out_size)
-  bench("BLAS benchmark"):
+  bench("OpenBLAS benchmark"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
     zeroMem(output[0].addr, out_size) # We zero memory between computation
   do:
@@ -77,6 +80,19 @@ proc benchBLAS(a, b: seq[float32], nb_samples: int) =
       0, output[0].addr, N
     )
 
+proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+  bench("Arraymancer fallback BLAS"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    zeroMem(output[0].addr, out_size) # We zero memory between computation
+  do:
+    # Main work
+    gemm_nn_fallback[float32](
+      M, N, K,
+      1,      a, 0, K, 1,       # offset, stride row, stride col
+              b, 0, N, 1,
+      0, output, 0, N, 1
+    )
 # ###########################################
 
 when defined(fast_math):
@@ -99,9 +115,10 @@ when isMainModule:
     let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
 
-    benchBLAS(a, b, nb_samples = 20)
+    benchOpenBLAS(a, b, nb_samples = 20)
+    benchArraymancerFallback(a, b, nb_samples = 20)
 
-# Warmup: 1.2052 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.3832 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 224, N: 8640)
 # B matrix shape: (M: 8640, N: 224)
@@ -110,13 +127,24 @@ when isMainModule:
 # Required bytes:                   15.483 MB
 # Arithmetic intensity:             56.000 FLOP/byte
 
-# BLAS benchmark
-# Collected 20 samples in 0.206 seconds
-# Average time: 10.284 ms
-# Stddev  time: 1.709 ms
-# Min     time: 7.978 ms
-# Max     time: 13.609 ms
-# Perf:         84.307 GFLOP/s
+# OpenBLAS benchmark
+# Collected 20 samples in 0.412 seconds
+# Average time: 20.614 ms
+# Stddev  time: 5.328 ms
+# Min     time: 12.964 ms
+# Max     time: 33.944 ms
+# Perf:         42.060 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 2158.1591796875
+
+# Arraymancer fallback BLAS
+# Collected 20 samples in 4.727 seconds
+# Average time: 236.333 ms
+# Stddev  time: 24.520 ms
+# Min     time: 212.795 ms
+# Max     time: 313.838 ms
+# Perf:         3.669 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 2158.158935546875
