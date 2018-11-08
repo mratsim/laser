@@ -263,6 +263,8 @@ proc benchCacheBlockingPrefetch(a: seq[float32], nb_samples: int) =
   let po{.restrict.} = output[0].addr
   const blck = 32
 
+  # This seems to trigger constant and loop folding
+  # and does not seem to be replicable if not defined inline
   bench("Cache blocking with Prefetch"):
     discard
   do:
@@ -491,6 +493,9 @@ when isMainModule:
 ########################################################################
 # Serial
 ########################################################################
+
+# The cache blocking + prefetch seems to trigger constant and loop folding
+# and does not seem to be replicable if not defined inline
 
 # Warmup: 1.4231 s, result 224 (displayed to avoid compiler optimizing warmup away)
 

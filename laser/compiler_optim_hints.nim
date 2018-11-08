@@ -53,7 +53,10 @@ template assume_aligned*[T](data: ptr T, alignment: static int = LASER_MEM_ALIGN
   else:
     data
 
-template prefetch*[T](data: ptr T, rw: static PrefetchRW = Read, locality: static PrefetchLocality = HighTemporalLocality) =
+template prefetch*[T](
+            data: ptr (T or UncheckedArray[T]),
+            rw: static PrefetchRW = Read,
+            locality: static PrefetchLocality = HighTemporalLocality) =
   ## Prefetch examples:
   ##   - https://scripts.mit.edu/~birge/blog/accelerating-code-using-gccs-prefetch-extension/
   ##   - https://stackoverflow.com/questions/7327994/prefetching-examples
