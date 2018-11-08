@@ -92,7 +92,7 @@ func nchw2nhwc*[T](
   ##
   ## NCHW is the default format on PyTorch, CuDNN, mxnet, Chainer
   ## NHWC is the default format on Tensorflow
-  transpose2D_batched(dst_hwnc, src_nchw, C, H*W)
+  transpose2D_batched(dst_hwnc, src_nchw, N, C, H*W)
 
 func nhwc2nchw*[T](
         dst_nchw, src_nhwc: ptr (T or UncheckedArray[T]),
@@ -106,4 +106,4 @@ func nhwc2nchw*[T](
   ##
   ## NCHW is the default format on PyTorch, CuDNN, mxnet, Chainer
   ## NHWC is the default format on Tensorflow
-  transpose2D_batched(dst_nchw, src_nhwc, H*W, C)
+  transpose2D_batched(dst_nchw, src_nhwc, N, H*W, C)
