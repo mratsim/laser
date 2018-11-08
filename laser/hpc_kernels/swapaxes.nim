@@ -16,7 +16,7 @@ when defined(openmp):
 
 func transpose2D_copy*[T](
         dst, src: ptr (T or UncheckedArray[T]),
-        NR, NC: Natural) {.inline.}=
+        NR, NC: Natural) =
   ## Efficient physical transposition of a contiguous 2D matrix
   ## Output:
   ##   - dst: a pointer to an allocated buffer of size NC * NR
@@ -39,7 +39,7 @@ func transpose2D_copy*[T](
   # i.e. scatters are cheaper than gathers
 
   withCompilerOptimHints()
-  const blck = 64
+  const blck = 32
   let pd{.restrict.} = dst
   let ps{.restrict.} = src
 
