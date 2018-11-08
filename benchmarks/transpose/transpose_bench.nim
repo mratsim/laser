@@ -24,7 +24,7 @@ template printStats(name: string, output: openarray) {.dirty.} =
   echo &"Stddev  time: {stats.standardDeviationS * 1000 :>4.3f} ms"
   echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
   echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
-  echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GFLOP/s"
+  echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GMEMOPs/s"
   echo "\nDisplay output[1] to make sure it's not optimized away"
   echo output[1] # Prevents compiler from optimizing stuff away
 
@@ -375,7 +375,7 @@ when isMainModule:
 # Stddev  time: 1.587 ms
 # Min     time: 21.526 ms
 # Max     time: 34.755 ms
-# Perf:         0.329 GFLOP/s
+# Perf:         0.329 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -386,7 +386,7 @@ when isMainModule:
 # Stddev  time: 1.739 ms
 # Min     time: 15.022 ms
 # Max     time: 34.356 ms
-# Perf:         0.423 GFLOP/s
+# Perf:         0.423 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -397,7 +397,7 @@ when isMainModule:
 # Stddev  time: 1.470 ms
 # Min     time: 17.792 ms
 # Max     time: 33.235 ms
-# Perf:         0.368 GFLOP/s
+# Perf:         0.368 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -408,7 +408,7 @@ when isMainModule:
 # Stddev  time: 1.339 ms
 # Min     time: 16.527 ms
 # Max     time: 31.409 ms
-# Perf:         0.425 GFLOP/s
+# Perf:         0.425 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -419,7 +419,7 @@ when isMainModule:
 # Stddev  time: 1.973 ms
 # Min     time: 19.449 ms
 # Max     time: 40.228 ms
-# Perf:         0.337 GFLOP/s
+# Perf:         0.337 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -430,7 +430,7 @@ when isMainModule:
 # Stddev  time: 0.818 ms
 # Min     time: 8.397 ms
 # Max     time: 16.753 ms
-# Perf:         0.900 GFLOP/s
+# Perf:         0.900 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -441,7 +441,7 @@ when isMainModule:
 # Stddev  time: 1.734 ms
 # Min     time: 10.663 ms
 # Max     time: 24.437 ms
-# Perf:         0.656 GFLOP/s
+# Perf:         0.656 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -452,7 +452,7 @@ when isMainModule:
 # Stddev  time: 1.097 ms
 # Min     time: 8.659 ms
 # Max     time: 21.243 ms
-# Perf:         0.797 GFLOP/s
+# Perf:         0.797 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -463,7 +463,7 @@ when isMainModule:
 # Stddev  time: 0.845 ms
 # Min     time: 7.056 ms
 # Max     time: 14.593 ms
-# Perf:         1.051 GFLOP/s
+# Perf:         1.051 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -474,7 +474,7 @@ when isMainModule:
 # Stddev  time: 1.074 ms
 # Min     time: 8.664 ms
 # Max     time: 16.393 ms
-# Perf:         0.848 GFLOP/s
+# Perf:         0.848 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -485,7 +485,7 @@ when isMainModule:
 # Stddev  time: 0.720 ms
 # Min     time: 7.399 ms
 # Max     time: 14.150 ms
-# Perf:         1.005 GFLOP/s
+# Perf:         1.005 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -511,7 +511,7 @@ when isMainModule:
 # Stddev  time: 6.383 ms
 # Min     time: 34.098 ms
 # Max     time: 75.195 ms
-# Perf:         0.222 GFLOP/s
+# Perf:         0.222 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -522,7 +522,7 @@ when isMainModule:
 # Stddev  time: 1.580 ms
 # Min     time: 26.689 ms
 # Max     time: 33.603 ms
-# Perf:         0.284 GFLOP/s
+# Perf:         0.284 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -533,7 +533,7 @@ when isMainModule:
 # Stddev  time: 1.069 ms
 # Min     time: 34.082 ms
 # Max     time: 44.597 ms
-# Perf:         0.228 GFLOP/s
+# Perf:         0.228 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -544,7 +544,7 @@ when isMainModule:
 # Stddev  time: 1.085 ms
 # Min     time: 26.723 ms
 # Max     time: 37.929 ms
-# Perf:         0.288 GFLOP/s
+# Perf:         0.288 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -555,7 +555,7 @@ when isMainModule:
 # Stddev  time: 1.247 ms
 # Min     time: 34.120 ms
 # Max     time: 44.905 ms
-# Perf:         0.225 GFLOP/s
+# Perf:         0.225 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -566,7 +566,7 @@ when isMainModule:
 # Stddev  time: 0.961 ms
 # Min     time: 12.018 ms
 # Max     time: 24.380 ms
-# Perf:         0.641 GFLOP/s
+# Perf:         0.641 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -577,7 +577,7 @@ when isMainModule:
 # Stddev  time: 0.997 ms
 # Min     time: 19.466 ms
 # Max     time: 30.588 ms
-# Perf:         0.394 GFLOP/s
+# Perf:         0.394 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -588,7 +588,7 @@ when isMainModule:
 # Stddev  time: 0.748 ms
 # Min     time: 12.172 ms
 # Max     time: 19.928 ms
-# Perf:         0.599 GFLOP/s
+# Perf:         0.599 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -599,7 +599,7 @@ when isMainModule:
 # Stddev  time: 0.654 ms
 # Min     time: 12.950 ms
 # Max     time: 21.406 ms
-# Perf:         0.600 GFLOP/s
+# Perf:         0.600 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -610,7 +610,7 @@ when isMainModule:
 # Stddev  time: 0.792 ms
 # Min     time: 9.741 ms
 # Max     time: 18.762 ms
-# Perf:         0.787 GFLOP/s
+# Perf:         0.787 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
@@ -621,7 +621,7 @@ when isMainModule:
 # Stddev  time: 0.864 ms
 # Min     time: 13.025 ms
 # Max     time: 21.967 ms
-# Perf:         0.595 GFLOP/s
+# Perf:         0.595 GMEMOPs/s
 
 # Display output[1] to make sure it's not optimized away
 # 0.7808474898338318
