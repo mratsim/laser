@@ -118,6 +118,11 @@ when isMainModule:
     benchOpenBLAS(a, b, nb_samples = 20)
     benchArraymancerFallback(a, b, nb_samples = 20)
 
+# Seems like my BLAS has false sharing issue
+
+###############################
+# OpenMP
+
 # Warmup: 1.3832 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 224, N: 8640)
@@ -148,3 +153,25 @@ when isMainModule:
 
 # Display output[0] to make sure it's not optimized away
 # 2158.158935546875
+
+###############################
+# Serial
+
+# OpenBLAS benchmark
+# Collected 20 samples in 0.558 seconds
+# Average time: 27.884 ms
+# Stddev  time: 10.439 ms
+# Min     time: 14.651 ms
+# Max     time: 47.797 ms
+# Perf:         31.094 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 2158.1591796875
+
+# Arraymancer fallback BLAS
+# Collected 20 samples in 1.925 seconds
+# Average time: 96.261 ms
+# Stddev  time: 33.895 ms
+# Min     time: 74.643 ms
+# Max     time: 201.256 ms
+# Perf:         9.007 GFLOP/s
