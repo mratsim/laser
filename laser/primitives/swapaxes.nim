@@ -38,18 +38,20 @@ func transpose2D_copy*[T](
   #     and writing in a strided manner
   # i.e. scatters are cheaper than gathers
 
-  withCompilerOptimHints()
   const blck = 32
-  let pd{.restrict.} = dst
-  let ps{.restrict.} = src
 
   {.emit: """
-    #pragma omp parallel for simd collapse(2)
+    #define min(a,b) (((a)<(b))?(a):(b))
+    `T` (* __restrict pd)[`NR`] = (void*)`dst`;
+    `T` (* __restrict ps)[`NC`] = (void*)`src`;
+
+    #pragma omp parallel for collapse(2)
     for (int j = 0; j < `NC`; j+=`blck`)
       for (int i = 0; i < `NR`; i+=`blck`)
         for (int jj = j; jj<j+`blck` && jj<`NC`; jj++)
-          for (int ii = i; ii<i+`blck` && ii<`NR`; ii++)
-            `pd`[ii+jj*`NR`] = `ps`[jj+ii*`NC`];
+          #pragma omp simd
+          for (int ii = i; ii<min(i+`blck`,`NR`); ii++)
+            pd[jj][ii] = ps[ii][jj];
   """.}
 
 func transpose2D_batched*[T](
@@ -65,19 +67,21 @@ func transpose2D_batched*[T](
   ##   - N: The number of matrices in the batch
   ##   - NR, NC: the number of rows and columns respectively in the source matrix.
 
-  withCompilerOptimHints()
   const blck = 32
-  var pd{.restrict.} = dst
-  var ps{.restrict.} = src
 
   {.emit: """
+    #define min(a,b) (((a)<(b))?(a):(b))
+    `T` (* __restrict pd)[`NC`][`NR`] = (void*)`dst`;
+    `T` (* __restrict ps)[`NR`][`NC`] = (void*)`src`;
+
     #pragma omp parallel for simd collapse(3)
     for (int n = 0; n < `N`; n++)
       for (int j = 0; j < `NC`; j+=`blck`)
         for (int i = 0; i < `NR`; i+=`blck`)
           for (int jj = j; jj<j+`blck` && jj<`NC`; jj++)
-            for (int ii = i; ii<i+`blck` && ii<`NR`; ii++)
-              `pd`[ii+jj*(`NR` + n*`NC`)] = `ps`[jj+ii*(`NC` + n*`NR`)];
+            #pragma omp simd
+            for (int ii = i; ii<min(i+`blck`,`NR`); ii++)
+              `pd`[n][jj][ii] = `ps`[n][ii][jj];
   """.}
 
 func nchw2nhwc*[T](
