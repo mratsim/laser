@@ -356,4 +356,11 @@ if not cpuinfo_initialize():
 addQuitProc(cpuinfo_deinitialize)
 
 {.pragma: cpuinfo, cdecl, header: headerPath.}
+func cpuinfo_has_x86_sse*(): bool {.cpuinfo.}
+func cpuinfo_has_x86_sse2*(): bool {.cpuinfo.}
 func cpuinfo_has_x86_sse3*(): bool {.cpuinfo.}
+func cpuinfo_has_x86_avx*(): bool {.cpuinfo.}
+func cpuinfo_has_x86_avx2*(): bool {.cpuinfo.}
+func cpuinfo_has_x86_avx512f*(): bool {.cpuinfo.}
+
+func cpuinfo_has_x86_fma3*(): bool {.cpuinfo.}
