@@ -93,6 +93,35 @@ proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int) =
               b, 0, N, 1,
       0, output, 0, N, 1
     )
+
+proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+
+  let pa = a[0].unsafeAddr
+  let pb = b[0].unsafeAddr
+  let po = output[0].addr
+  const blck = 32
+
+  bench("Simple Tiling"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    zeroMem(output[0].addr, out_size) # We zero memory between computation
+  do:
+    {.emit: """
+      #define min(a,b) (((a)<(b))?(a):(b))
+
+      float (* restrict A)[`K`] = (void*)`pa`;
+      float (* restrict B)[`N`] = (void*)`pb`;
+      float (* restrict C)[`N`] = (void*)`po`;
+
+      // TODO: where to parallelize?
+      for (int j = 0; j < `N`; j+=`blck`)
+        for (int k = 0; k < `K`; k+=`blck`)
+          for (int i = 0; i < `M`; i++)
+            for (int jj = j; jj<min(j+`blck`, `N`); jj++)
+              for (int kk = k; kk<min(k+`blck`, `K`); kk++)
+                C[i][jj] += A[i][kk] * B[kk][jj];
+
+    """.}
 # ###########################################
 
 when defined(fast_math):
@@ -100,6 +129,10 @@ when defined(fast_math):
 
 when defined(march_native):
   {.passC:"-march=native".}
+
+when defined(openmp):
+  {.passC: "-fopenmp".}
+  {.passL: "-fopenmp".}
 
 when isMainModule:
   randomize(42) # For reproducibility
@@ -117,6 +150,7 @@ when isMainModule:
 
     benchOpenBLAS(a, b, nb_samples = 20)
     benchArraymancerFallback(a, b, nb_samples = 20)
+    benchSimpleTiling(a, b, nb_samples = 20)
 
 # Seems like my BLAS has false sharing issue
 

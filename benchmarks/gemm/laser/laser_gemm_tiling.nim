@@ -24,7 +24,9 @@
 
 # We assume that the CPU has at least 2 levels of cache
 
-import ../../../laser/[cpuinfo, compiler_optim_hints]
+import
+  ../../../laser/[cpuinfo, compiler_optim_hints],
+  typetraits
 
 # ##########################################################################################
 
@@ -94,6 +96,8 @@ const X86_regs: X86_FeatureMap = [
   x86_AVX512:  6  # 32 ZMM registers
 ]
 
+const PageSize* = 512
+
 func x86_ukernel[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): MicroKernel[T] {.inline.}=
   # TODO: Complex
   when T is SomeFloat:
@@ -126,6 +130,8 @@ func x86_ukernel[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): Micro
 type Tile[T] = object
   a: ptr UncheckedArray[T]
   b: ptr UncheckedArray[T]
+  mr: int
+  nr: int
   kc: int
   mc: int
   allocated_mem: pointer   # Save on cache line, use an aligned allocator to not track this
@@ -134,7 +140,7 @@ proc `=destroy`[T](tile: var Tile[T]) =
   if not tile.allocated_mem.isNil:
     deallocShared tile.allocated_mem
 
-func `+`[T](p: pointer, offset: int): pointer {.inline.}=
+func `+`[T](p: pointer or ptr, offset: int): type(p) {.inline.}=
   # Pointer arithmetic
   {.emit: "`result` = `p` + `offset`;".}
 
@@ -145,7 +151,7 @@ func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
   let address = cast[ByteAddress](p)
   let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
     if (address and (LASER_MEM_ALIGN - 1)) == 0:
-      assume_aligned cast[ptr UncheckedArray[T]](address)
+      assume_aligned cast[ptr UncheckedArray[T]](p)
     else:
       let offset = LASER_MEM_ALIGN - (address and (LASER_MEM_ALIGN - 1))
       assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
@@ -170,7 +176,7 @@ proc partition(dim, max_chunk_size, tile_dim: Positive): Positive =
     if candidate <= max_chunk_size:
       return candidate
 
-proc newTile(M, N, K: Natural, T: type): Tile[T] =
+proc newTiles*(M, N, K: Natural, T: type): Tile[T] =
 
   # Goto paper [1] section 6.3: choosing kc
   #   - kc should be as large as possible to amortize the mr*nr updates of Cj
@@ -200,9 +206,12 @@ proc newTile(M, N, K: Natural, T: type): Tile[T] =
     elif cpuinfo_has_x86_sse(): x86_ukernel(T, x86_SSE)
     else: x86_ukernel(T, x86_Generic)
 
+  result.nr = ukernel.nr
+  result.mr = ukernel.mr
+
   let
-    nr = ukernel.nr
-    mr = ukernel.mr
+    nr = result.nr
+    mr = result.mr
     l1 = cpuinfo_get_l1d_caches().size.int              # L1 cache
     l2h = cpuinfo_get_l2_caches().size.int * 3 div 5    # More than half L2 cache
     line_size = cpuinfo_get_l1d_caches().line_size.int
@@ -220,7 +229,7 @@ proc newTile(M, N, K: Natural, T: type): Tile[T] =
   #       under the constraint that mckc ≤ K is the problem
   #       of maximizing the area of a rectangle
   #       while minimizing the perimeter,
-  let TLB = 512 + 2*(nr*line_size + nr*mr * T.sizeof)
+  let TLB = PageSize + 2*(nr*line_size + nr*mr * T.sizeof)
 
   let halfPerimeter = T.sizeof * (mr + nr)
 
@@ -247,3 +256,12 @@ proc newTile(M, N, K: Natural, T: type): Tile[T] =
   #   - mr*nr microkernel = 12*6
   #
   #   -> kc = 304, mc = 120
+
+  let bufA_size = T.sizeof * result.kc * result.mc
+  let bufB_size = T.sizeof * result.kc * nr
+
+  result.allocated_mem = allocShared0(bufA_size + bufB_size + PageSize)
+    # PageSize has enough space for 64 bytes alignement
+    # This help for prefetching next page in the TLB
+  result.a{.restrict.} = assume_aligned align_raw_data(T, result.allocated_mem)
+  result.b{.restrict.} = result.a + bufA_size # TODO: align as well?
