@@ -21,12 +21,18 @@
 #   [3] Automating the Last-Mile for High Performance Dense Linear Algebra
 #       Veras et al
 #     - https://arxiv.org/pdf/1611.08035.pdf
+#
+#   [4] GEMM: From Pure C to SSE Optimized Micro Kernels
+#       Michael Lehn
+#     - http://apfel.mathematik.uni-ulm.de/~lehn/sghpc/gemm/index.html
+#
 
 # We assume that the CPU has at least 2 levels of cache
 
 import
   ../../../laser/[cpuinfo, compiler_optim_hints],
-  typetraits
+  typetraits,
+  ./laser_gemm_utils
 
 # ##########################################################################################
 
@@ -53,8 +59,8 @@ import
 #   2xFMA so consume 16 single-precision float
 #   so mr*nr >= 16
 
-type MicroKernel[T] = object
-  mr, nr: int
+type MicroKernel*[T] = object
+  mr*, nr*: int
 
 type CPUFeatureX86 = enum
   x86_Generic,
@@ -98,7 +104,7 @@ const X86_regs: X86_FeatureMap = [
 
 const PageSize* = 512
 
-func x86_ukernel[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): MicroKernel[T] {.inline.}=
+func x86_ukernel*[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): MicroKernel[T] {.inline.}=
   # TODO: Complex
   when T is SomeFloat:
     result.mr = X86_vecsize_float[cpu] div T.sizeof
@@ -127,22 +133,16 @@ func x86_ukernel[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): Micro
 
 # ##########################################################################################
 
-type Tile[T] = object
-  a: ptr UncheckedArray[T]
-  b: ptr UncheckedArray[T]
-  mr: int
-  nr: int
-  kc: int
-  mc: int
+type Tile*[T] = object
+  a*: ptr UncheckedArray[T]
+  b*: ptr UncheckedArray[T]
+  kc*: int
+  mc*: int
   allocated_mem: pointer   # Save on cache line, use an aligned allocator to not track this
 
 proc `=destroy`[T](tile: var Tile[T]) =
   if not tile.allocated_mem.isNil:
     deallocShared tile.allocated_mem
-
-func `+`[T](p: pointer or ptr, offset: int): type(p) {.inline.}=
-  # Pointer arithmetic
-  {.emit: "`result` = `p` + `offset`;".}
 
 func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
   static: assert T.supportsCopyMem
@@ -176,8 +176,8 @@ proc partition(dim, max_chunk_size, tile_dim: Positive): Positive =
     if candidate <= max_chunk_size:
       return candidate
 
-proc newTiles*(M, N, K: Natural, T: type): Tile[T] =
-
+proc newTiles*(M, N, K: Natural,
+              T: type, ukernel: static MicroKernel[T]): Tile[T] =
   # Goto paper [1] section 6.3: choosing kc
   #   - kc should be as large as possible to amortize the mr*nr updates of Cj
   #   - Elements from Bj [kc, nr] must remain in L1 cache.
@@ -197,18 +197,6 @@ proc newTiles*(M, N, K: Natural, T: type): Tile[T] =
   #   - kc * nr in L1 cache
   #   - mc * kc in L2 cache
   #   - kc * nc in L3 cache (no L3 in Xeon Phi ¯\_(ツ)_/¯)
-
-  let ukernel = block:
-    if cpuinfo_has_x86_avx512f(): x86_ukernel(T, x86_AVX512)
-    elif cpuinfo_has_x86_avx2(): x86_ukernel(T, x86_AVX2)
-    elif cpuinfo_has_x86_avx(): x86_ukernel(T, x86_AVX)
-    elif cpuinfo_has_x86_sse2(): x86_ukernel(T, x86_SSE2)
-    elif cpuinfo_has_x86_sse(): x86_ukernel(T, x86_SSE)
-    else: x86_ukernel(T, x86_Generic)
-
-  result.nr = ukernel.nr
-  result.mr = ukernel.mr
-
   let
     nr = result.nr
     mr = result.mr
