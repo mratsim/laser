@@ -36,6 +36,11 @@ type
     LowTemporalLocality = 1
     ModerateTemporalLocality = 2
     HighTemporalLocality = 3 # Data should be left in all levels of cache possible
+    # Translation
+    # 0 - use no cache eviction level
+    # 1 - L1 cache eviction level
+    # 2 - L2 cache eviction level
+    # 3 - L1 and L2 cache eviction level
 
 when withBuiltins:
   proc builtin_assume_aligned(data: pointer, alignment: csize): pointer {.importc: "__builtin_assume_aligned", noDecl.}
