@@ -16,9 +16,9 @@ import
 
 proc pack_mr_kc[T](
       buffer: ptr UncheckedArray[T],
-      kc: int, ukernel: static MicroKernel[T],
+      kc: int, ukernel: static MicroKernel,
       A: var MatrixView[T]) {.sideeffect.}=
-  ## Packs micro-panel mr*kc for bufA mc*kc (half-L2 cache)
+  ## Packs micro-panel [mr, kc] for buffer Ã[mc, kc] (half-L2 cache)
 
   ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
@@ -33,10 +33,12 @@ proc pack_mr_kc[T](
 
 proc pack_A_mc_kc*[T](
       buffer: ptr UncheckedArray[T],
-      kc: int, ukernel: static MicroKernel[T],
+      kc: int, ukernel: static MicroKernel,
       A: var MatrixView[T]) =
-  ## Packs panel mc*kc for bufA (half-L2 cache)
+  ## Packs panel [mc, kc] into buffer Ã (size ~half-L2 cache)
   ## Pads if needed
+  ## Buffer uses Z-ordering so that the ukernel can access contiguous
+  ## chunks of memory for the dot product
 
   ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
@@ -68,9 +70,9 @@ proc pack_A_mc_kc*[T](
 
 proc pack_kc_nr[T](
       buffer: ptr UncheckedArray[T],
-      kc: int, ukernel: static MicroKernel[T],
+      kc: int, ukernel: static MicroKernel,
       B: var MatrixView[T]) {.sideeffect.}=
-  ## Packs micro-panel kc*nr for bufB (half-L1 cache)
+  ## Packs micro-panel kc*nr for ~B (half-L1 cache)
 
   ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
@@ -85,10 +87,12 @@ proc pack_kc_nr[T](
 
 proc pack_B_kc_nc*[T](
       buffer: ptr UncheckedArray[T],
-      kc, ukernel: static MicroKernel[T],
+      kc, ukernel: static MicroKernel,
       B: var MatrixView[T]) =
-  ## Packs panel kc*nc for bufB (half-L1 cache)
+  ## Packs panel [kc, nc] for ~B (half-L1 cache)
   ## Pads if needed
+  ## Buffer uses Z-ordering so that the ukernel can access contiguous
+  ## chunks of memory for the dot product
 
   const NR = ukernel.nr
 

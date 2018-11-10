@@ -26,6 +26,9 @@
 #       Michael Lehn
 #     - http://apfel.mathematik.uni-ulm.de/~lehn/sghpc/gemm/index.html
 #
+#   [5] On Composing Matrix Multiplication from Kernels
+#       Bryan marker
+#     - http://www.cs.utexas.edu/users/flame/pubs/bamarker_thesis.pdf
 
 # We assume that the CPU has at least 2 levels of cache
 
@@ -60,10 +63,15 @@ import
 #   so mr*nr >= 16
 
 type
-  MicroKernel*[T] = object
+  MicroKernel* = object
     mr*, nr*: int
-    when defined(i386) or defined(amd64):
+    vec_size*: int
+    when defined(amd64) or defined(i386):
       cpu_simd: CPUFeatureX86
+
+    # TODO: store the Type as generic - pending upstream
+    #   - https://github.com/nim-lang/Nim/issues/9679
+    #   - https://github.com/nim-lang/Nim/issues/9678
 
   CPUFeatureX86* = enum
     x86_Generic,
@@ -107,13 +115,16 @@ const X86_regs: X86_FeatureMap = [
 
 const PageSize* = 512
 
-func x86_ukernel*[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): MicroKernel[T] {.inline.}=
+func x86_ukernel*[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): MicroKernel {.inline.}=
   # TODO: Complex
   when T is SomeFloat:
-    result.mr = X86_vecsize_float[cpu] div T.sizeof
+    result.vecsize =  X86_vecsize_float[cpu]
   else:
-    result.mr = X86_vecsize_int[cpu] div T.sizeof
+    result.vecsize =  X86_vecsize_int[cpu]
+
+  result.mr = result.vecsize div T.sizeof
   result.nr = X86_regs[cpu]
+
   when sizeof(int) == 8: # 64-bit - use 8/12 out of the 16 XMM/YMM registers
     result.mr *= 2
   result.cpu_simd = cpu
@@ -161,7 +172,7 @@ func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
       assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
   return aligned_ptr
 
-proc partition(dim, max_chunk_size, tile_dim: Positive): Positive =
+func partition(dim, max_chunk_size, tile_dim: Positive): Positive =
   # Partition a dimension into mc, nc or kc chunks.
   # Chunks are chosen according to max_chunk_size which depends on the L1/L2 cache
   # and according to the microkernel tile dimension
@@ -180,8 +191,11 @@ proc partition(dim, max_chunk_size, tile_dim: Positive): Positive =
     if candidate <= max_chunk_size:
       return candidate
 
-proc newTiles*(M, N, K: Natural,
-              T: type, ukernel: static MicroKernel[T]): Tile[T] =
+proc newTiles*(
+        ukernel: static MicroKernel,
+        T: type,
+        M, N, K: Natural,
+        ): Tile[T] =
   # Goto paper [1] section 6.3: choosing kc
   #   - kc should be as large as possible to amortize the mr*nr updates of Cj
   #   - Elements from Bj [kc, nr] must remain in L1 cache.
@@ -198,12 +212,13 @@ proc newTiles*(M, N, K: Natural,
   #     In practice mc is chosen so that A occupies about half the smaller of (1) and (2)
 
   # BLIS paper [2] section II Figure 2:
-  #   - kc * nr in L1 cache
-  #   - mc * kc in L2 cache
-  #   - kc * nc in L3 cache (no L3 in Xeon Phi ¯\_(ツ)_/¯)
+  #   - kc * nr in L1 cache µkernel
+  #   - mc * kc in L2 cache Ã
+  #   - kc * nc in L3 cache ~B (no L3 in Xeon Phi ¯\_(ツ)_/¯)
+  const
+    nr = ukernel.nr
+    mr = ukernel.mr
   let
-    nr = result.nr
-    mr = result.mr
     l1 = cpuinfo_get_l1d_caches().size.int              # L1 cache
     l2h = cpuinfo_get_l2_caches().size.int * 3 div 5    # More than half L2 cache
     line_size = cpuinfo_get_l1d_caches().line_size.int
