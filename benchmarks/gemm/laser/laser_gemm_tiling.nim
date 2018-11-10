@@ -59,19 +59,22 @@ import
 #   2xFMA so consume 16 single-precision float
 #   so mr*nr >= 16
 
-type MicroKernel*[T] = object
-  mr*, nr*: int
+type
+  MicroKernel*[T] = object
+    mr*, nr*: int
+    when defined(i386) or defined(amd64):
+      cpu_simd: CPUFeatureX86
 
-type CPUFeatureX86 = enum
-  x86_Generic,
-  # x86_MMX,
-  x86_SSE,
-  x86_SSE2,
-  x86_AVX,
-  x86_AVX2,
-  x86_AVX512
+  CPUFeatureX86* = enum
+    x86_Generic,
+    # x86_MMX,
+    x86_SSE,
+    x86_SSE2,
+    x86_AVX,
+    x86_AVX2,
+    x86_AVX512
 
-type X86_FeatureMap = array[CPUFeatureX86, int]
+  X86_FeatureMap = array[CPUFeatureX86, int]
 
 const X86_vecsize_float: X86_FeatureMap = [
   x86_Generic:         1,
@@ -113,6 +116,7 @@ func x86_ukernel*[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): Micr
   result.nr = X86_regs[cpu]
   when sizeof(int) == 8: # 64-bit - use 8/12 out of the 16 XMM/YMM registers
     result.mr *= 2
+  result.cpu_simd = cpu
 
   # TODO: For AVX-512, we assume that CPU have 2 AVX512 units
   #       This is true on Skylake-X and Xeon-W and Xeon-SP Gold 6XXX

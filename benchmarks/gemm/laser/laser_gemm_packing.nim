@@ -14,8 +14,11 @@ import
 #
 # ##############
 
-proc pack_mr_kc[T](buffer: ptr UncheckedArray[T], kc: int, ukernel: static MicroKernel[T], A: var MatrixView[T]) {.sideeffect.}=
-  ## Packs micro-panel mr*kc for the bufA mc*kc (half-L2 cache)
+proc pack_mr_kc[T](
+      buffer: ptr UncheckedArray[T],
+      kc: int, ukernel: static MicroKernel[T],
+      A: var MatrixView[T]) {.sideeffect.}=
+  ## Packs micro-panel mr*kc for bufA mc*kc (half-L2 cache)
 
   ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
@@ -23,13 +26,17 @@ proc pack_mr_kc[T](buffer: ptr UncheckedArray[T], kc: int, ukernel: static Micro
   const MR = ukernel.mr
 
   for j in 0 ..< kc:
-    for i in `||`(0, MR-1, "simd"): # TODO can use _mm_i32gather_ps on AVX
+    for i in 0||(MR-1, "simd"): # TODO can use _mm_i32gather_ps on AVX
       buffer[i] = A[i, 0]
     buffer += MR
     A.incCol()
 
-proc pack_A_mc_kc[T](buffer: ptr UncheckedArray[T], mc, kc: int, ukernel: static MicroKernel[T], A: var MatrixView[T]) =
-  ## Packs panel mc*kc for the bufA (half-L2 cache)
+proc pack_A_mc_kc*[T](
+      buffer: ptr UncheckedArray[T],
+      kc: int, ukernel: static MicroKernel[T],
+      A: var MatrixView[T]) =
+  ## Packs panel mc*kc for bufA (half-L2 cache)
+  ## Pads if needed
 
   ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
@@ -41,8 +48,8 @@ proc pack_A_mc_kc[T](buffer: ptr UncheckedArray[T], mc, kc: int, ukernel: static
 
   var mr = 0
   doWhile 0 < A.nrows:
-    if A.nrows < MR:
-      mr = A.nrows
+    if A.nrows < MR: # last iteration
+      mr = A.nrows   # tail to process
 
     pack_mr_kc[MR](buffer, kc, A)
     buffer += kc*MR
@@ -53,6 +60,54 @@ proc pack_A_mc_kc[T](buffer: ptr UncheckedArray[T], mc, kc: int, ukernel: static
     for j in 0 ..< kc:
       for i in 0 ..< mr:
         buffer[i] = A[i, 0]
-      zeroMem(buffer, (MR-mr)*T.sizeof)
+      for i in mr ..< MR:
+        # Padding
+        buffer[i] = 0.T
       buffer += MR
       A.incCol()
+
+proc pack_kc_nr[T](
+      buffer: ptr UncheckedArray[T],
+      kc: int, ukernel: static MicroKernel[T],
+      B: var MatrixView[T]) {.sideeffect.}=
+  ## Packs micro-panel kc*nr for bufB (half-L1 cache)
+
+  ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
+  ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
+  ##     and it's the hidden pointer that will be moved :/.
+  const NR = ukernel.nr
+
+  for i in 0 ..< k:
+    for j in 0||(NR-1, "simd"):
+      buffer[j] = B[0, j]
+    buffer += NR
+    B.incRow()
+
+proc pack_B_kc_nc*[T](
+      buffer: ptr UncheckedArray[T],
+      kc, ukernel: static MicroKernel[T],
+      B: var MatrixView[T]) =
+  ## Packs panel kc*nc for bufB (half-L1 cache)
+  ## Pads if needed
+
+  const NR = ukernel.nr
+
+  var nr = 0
+  doWhile 0 < B.ncols:
+    if B.ncols < NR: # last iteration
+      nr = B.ncols   # tail to process
+
+    pack_kc_nr(buffer, kc, ukernel, B)
+    buffer += kc*NR
+    B.incCol(NR)
+
+  # Process the tail
+  if nr != 0:
+    for i in 0 ..< kc:
+      for j in 0 ..< nr:
+        buffer[j] = B[0, j]
+      for j in nr ..< NR:
+        # Padding
+        buffer[j] = 0.T
+      buffer += NR
+      B.incRow()
