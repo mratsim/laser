@@ -20,10 +20,11 @@ func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
   withCompilerOptimHints()
   let address = cast[ByteAddress](p)
   let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
-    if (address and (LASER_MEM_ALIGN - 1)) == 0:
+    let remainder = address and (LASER_MEM_ALIGN - 1) # modulo LASER_MEM_ALIGN (power of 2)
+    if remainder == 0:
       assume_aligned cast[ptr UncheckedArray[T]](address)
     else:
-      let offset = LASER_MEM_ALIGN - (address and (LASER_MEM_ALIGN - 1))
+      let offset = LASER_MEM_ALIGN - remainder
       assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
   return aligned_ptr
 

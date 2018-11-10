@@ -153,7 +153,7 @@ type Tile*[T] = object
   b*: ptr UncheckedArray[T]
   kc*: int
   mc*: int
-  allocated_mem: pointer   # Save on cache line, use an aligned allocator to not track this
+  allocated_mem: pointer # TODO Save on cache line, use an aligned allocator to not track this
 
 proc `=destroy`[T](tile: var Tile[T]) =
   if not tile.allocated_mem.isNil:
@@ -165,10 +165,11 @@ func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
   withCompilerOptimHints()
   let address = cast[ByteAddress](p)
   let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
-    if (address and (LASER_MEM_ALIGN - 1)) == 0:
+    let remainder = address and (LASER_MEM_ALIGN - 1) # mod power of 2
+    if remainder == 0:
       assume_aligned cast[ptr UncheckedArray[T]](p)
     else:
-      let offset = LASER_MEM_ALIGN - (address and (LASER_MEM_ALIGN - 1))
+      let offset = LASER_MEM_ALIGN - remainder
       assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
   return aligned_ptr
 
