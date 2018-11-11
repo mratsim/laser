@@ -215,27 +215,26 @@ when isMainModule:
 
     doAssert res_ab == ab
 
-  # block:
-    # let a = [[1.0,2,3],
-    #          [4.0,5,6]]
+  block:
+    let a = [[1.0,2,3],
+             [4.0,5,6]]
 
-    # let b = [[7.0,  8],
-    #          [9.0, 10],
-    #          [11.0,12]]
+    let b = [[7.0,  8],
+             [9.0, 10],
+             [11.0,12]]
 
-    # let ab = [[ 58.0, 64],
-    #           [139.0,154]]
+    let ab = [[ 58.0, 64],
+              [139.0,154]]
 
-    # var res_ab: array[2, array[2, float]]
-    # gemm_strided(
-    #   2, 2, 3,
-    #   1.0,  a[0][0].unsafeAddr, 2, 1,
-    #         b[0][0].unsafeAddr, 3, 1,
-    #   0.0,  res_ab[0][0].addr,  3, 1
-    #   )
+    var res_ab: array[2, array[2, float]]
+    gemm_strided(
+      2, 2, 3,
+      1.0,  a[0][0].unsafeAddr, 3, 1,
+            b[0][0].unsafeAddr, 2, 1,
+      0.0,  res_ab[0][0].addr,  2, 1
+      )
 
-    # echo res_ab
-    # #doAssert res_ab == ab
+    doAssert res_ab == ab
 
   # block:
   #   # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
