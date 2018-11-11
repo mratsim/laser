@@ -165,8 +165,8 @@ macro extract_mr*(ukernel: static MicroKernel): untyped =
   let mr = ukernel.mr
   result = newLit mr
 macro extract_nr*(ukernel: static MicroKernel): untyped =
-  let mr = ukernel.mr
-  result = newLit mr
+  let nr = ukernel.nr
+  result = newLit nr
 
 # ##########################################################################################
 
