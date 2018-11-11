@@ -20,13 +20,12 @@ func toMatrixView*[T](data: ptr T, nrows, ncols: Positive, rowStride, colStride:
   result.colStride = colStride
 
 func incRow*[T](view: var MatrixView[T], offset: Natural = 1) {.inline.} =
-  assert offset < view.nrows
   # Need to dereference the hidden pointer for var
   {.emit: "`(*view).buffer` += `(*view).rowStride` * `offset`;".}
   dec view.nrows, offset
 
 func incCol*[T](view: var MatrixView[T], offset: Natural = 1) {.inline.} =
-  assert offset < view.ncols
+    # Need to dereference the hidden pointer for var
   {.emit: "`(*view).buffer` += `(*view).colStride` * `offset`;".}
   dec view.ncols, offset
 

@@ -53,17 +53,14 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
   # Copy uses a tile of dimension kc*MR
   const MR = ukernel.extract_mr
 
-  var mr = MR
-  doWhile 0 < A.nrows:
-    if A.nrows < MR: # last iteration
-      mr = A.nrows   # tail to process
-
+  while MR <= A.nrows:
     pack_mr_kc[T, ukernel](buffer, kc, A)
     buffer += kc*MR
     A.incCol(MR)
 
   # Process the tail
-  if mr != 0:
+  if A.nrows != 0:
+    let mr = A.nrows
     for j in 0 ..< kc:
       for i in 0 ..< mr:
         buffer[i] = A[i, 0]
@@ -101,17 +98,14 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
 
   const NR = ukernel.extract_nr
 
-  var nr = NR
-  doWhile 0 < B.ncols:
-    if B.ncols < NR: # last iteration
-      nr = B.ncols   # tail to process
-
+  while NR <= B.ncols:
     pack_kc_nr[T, ukernel](buffer, kc, B)
     buffer += kc*NR
     B.incCol(NR)
 
   # Process the tail
-  if nr != 0:
+  if B.ncols != 0:
+    let nr = B.ncols
     for i in 0 ..< kc:
       for j in 0 ..< nr:
         buffer[j] = B[0, j]

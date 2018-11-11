@@ -29,7 +29,7 @@ func gemm_ukernel_generic*[T; MR, NR: static int](
       tiles: Tile[T]
     ) =
 
-  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].addr)
+  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.addr)
   var  A {.restrict.} = assume_aligned tiles.a # [mr, kc]
   var  B {.restrict.} = tiles.b                # [kc, nr]
 
@@ -61,7 +61,7 @@ proc gemm_ukernel_epilogue*[MR, NR: static int, T](
       beta: T,  vC: MatrixView[T]
     ) =
 
-  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
+  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.unsafeAddr)
 
   if beta == 0.T:
     if alpha == 1.T:                   # C = AB
@@ -95,7 +95,7 @@ func gemm_ukernel_edge_epilogue*[MR, NR: static int, T](
       mr, nr: int # Tail to process
     ) =
 
-  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
+  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.unsafeAddr)
 
   if beta == 0.T:
     if alpha == 1.T:                   # C = AB
