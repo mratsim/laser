@@ -6,7 +6,7 @@
 import
   ../../../laser/[cpuinfo, compiler_optim_hints],
   ./laser_gemm_tiling, ./laser_gemm_matrix, ./laser_gemm_utils,
-  ./laser_gemm_packing, ./laser_gemm_ukernel_generic
+  ./laser_gemm_ukernel_generic, ./laser_gemm_packing
 
 withCompilerOptimHints()
 
@@ -20,11 +20,10 @@ withCompilerOptimHints()
 #   - GEBP: Generalized Block-Panel multiplication
 #   ...
 
-proc gebp_mkernel[T](
+proc gebp_mkernel[T; ukernel: static MicroKernel](
       alpha, beta: T,
       mcncC: MatrixView[T],
-      tiles: Tile[T],
-      ukernel: static MicroKernel
+      tiles: Tile[T]
     ) =
   ## Macro kernel, multiply:
   ##  - a block A[mc, kc] * panel B[kc, N]
@@ -40,8 +39,8 @@ proc gebp_mkernel[T](
   # Nim doesn't support arbitrary increment with OpenMP
   # So we store indexing/edge case data in tiles
 
-  const MR = ukernel.mr
-  const NR = ukernel.nr
+  const MR = ukernel.extract_mr
+  const NR = ukernel.extract_nr
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
@@ -64,9 +63,8 @@ proc gebp_mkernel[T](
       # TODO save addr of next panel of A for prefetch
       # and if last iter, save addr of next panel of B
       var AB{.align_variable.}: array[MR, array[NR, T]]
-      let AB = AB[0][0].addr.toMatrixView(MR, NR, NR, 1)
 
-      gemm_ukernel_generic(AB, tiles, ukernel)     # GEBB microkernel + epilogue
+      gemm_ukernel_generic(AB, tiles)              # GEBB microkernel + epilogue
       if nr == NR and mr == MR:                    #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
         # General case                             #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
         gemm_ukernel_epilogue(                     #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
@@ -84,11 +82,10 @@ proc gebp_mkernel[T](
     jr_mcncC.incCol(nr)
   # #####################################
 
-proc gemm_impl[T](
+proc gemm_impl[T; ukernel: static MicroKernel](
       alpha: T, vA: MatrixView[T], vB: MatrixView[T],
       beta: T, vC: MatrixView[T],
-      tiles: Tile[T],
-      ukernel: static MicroKernel
+      tiles: Tile[T]
     ) =
   # Loop concerns:
   #   - Which one to parallelize
@@ -102,8 +99,8 @@ proc gemm_impl[T](
   # ##################################################################
   # 1. for jc = 0,...,n−1 in steps of nc
   # not partitioned currently nc = N
-  let jc_kncB = vB                                  # B[0:K, jc:jc+nc]
-  let jc_mncC = vC                                  # C[0:M, jc:jc+nc]
+  var jc_kncB = vB                                  # B[0:K, jc:jc+nc]
+  var jc_mncC = vC                                  # C[0:M, jc:jc+nc]
   # ######################################
   # 2.   for pc = 0,...,k−1 in steps of kc
   var kc = tiles.kc
@@ -114,7 +111,7 @@ proc gemm_impl[T](
 
     var pc_kcncB = jc_kncB.sliceRows(kc)            # B[pc:pc+kc, jc:jc+nc]
     let bufB{.restrict.} = tiles.b                  # panel [kc, nc] (nc is large or unknown)
-    pack_B_kc_nc(bufB, kc, ukernel, pc_kcncB)       # mutate bufB and pc_kcncB
+    pack_B_kc_nc[T, ukernel](bufB, kc, pc_kcncB)    # mutate bufB and pc_kcncB
 
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
@@ -126,18 +123,18 @@ proc gemm_impl[T](
 
       var jr_mckcA = ic_mkcA.sliceRows(mc)          # A[ic:ic+mc, pc:pc+kc]
       let bufA{.restrict.} = assume_aligned tiles.a # block [mc, kc]
-      pack_A_mc_kc(bufA, kc, ukernel, jr_mckcA)     # mutate bufA and jr_mckcA
+      pack_A_mc_kc[T, ukernel](bufA, kc, jr_mckcA)  # mutate bufA and jr_mckcA
 
       let jr_mcncC = jc_mncC.sliceRows(mc)          # C[ic:ic+mc, jc:jc+nc]
-      gebp_mkernel(                                 # GEBP macrokernel:
+      gebp_mkernel[T, ukernel](                     # GEBP macrokernel:
           alpha, beta, jr_mcncC,                    #   C[ic:ic+mc, jc:jc+nc] =
-          tiles, ukernel                            #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
+          tiles                                     #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
         )                                           #    βC[ic:ic+mc, jc:jc+nc]
 
-      ic_mncC.incRow(mc)
+      jc_mncC.incRow(mc)
       ic_mkcA.incRow(mc)
     # ####################################
-    pc_kncB.incRow(kc)
+    jc_kncB.incRow(kc)
     pc_mkA.incCol(kc)
   # ######################################
 
@@ -170,25 +167,33 @@ proc gemm_strided*[T: SomeNumber](
     #   - panel B: kc*nc L3 cache
 
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
-    template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
-      const ukernel = cpu_features.x86_ukernel(T)
-      let tiles = ukernel.newTiles(T, M, N, K)
-      gemm_impl(
-        alpha, vA, vB,
-        beta, vC,
-        tiles,
-        ukernel
-      )
-      return
+    # template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
+    #   const ukernel = MicroKernel(mr: 6, nr: 16, vec_size:32, cpu_simd: x86_AVX2) # cpu_features.x86_ukernel(T)
+    #   let tiles = ukernel.newTiles(T, M, N, K)
+    #   gemm_impl(
+    #     alpha, vA, vB,
+    #     beta, vC,
+    #     tiles,
+    #     ukernel
+    #   )
+    #   return
 
-    when defined(i386) or defined(amd64):
-      when T is SomeFloat:
-        if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
-        elif cpuinfo_has_x86_avx():   dispatch(x86_AVX) # Handles AVX2 as well, only diff is that AVX2 can issue 2xFMA
-        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
-        elif cpuinfo_has_x86_sse():   dispatch(x86_SSE)
-      else: # Integers are taking advantage of wider registers later (in SSE2 and AVX2)
-        if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
-        elif cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
-        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
-    dispatch(x86_Generic)
+    # when defined(i386) or defined(amd64):
+    #   when T is SomeFloat:
+    #     if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
+    #     elif cpuinfo_has_x86_avx():   dispatch(x86_AVX) # Handles AVX2 as well, only diff is that AVX2 can issue 2xFMA
+    #     elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+    #     elif cpuinfo_has_x86_sse():   dispatch(x86_SSE)
+    #   else: # Integers are taking advantage of wider registers later (in SSE2 and AVX2)
+    #     if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
+    #     elif cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
+    #     elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+    # dispatch(x86_Generic)
+
+    const ukernel = MicroKernel(mr: 6, nr: 16, vec_size:32, cpu_simd: x86_AVX2) # cpu_features.x86_ukernel(T)
+    let tiles = ukernel.newTiles(T, M, N, K)
+    gemm_impl[T, ukernel](
+      alpha, vA, vB,
+      beta, vC,
+      tiles
+    )

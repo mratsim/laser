@@ -114,11 +114,14 @@ const X86_regs: X86_FeatureMap = [
 
 const PageSize* = 512
 
-func x86_ukernel*(cpu: static CPUFeatureX86, T: typedesc): MicroKernel {.inline.}=
+func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
+  # Cannot reproduce a small case :/
+  var ukernel: MicroKernel # triggers "Object Constructor needs an object type)"
+
   when T is SomeFloat:
-    result.vecsize =  X86_vecsize_float[cpu]
+    ukernel.vecsize =  X86_vecsize_float[cpu]
   else:
-    result.vecsize =  X86_vecsize_int[cpu]
+    ukernel.vecsize =  X86_vecsize_int[cpu]
   # TODO: Complex support
 
   # The inner microkernel loop does:
@@ -128,12 +131,14 @@ func x86_ukernel*(cpu: static CPUFeatureX86, T: typedesc): MicroKernel {.inline.
   # This avoids dealing with transpose
   # in the inner loop and untranspose in the epilogue
 
-  result.mr = X86_regs[cpu]
-  result.nr = result.vecsize div T.sizeof
+  ukernel.mr = X86_regs[cpu]
+  ukernel.nr = ukernel.vecsize div sizeof(T)
 
   when sizeof(int) == 8: # 64-bit - use 8/12 out of the 16 XMM/YMM registers
-    result.nr *= 2
-  result.cpu_simd = cpu
+    ukernel.nr *= 2
+  ukernel.cpu_simd = cpu
+
+  return ukernel
 
   # TODO: For AVX-512, we assume that CPU have 2 AVX512 units
   #       This is true on Skylake-X and Xeon-W and Xeon-SP Gold 6XXX
@@ -151,6 +156,17 @@ func x86_ukernel*(cpu: static CPUFeatureX86, T: typedesc): MicroKernel {.inline.
   # MKLDNN also uses 16x6 for float and 8x6 for double (?)
   #   see unroll_factor: https://github.com/intel/mkl-dnn/blob/21fb5f2af1dd14e132af4f1b79160977ee487818/src/cpu/gemm/gemm_utils.hpp#L30-L48
 
+#############################################
+# Workaround "undeclared identifier mr or nr"
+# for some reason the compiler cannot access fields in
+# the static MicroKernel.
+import macros
+macro extract_mr*(ukernel: static MicroKernel): untyped =
+  let mr = ukernel.mr
+  result = newLit mr
+macro extract_nr*(ukernel: static MicroKernel): untyped =
+  let mr = ukernel.mr
+  result = newLit mr
 
 # ##########################################################################################
 

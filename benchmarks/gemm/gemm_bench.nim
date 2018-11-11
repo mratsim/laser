@@ -46,7 +46,8 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 import
   ./gemm_common,
   ../blas,
-  ./arraymancer/blas_l3_gemm
+  ./arraymancer/blas_l3_gemm,
+  ./laser/laser_gemm
 
 const
   M     =  224
@@ -87,11 +88,11 @@ proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int) =
     zeroMem(output[0].addr, out_size) # We zero memory between computation
   do:
     # Main work
-    gemm_nn_fallback[float32](
+    gemm_nn_fallback(
       M, N, K,
-      1,      a, 0, K, 1,       # offset, stride row, stride col
-              b, 0, N, 1,
-      0, output, 0, N, 1
+      1'f32,      a, 0, K, 1,       # offset, stride row, stride col
+                  b, 0, N, 1,
+      0'f32, output, 0, N, 1
     )
 
 proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) =
@@ -122,6 +123,24 @@ proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) =
                 C[i][jj] += A[i][kk] * B[kk][jj];
 
     """.}
+
+proc benchLaserGEMM(a, b: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+
+  let a_ptr{.restrict.} = a[0].unsafeAddr
+  let b_ptr{.restrict.} = b[0].unsafeAddr
+  let c_ptr{.restrict.} = output[0].addr
+  bench("New Laser GEMM implementation - Generic SIMD"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    zeroMem(output[0].addr, out_size) # We zero memory between computation
+  do:
+    # Main work
+    gemm_strided(
+      M, N, K,
+      1'f32,  a_ptr, K, 1,       # stride row, stride col
+              b_ptr, N, 1,
+      0'f32,  c_ptr, N, 1
+    )
 # ###########################################
 
 when defined(fast_math):
@@ -151,6 +170,7 @@ when isMainModule:
     benchOpenBLAS(a, b, nb_samples = 20)
     benchArraymancerFallback(a, b, nb_samples = 20)
     benchSimpleTiling(a, b, nb_samples = 20)
+    benchLaserGEMM(a, b, nb_samples = 20)
 
 # Seems like my BLAS has false sharing issue
 

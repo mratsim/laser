@@ -3,22 +3,15 @@
 # Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
 # This file may not be copied, modified, or distributed except according to those terms.
 
+# Due to issue with "static MicroKernel" as parameter
+# as of 0.19.9 we pass it as a generic param
+#   - 1. undeclared identifier mr/nr, when accessing ukernel
+#   - 2. object constructor needs and object type when workaround first issue with macro
+
 import
   ./laser_gemm_matrix,
   ./laser_gemm_utils,
   ./laser_gemm_tiling
-
-#############################################
-# Workaround "undeclared identifier mr or nr"
-# for some reason the compiler cannot access fields in
-# the static MicroKernel. And I cannot reproduce in a small test case :/
-import macros
-macro extract_mr(ukernel: static MicroKernel): untyped =
-  let mr = ukernel.mr
-  result = newLit mr
-macro extract_nr(ukernel: static MicroKernel): untyped =
-  let mr = ukernel.mr
-  result = newLit mr
 
 # ##############
 #
@@ -26,9 +19,9 @@ macro extract_nr(ukernel: static MicroKernel): untyped =
 #
 # ##############
 
-proc pack_mr_kc[T](
+proc pack_mr_kc[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
-      kc: int, ukernel: static MicroKernel,
+      kc: int,
       A: var MatrixView[T]) {.sideeffect.}=
   ## Packs micro-panel [mr, kc] for buffer Ã[mc, kc] (half-L2 cache)
 
@@ -43,9 +36,9 @@ proc pack_mr_kc[T](
     buffer += MR
     A.incCol()
 
-proc pack_A_mc_kc*[T](
+proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
-      kc: int, ukernel: static MicroKernel,
+      kc: int,
       A: var MatrixView[T]) =
   ## Packs panel [mc, kc] into buffer Ã (size ~half-L2 cache)
   ## Pads if needed
@@ -65,7 +58,7 @@ proc pack_A_mc_kc*[T](
     if A.nrows < MR: # last iteration
       mr = A.nrows   # tail to process
 
-    pack_mr_kc(buffer, kc, ukernel, A)
+    pack_mr_kc[T, ukernel](buffer, kc, A)
     buffer += kc*MR
     A.incCol(MR)
 
@@ -80,9 +73,9 @@ proc pack_A_mc_kc*[T](
       buffer += MR
       A.incCol()
 
-proc pack_kc_nr[T](
+proc pack_kc_nr[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
-      kc: int, ukernel: static MicroKernel,
+      kc: int,
       B: var MatrixView[T]) {.sideeffect.}=
   ## Packs micro-panel kc*nr for ~B (half-L1 cache)
 
@@ -97,9 +90,9 @@ proc pack_kc_nr[T](
     buffer += NR
     B.incRow()
 
-proc pack_B_kc_nc*[T](
+proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
-      kc: int, ukernel: static MicroKernel,
+      kc: int,
       B: var MatrixView[T]) =
   ## Packs panel [kc, nc] for ~B (half-L1 cache)
   ## Pads if needed
@@ -113,7 +106,7 @@ proc pack_B_kc_nc*[T](
     if B.ncols < NR: # last iteration
       nr = B.ncols   # tail to process
 
-    pack_kc_nr(buffer, kc, ukernel, B)
+    pack_kc_nr[T, ukernel](buffer, kc, B)
     buffer += kc*NR
     B.incCol(NR)
 
