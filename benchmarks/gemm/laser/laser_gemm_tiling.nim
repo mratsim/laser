@@ -198,7 +198,7 @@ func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
       assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
   return aligned_ptr
 
-func partition(dim, max_chunk_size, tile_dim: Positive): Positive =
+func partition(dim, max_chunk_size, tile_dim: Natural): Natural =
   # Partition a dimension into mc, nc or kc chunks.
   # Chunks are chosen according to max_chunk_size which depends on the L1/L2 cache
   # and according to the microkernel tile dimension

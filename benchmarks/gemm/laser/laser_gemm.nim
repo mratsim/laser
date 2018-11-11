@@ -167,33 +167,24 @@ proc gemm_strided*[T: SomeNumber](
     #   - panel B: kc*nc L3 cache
 
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
-    # template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
-    #   const ukernel = MicroKernel(mr: 6, nr: 16, vec_size:32, cpu_simd: x86_AVX2) # cpu_features.x86_ukernel(T)
-    #   let tiles = ukernel.newTiles(T, M, N, K)
-    #   gemm_impl(
-    #     alpha, vA, vB,
-    #     beta, vC,
-    #     tiles,
-    #     ukernel
-    #   )
-    #   return
+    template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
+      const ukernel = cpu_features.x86_ukernel(T)
+      let tiles = ukernel.newTiles(T, M, N, K)
+      gemm_impl[T, ukernel](
+        alpha, vA, vB,
+        beta, vC,
+        tiles
+      )
+      return
 
-    # when defined(i386) or defined(amd64):
-    #   when T is SomeFloat:
-    #     if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
-    #     elif cpuinfo_has_x86_avx():   dispatch(x86_AVX) # Handles AVX2 as well, only diff is that AVX2 can issue 2xFMA
-    #     elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
-    #     elif cpuinfo_has_x86_sse():   dispatch(x86_SSE)
-    #   else: # Integers are taking advantage of wider registers later (in SSE2 and AVX2)
-    #     if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
-    #     elif cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
-    #     elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
-    # dispatch(x86_Generic)
-
-    const ukernel = MicroKernel(mr: 6, nr: 16, vec_size:32, cpu_simd: x86_AVX2) # cpu_features.x86_ukernel(T)
-    let tiles = ukernel.newTiles(T, M, N, K)
-    gemm_impl[T, ukernel](
-      alpha, vA, vB,
-      beta, vC,
-      tiles
-    )
+    when defined(i386) or defined(amd64):
+      when T is SomeFloat:
+        if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
+        elif cpuinfo_has_x86_avx():   dispatch(x86_AVX) # Handles AVX2 as well, only diff is that AVX2 can issue 2xFMA
+        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+        elif cpuinfo_has_x86_sse():   dispatch(x86_SSE)
+      else: # Integers are taking advantage of wider registers later (in SSE2 and AVX2)
+        if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
+        elif cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
+        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+    dispatch(x86_Generic)
