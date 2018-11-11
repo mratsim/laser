@@ -193,26 +193,49 @@ proc gemm_strided*[T: SomeNumber](
 when isMainModule:
     # Tests
   block:
-    let a = [[1.0,2,3],
-             [4.0,5,6]]
+    let a = [[1.0, 2, 3],
+             [1.0, 1, 1],
+             [1.0, 1, 1]]
 
-    let b = [[7.0,  8],
-             [9.0, 10],
-             [11.0,12]]
+    let b = [[1.0, 1],
+             [1.0, 1],
+             [1.0, 1]]
 
-    let ab = [[ 58.0, 64],
-              [139.0,154]]
+    let ab = [[6.0, 6],
+              [3.0, 3],
+              [3.0, 3]]
 
-    var res_ab: array[10, array[10, float]]
+    var res_ab: array[3, array[2, float]]
     gemm_strided(
-      2, 2, 3,
-      1.0,  a[0][0].unsafeAddr, 2, 1,
-            b[0][0].unsafeAddr, 3, 1,
-      0.0,  res_ab[0][0].addr,  3, 1
+      3, 2, 3,
+      1.0,  a[0][0].unsafeAddr, 3, 1,
+            b[0][0].unsafeAddr, 2, 1,
+      0.0,  res_ab[0][0].addr,  2, 1
       )
 
-    echo res_ab
-    # doAssert res_ab == ab
+    doAssert res_ab == ab
+
+  # block:
+    # let a = [[1.0,2,3],
+    #          [4.0,5,6]]
+
+    # let b = [[7.0,  8],
+    #          [9.0, 10],
+    #          [11.0,12]]
+
+    # let ab = [[ 58.0, 64],
+    #           [139.0,154]]
+
+    # var res_ab: array[2, array[2, float]]
+    # gemm_strided(
+    #   2, 2, 3,
+    #   1.0,  a[0][0].unsafeAddr, 2, 1,
+    #         b[0][0].unsafeAddr, 3, 1,
+    #   0.0,  res_ab[0][0].addr,  3, 1
+    #   )
+
+    # echo res_ab
+    # #doAssert res_ab == ab
 
   # block:
   #   # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
