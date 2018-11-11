@@ -26,7 +26,7 @@ proc pack_mr_kc[T](
   const MR = ukernel.mr
 
   for j in 0 ..< kc:
-    for i in 0||(MR-1, "simd"): # TODO can use _mm_i32gather_ps on AVX
+    for i in `||`(0, MR-1, "simd"): # TODO can use _mm_i32gather_ps on AVX
       buffer[i] = A[i, 0]
     buffer += MR
     A.incCol()
@@ -48,12 +48,12 @@ proc pack_A_mc_kc*[T](
   # Copy uses a tile of dimension kc*MR
   const MR = ukernel.mr
 
-  var mr = 0
+  var mr = MR
   doWhile 0 < A.nrows:
     if A.nrows < MR: # last iteration
       mr = A.nrows   # tail to process
 
-    pack_mr_kc[MR](buffer, kc, A)
+    pack_mr_kc(buffer, kc, ukernel, A)
     buffer += kc*MR
     A.incCol(MR)
 
@@ -79,15 +79,15 @@ proc pack_kc_nr[T](
   ##     and it's the hidden pointer that will be moved :/.
   const NR = ukernel.nr
 
-  for i in 0 ..< k:
-    for j in 0||(NR-1, "simd"):
+  for i in 0 ..< kc:
+    for j in `||`(0, NR-1, "simd"):
       buffer[j] = B[0, j]
     buffer += NR
     B.incRow()
 
 proc pack_B_kc_nc*[T](
       buffer: ptr UncheckedArray[T],
-      kc, ukernel: static MicroKernel,
+      kc: int, ukernel: static MicroKernel,
       B: var MatrixView[T]) =
   ## Packs panel [kc, nc] for ~B (half-L1 cache)
   ## Pads if needed
@@ -96,7 +96,7 @@ proc pack_B_kc_nc*[T](
 
   const NR = ukernel.nr
 
-  var nr = 0
+  var nr = NR
   doWhile 0 < B.ncols:
     if B.ncols < NR: # last iteration
       nr = B.ncols   # tail to process

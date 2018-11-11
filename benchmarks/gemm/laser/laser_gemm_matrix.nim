@@ -12,37 +12,42 @@ type
     nrows*, ncols*: int
     rowStride*, colStride*: int
 
-func toMatrixView*[T](data: ptr T, nrows, ncols, incRow, incCol: int): MatrixView[T] {.inline.} =
+func toMatrixView*[T](data: ptr T, nrows, ncols: Positive, rowStride, colStride: int): MatrixView[T] {.inline.} =
   result.buffer = cast[ptr UncheckedArray[T]](data)
   result.nrows = nrows
   result.ncols = ncols
-  result.rowStride = incRow
-  result.colStride = incCol
+  result.rowStride = rowStride
+  result.colStride = colStride
 
-func incRow*[T](view: var MatrixView[T], offset = 1) {.inline.} =
+func incRow*[T](view: var MatrixView[T], offset: Natural = 1) {.inline.} =
+  assert offset < view.nrows
   {.emit: "`view.buffer` += `view.rowStride` * `offset`;".}
   dec view.nrows, offset
 
-func incCol*[T](view: var MatrixView[T], offset = 1) {.inline.} =
+func incCol*[T](view: var MatrixView[T], offset: Natural = 1) {.inline.} =
+  assert offset < view.ncols
   {.emit: "`view.buffer` += `view.colStride` * `offset`;".}
   dec view.ncols, offset
 
-func sliceRows*[T](view: MatrixView[T], size: int): MatrixView[T]{.inline.} =
-  ## Returns a slice: view[0 ..< size, _]
+func sliceRows*[T](view: MatrixView[T], size: Natural): MatrixView[T]{.inline.} =
+  ## Returns a **exclusive** slice: view[0 ..< size, _]
   result = view
-  assert nrows >= size
+  assert size <= result.nrows
   result.nrows = size
 
-func sliceCols*[T](view: MatrixView[T], size: int): MatrixView[T]{.inline.} =
-  ## Returns a slice: view[_, 0 ..< size]
+func sliceCols*[T](view: MatrixView[T], size: Natural): MatrixView[T]{.inline.} =
+  ## Returns an **exclusive** slice: view[_, 0 ..< size]
   result = view
-  assert ncols >= size
+  assert size <= result.ncols
   result.ncols = size
 
-template at*[T](view: MatrixView[T], offset: int): T =
+template at*[T](view: MatrixView[T], offset: Natural): T =
   ## Access a specific offset (like a linear memory range)
+  assert offset < (view.nrows * view.rowStride) + (view.ncols * view.colStride)
   view.buffer[idx]
 
-template `[]`*[T](view: MatrixView[T], row, col: int): T =
+template `[]`*[T](view: MatrixView[T], row, col: Natural): T =
   ## Access like a 2D matrix
+  assert row < view.nrows
+  assert col < view.ncols
   view.buffer[row * view.rowStride + col * view.colStride]

@@ -23,6 +23,6 @@ template `+=`*(p: pointer, offset: int) =
   const osym = offset.astToStr()
   {.emit: psym & " += " & osym & ";".}
 
-func `+`*[T](p: pointer or ptr, offset: int): type(p) {.inline.}=
+func `+`*(p: pointer or ptr, offset: int): type(p) {.inline.}=
   # Pointer arithmetic
   {.emit: "`result` = `p` + `offset`;".}

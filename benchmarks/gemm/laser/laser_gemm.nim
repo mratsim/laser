@@ -102,37 +102,37 @@ proc gemm_impl[T](
   # ##################################################################
   # 1. for jc = 0,...,n−1 in steps of nc
   # not partitioned currently nc = N
-  let jc_kncB = vB                                 # B[0:K, jc:jc+nc]
-  let jc_mncC = vC                                 # C[0:M, jc:jc+nc]
+  let jc_kncB = vB                                  # B[0:K, jc:jc+nc]
+  let jc_mncC = vC                                  # C[0:M, jc:jc+nc]
   # ######################################
   # 2.   for pc = 0,...,k−1 in steps of kc
   var kc = tiles.kc
-  var pc_mkA = vA                                  # A[0:M, 0:K]
+  var pc_mkA = vA                                   # A[0:M, 0:K]
   doWhile 0 < pc_mkA.ncols:
     if pc_mkA.ncols < kc: # last iteration
       kc = pc_mkA.ncols
 
-    var pc_kcncB = jc_kncB.sliceRows(kc)           # B[pc:pc+kc, jc:jc+nc]
-    let bufB{.restrict.} = tile.b                  # panel [kc, nc] (nc is large or unknown)
-    pack_B_kc_nc(bufB, kc, ukernel, pc_kcncB)      # mutate bufB and pc_kcncB
+    var pc_kcncB = jc_kncB.sliceRows(kc)            # B[pc:pc+kc, jc:jc+nc]
+    let bufB{.restrict.} = tiles.b                  # panel [kc, nc] (nc is large or unknown)
+    pack_B_kc_nc(bufB, kc, ukernel, pc_kcncB)       # mutate bufB and pc_kcncB
 
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
     var mc = tiles.mc
-    var ic_mkcA = pc_mkcA.sliceCols(kc)            # A[0:M, pc:pc+kc]
+    var ic_mkcA = pc_mkA.sliceCols(kc)              # A[0:M, pc:pc+kc]
     doWhile 0 < ic_mkcA.nrows:
       if ic_mkcA.nrows < mc: # last iteration
         mc = ic_mkcA.nrows
 
-      var jr_mckcA = ic_mkcA.sliceRows(mc)         # A[ic:ic+mc, pc:pc+kc]
-      let bufA{.restrict.} = assume_aligned tile.a # block [mc, kc]
-      pack_A_mc_kc(bufA, kc, ukernel, jr_mckcA)    # mutate bufA and jr_mckcA
+      var jr_mckcA = ic_mkcA.sliceRows(mc)          # A[ic:ic+mc, pc:pc+kc]
+      let bufA{.restrict.} = assume_aligned tiles.a # block [mc, kc]
+      pack_A_mc_kc(bufA, kc, ukernel, jr_mckcA)     # mutate bufA and jr_mckcA
 
-      let jr_mcncC = jc_mncC.sliceRows(mc)         # C[ic:ic+mc, jc:jc+nc]
-      gebp_mkernel(                                # GEBP macrokernel:
-          alpha, beta, jr_mcncC,                   #   C[ic:ic+mc, jc:jc+nc] =
-          tiles, ukernel                           #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
-        )                                          #    βC[ic:ic+mc, jc:jc+nc]
+      let jr_mcncC = jc_mncC.sliceRows(mc)          # C[ic:ic+mc, jc:jc+nc]
+      gebp_mkernel(                                 # GEBP macrokernel:
+          alpha, beta, jr_mcncC,                    #   C[ic:ic+mc, jc:jc+nc] =
+          tiles, ukernel                            #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
+        )                                           #    βC[ic:ic+mc, jc:jc+nc]
 
       ic_mncC.incRow(mc)
       ic_mkcA.incRow(mc)
@@ -145,34 +145,50 @@ proc gemm_strided*[T: SomeNumber](
       M, N, K: int,
       alpha: T,
       A: ptr T,
-      incRowA, incColA: int,
+      rowStrideA, colStrideA: int,
       B: ptr T,
-      incRowB, incColB: int,
+      rowStrideB, colStrideB: int,
       beta: T,
       C: ptr T,
-      incRowC, incColc: int) =
+      rowStrideC, colStrideC: int) =
 
-    let tiles = newTiles(M, N, K, T)
-    # buffer A: mc*kc L2 cache
-    # buffer B: kc*nc L3 cache
-    # buffer C: mr*nr registers
-    #
-    # and kc*nr panel in L1 cache
-
-    # TODO detect colMajor
+    # TODO detect colMajor / transpose for contiguous iteration
     # TODO shortcut alpha = 0 or K = 0
+    # TODO: custom epilogue fusion like relu/tanh/sigmoid
+    # TODO: shortcut for small gemm
 
     # Create a view to abstract deling with strides
     # and passing those in each proc
-    let vA = A.toMatrixView(M, K, incRowA, incColA)
-    let vB = B.toMatrixView(K, N, incRowB, incColB)
-    let vC = C.toMatrixView(M, N, incRowC, incColC)
+    let vA = A.toMatrixView(M, K, rowStrideA, colStrideA)
+    let vB = B.toMatrixView(K, N, rowStrideB, colStrideB)
+    let vC = C.toMatrixView(M, N, rowStrideC, colStrideC)
+
+    # Cache hierarchy:
+    #   - block C: mr*nr registers
+    #   - block B: kc*nr L1 cache
+    #   - block A: mc*kc L2 cache
+    #   - panel B: kc*nc L3 cache
 
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
-    if cpuinfo_has_x86_avx512f(): x86_ukernel(T, x86_AVX512)
-    elif cpuinfo_has_x86_avx2(): x86_ukernel(T, x86_AVX2)
-    elif cpuinfo_has_x86_avx(): x86_ukernel(T, x86_AVX)
-    elif cpuinfo_has_x86_sse2(): x86_ukernel(T, x86_SSE2)
-    elif cpuinfo_has_x86_sse(): x86_ukernel(T, x86_SSE)
-    else: x86_ukernel(T, x86_Generic)
+    template dispatch(cpu_features: CPUFeatureX86){.dirty.} =
+      const ukernel = x86_ukernel(T, cpu_features)
+      let tiles = ukernel.newTiles(T, M, N, K)
+      gemm_impl(
+        alpha, vA, vB,
+        beta, vC,
+        tiles,
+        ukernel
+      )
+      return
 
+    when defined(i386) or defined(amd64):
+      when T is SomeFloat:
+        if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
+        elif cpuinfo_has_x86_avx():   dispatch(x86_AVX) # Handles AVX2 as well, only diff is that AVX2 can issue 2xFMA
+        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+        elif cpuinfo_has_x86_sse():   dispatch(x86_SSE)
+      else: # Integers are taking advantage of wider registers later (in SSE2 and AVX2)
+        if cpuinfo_has_x86_avx512f(): dispatch(x86_AVX512)
+        elif cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
+        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+    dispatch(x86_Generic)

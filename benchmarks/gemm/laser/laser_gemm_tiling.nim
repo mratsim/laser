@@ -67,7 +67,7 @@ type
     mr*, nr*: int
     vec_size*: int
     when defined(amd64) or defined(i386):
-      cpu_simd: CPUFeatureX86
+      cpu_simd*: CPUFeatureX86
 
     # TODO: store the Type as generic - pending upstream
     #   - https://github.com/nim-lang/Nim/issues/9679
@@ -116,7 +116,6 @@ const X86_regs: X86_FeatureMap = [
 const PageSize* = 512
 
 func x86_ukernel*[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): MicroKernel {.inline.}=
-
   when T is SomeFloat:
     result.vecsize =  X86_vecsize_float[cpu]
   else:
@@ -235,7 +234,7 @@ proc newTiles*(
     l2h = cpuinfo_get_l2_caches().size.int * 3 div 5    # More than half L2 cache
     line_size = cpuinfo_get_l1d_caches().line_size.int
 
-  const SmallGEMM_threshold = 240 # Threshold for extremely small GEMMs. LibXSMM uses cubic root of (MNK) < 128
+  const Kc_Threshold = 240
   # We use Mir-GLAS approach here
 
   # First determine a candidate kc depending on l2 cache constraints
@@ -254,7 +253,7 @@ proc newTiles*(
 
   # Second, check if we have a small gemm
   #         or if we don't fit kc*nr in TLB or L1 cache
-  if result.kc < SmallGEMM_threshold or
+  if result.kc < Kc_Threshold or
       l1 < TLB + result.kc * halfPerimeter:
 
     result.kc = (l1 - TLB) div halfPerimeter
@@ -282,8 +281,8 @@ proc newTiles*(
   result.allocated_mem = allocShared0(bufA_size + bufB_size + PageSize)
     # PageSize has enough space for 64 bytes alignement
     # This help for prefetching next page in the TLB
-  result.a{.restrict.} = assume_aligned align_raw_data(T, result.allocated_mem)
-  result.b{.restrict.} = result.a + bufA_size # TODO: align as well?
+  result.a = assume_aligned align_raw_data(T, result.allocated_mem)
+  result.b = result.a + bufA_size # TODO: align as well?
 
   # Workaround for Nim OpenMP for loop not supporting non-unit increment
   # we don't partition N so N = NC
