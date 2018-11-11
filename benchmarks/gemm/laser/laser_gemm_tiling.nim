@@ -116,17 +116,25 @@ const X86_regs: X86_FeatureMap = [
 const PageSize* = 512
 
 func x86_ukernel*[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): MicroKernel {.inline.}=
-  # TODO: Complex
+
   when T is SomeFloat:
     result.vecsize =  X86_vecsize_float[cpu]
   else:
     result.vecsize =  X86_vecsize_int[cpu]
+  # TODO: Complex support
 
-  result.mr = result.vecsize div T.sizeof
-  result.nr = X86_regs[cpu]
+  # The inner microkernel loop does:
+  #   AB[m][n] = A[m] * B[n]
+  # So n should be the vector size
+  # if most compute are row-Major.
+  # This avoids dealing with transpose
+  # in the inner loop and untranspose in the epilogue
+
+  result.mr = X86_regs[cpu]
+  result.nr = result.vecsize div T.sizeof
 
   when sizeof(int) == 8: # 64-bit - use 8/12 out of the 16 XMM/YMM registers
-    result.mr *= 2
+    result.nr *= 2
   result.cpu_simd = cpu
 
   # TODO: For AVX-512, we assume that CPU have 2 AVX512 units
@@ -135,7 +143,7 @@ func x86_ukernel*[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): Micr
 
   #### Comparison with others
   # Example: for AVX2 Haswell CPU
-  # This returns 8x6 ukernel for float and 4x6 for double.
+  # This returns 6x16 ukernel for float and 4x8 for double.
   #
   # BLIS paper [3] recommends 4x12 and tested 8x4 for float,
   # the difference being between the broadcast and shuffle

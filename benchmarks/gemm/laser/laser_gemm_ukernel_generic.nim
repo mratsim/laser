@@ -16,12 +16,10 @@ macro unroll_ukernel[mr, nr: static int, T](
     ): untyped =
 
   result = newStmtList()
-  for j in 0 .. nr - 1:
-    for i in 0 .. mr - 1:
+  for i in 0 .. mr - 1:
+    for j in 0 .. nr - 1:
       result.add quote do:
-        # Note the transposition for contiguous AB access
-        # mr is a multiple of the SIMD size
-        `AB`[j][i] += `A`[`i`] * `B`[`j`]
+        `AB`[i][j] += `A`[`i`] * `B`[`j`]
 
 func gemm_ukernel_generic*[T](
       alpha, beta: T,
@@ -32,6 +30,12 @@ func gemm_ukernel_generic*[T](
 
   const mr = ukernel.mr
   const nr = ukernel.nr
+
+  # The inner loop must be the SIMD vector size
+  # Also since we work mostly with row-major tensors
+  # it's better if it's the nr dimension to avoid transposing AB
+  static: assert nr == ukernel.vec_size
+
 
   withCompilerOptimHints()
   var AB{.align_variable.}: array[mr, array[nr, T]]
@@ -64,28 +68,26 @@ func gemm_ukernel_generic*[T](
   # We need to untranspose here
   if beta == 0.T:
     if alpha == 1.T:                   # C = AB
-      for j in 0 ..< nr:
-        for i in `||`(0, mr-1, "simd"):
-          vC[i, j] = AB[j][i]
+      for i in 0 ..< mr:
+        for j in `||`(0, nr-1, "simd"):
+          vC[i, j] = AB[i][j]
     else:                              # C = αAB
-      for j in 0 ..< nr:
-        for i in `||`(0, mr-1, "simd"):
-          vC[i, j] = alpha * AB[j][i]
+      for i in 0 ..< mr:
+        for j in `||`(0, nr-1, "simd"):
+          vC[i, j] = alpha * AB[i][j]
   else:                                # C *=   β
     for i in 0 ..< mr:
-      for j in 0 ..< nr:
-        # We assume that C is row Major
-        # or row-Major tilted
+      for j in `||`(0, nr-1, "simd"):
         vC[i, j] *= beta
 
     if alpha == 1.T:                   # C +=  AB
-      for j in 0 ..< nr:
-        for i in `||`(0, mr-1, "simd"):
-          vC[i, j] += AB[j][i]
+      for i in 0 ..< mr:
+        for j in `||`(0, nr-1, "simd"):
+          vC[i, j] += AB[i][j]
     else:                              # C += αAB
-      for j in 0 ..< nr:
-        for i in `||`(0, mr-1, "simd"):
-          vC[i, j] += alpha * AB[j][i]
+      for i in 0 ..< mr:
+        for j in `||`(0, nr-1, "simd"):
+          vC[i, j] += alpha * AB[i][j]
 
   # TODO: arbitrary function like relu/tanh/sigmoid
 
@@ -100,4 +102,4 @@ func gemm_edge_epilogue*[mr, nr: static int, T](
   # and then copied into matrix C edges (i.e. tile area < nr*mr)
 
   assert vC.nrows < mr and vc.ncols < nr
-  
+
