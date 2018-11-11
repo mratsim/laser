@@ -153,6 +153,9 @@ type Tile*[T] = object
   b*: ptr UncheckedArray[T]
   kc*: int
   mc*: int
+  # Nim doesn't support arbitrary increment with OpenMP
+  # So we store indexing/edge case data in tiles
+  jr_num_nr_tiles*: int
   allocated_mem: pointer # TODO Save on cache line, use an aligned allocator to not track this
 
 proc `=destroy`[T](tile: var Tile[T]) =
@@ -273,3 +276,7 @@ proc newTiles*(
     # This help for prefetching next page in the TLB
   result.a{.restrict.} = assume_aligned align_raw_data(T, result.allocated_mem)
   result.b{.restrict.} = result.a + bufA_size # TODO: align as well?
+
+  # Workaround for Nim OpenMP for loop not supporting non-unit increment
+  # we don't partition N so N = NC
+  result.jr_num_nr_tiles = (N+nr-1) div nr
