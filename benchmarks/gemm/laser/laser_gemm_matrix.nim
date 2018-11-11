@@ -48,12 +48,12 @@ template at*[T](view: MatrixView[T], offset: Natural): T =
 
 template `[]`*[T](view: MatrixView[T], row, col: Natural): T =
   ## Access like a 2D matrix
-  assert row < view.nrows
-  assert col < view.ncols
+  # assert row < view.nrows
+  # assert col < view.ncols
   view.buffer[row * view.rowStride + col * view.colStride]
 
 template `[]=`*[T](view: MatrixView[T], row, col: Natural, value: T) =
   ## Access like a 2D matrix
-  assert row < view.nrows
-  assert col < view.ncols
+  # assert row < view.nrows
+  # assert col < view.ncols
   view.buffer[row * view.rowStride + col * view.colStride] = value

@@ -42,7 +42,7 @@ proc pack_mr_kc[T; ukernel: static MicroKernel](
 proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
       kc: int,
-      A: var MatrixView[T]) =
+      A: MatrixView[T]) =
   ## Packs panel [mc, kc] into buffer Ã (size ~half-L2 cache)
   ## Pads if needed
   ## Buffer uses Z-ordering so that the ukernel can access contiguous
@@ -51,27 +51,40 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
   ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
   ##     and it's the hidden pointer that will be moved :/.
-
-  # Copy panels of A into the mc*kc buffer
-  # Copy uses a tile of dimension mr*kc
   const MR = ukernel.extract_mr
+  let
+    mb = A.nrows div MR
+    mr = A.nrows mod MR
 
-  while MR <= A.nrows:
-    pack_mr_kc[T, ukernel](buffer, kc, A)
-    buffer += kc*MR
-    A.incRow(MR)
+  var A = A
+  echo "MR: ", MR
+  echo "A[3, 3]: ": A[3,  3]
 
-  # Process the tail
-  if A.nrows != 0:
-    let mr = A.nrows
-    for j in 0 ..< kc:
-      for i in 0 ..< mr:
-        buffer[i] = A[i, 0]
-      for i in mr ..< MR:
-        # Padding
-        buffer[i] = 0.T
+  for i in countup(0, A.nrows-1, MR):
+    for k in 0 ..< kc:
+      for ii in 0 ..< MR:
+        buffer[ii] = A[i*MR+ii, k]
       buffer += MR
-      A.incCol()
+    buffer += kc*MR
+
+  echo "mr: ", mr
+  echo "A[0,  0]: ": A[0,  0]
+  echo "A[0,  1]: ": A[0,  1]
+  echo "A[0,  2]: ": A[0,  2]
+  echo "A[0, -1]: ": A[0, -1]
+  echo "A[0, -2]: ": A[0, -2]
+  echo "A[0, -3]: ": A[0, -3]
+  echo "A[0, -4]: ": A[0, -4]
+
+  echo "A[A.nrows-mr, 0]: ": A[A.nrows-mr, 0]
+  echo "mr: ", mr
+  if mr > 0:
+    for i in A.nrows-mr ..< A.nrows+2:
+      buffer[i] = A[i, 0]
+      echo "buffer i: ", buffer[i]
+    for i in A.nrows ..< A.nrows + MR:
+      buffer[i] = 0.T
+    buffer += MR
 
 proc pack_kc_nr[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
@@ -110,13 +123,16 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
   # Copy uses a tile of dimension kc*nr
   const NR = ukernel.extract_nr
 
-  while NR <= B.ncols:
-    pack_kc_nr[T, ukernel](buffer, kc, B)
+
+  for j in countup(0, B.ncols-1, NR):
+    for k in 0 ..< kc:
+      for jj in 0 ..< NR:
+        buffer[jj] = B[k, j*NR+jj]
+      buffer += NR
     buffer += kc*NR
-    B.incCol(NR)
 
   # Process the tail
-  if B.ncols != 0:
+  if B.ncols > 0:
     let nr = B.ncols
     for i in 0 ..< kc:
       for j in 0 ..< nr:
