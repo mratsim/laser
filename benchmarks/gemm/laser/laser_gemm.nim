@@ -85,8 +85,8 @@ proc gebp_mkernel[T](
   # #####################################
 
 proc gemm_impl[T](
-      alpha: T, vA: MatrixView, vB: MatrixView,
-      beta: T, vC: MatrixView,
+      alpha: T, vA: MatrixView[T], vB: MatrixView[T],
+      beta: T, vC: MatrixView[T],
       tiles: Tile[T],
       ukernel: static MicroKernel
     ) =
@@ -170,8 +170,8 @@ proc gemm_strided*[T: SomeNumber](
     #   - panel B: kc*nc L3 cache
 
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
-    template dispatch(cpu_features: CPUFeatureX86){.dirty.} =
-      const ukernel = x86_ukernel(T, cpu_features)
+    template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
+      const ukernel = cpu_features.x86_ukernel(T)
       let tiles = ukernel.newTiles(T, M, N, K)
       gemm_impl(
         alpha, vA, vB,

@@ -8,6 +8,18 @@ import
   ./laser_gemm_utils,
   ./laser_gemm_tiling
 
+#############################################
+# Workaround "undeclared identifier mr or nr"
+# for some reason the compiler cannot access fields in
+# the static MicroKernel. And I cannot reproduce in a small test case :/
+import macros
+macro extract_mr(ukernel: static MicroKernel): untyped =
+  let mr = ukernel.mr
+  result = newLit mr
+macro extract_nr(ukernel: static MicroKernel): untyped =
+  let mr = ukernel.mr
+  result = newLit mr
+
 # ##############
 #
 # Packing A
@@ -23,7 +35,7 @@ proc pack_mr_kc[T](
   ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
   ##     and it's the hidden pointer that will be moved :/.
-  const MR = ukernel.mr
+  const MR = ukernel.extract_mr
 
   for j in 0 ..< kc:
     for i in `||`(0, MR-1, "simd"): # TODO can use _mm_i32gather_ps on AVX
@@ -46,7 +58,7 @@ proc pack_A_mc_kc*[T](
 
   # Copy panels of A into the mc*kc buffer
   # Copy uses a tile of dimension kc*MR
-  const MR = ukernel.mr
+  const MR = ukernel.extract_mr
 
   var mr = MR
   doWhile 0 < A.nrows:
@@ -77,7 +89,7 @@ proc pack_kc_nr[T](
   ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
   ##     and it's the hidden pointer that will be moved :/.
-  const NR = ukernel.nr
+  const NR = ukernel.extract_nr
 
   for i in 0 ..< kc:
     for j in `||`(0, NR-1, "simd"):
@@ -94,7 +106,7 @@ proc pack_B_kc_nc*[T](
   ## Buffer uses Z-ordering so that the ukernel can access contiguous
   ## chunks of memory for the dot product
 
-  const NR = ukernel.nr
+  const NR = ukernel.extract_nr
 
   var nr = NR
   doWhile 0 < B.ncols:

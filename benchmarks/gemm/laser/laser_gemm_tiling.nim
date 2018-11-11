@@ -66,10 +66,9 @@ type
   MicroKernel* = object
     mr*, nr*: int
     vec_size*: int
-    when defined(amd64) or defined(i386):
-      cpu_simd*: CPUFeatureX86
+    cpu_simd*: CPUFeatureX86
 
-    # TODO: store the Type as generic - pending upstream
+    # TODO: ARM support with a when arm ...
     #   - https://github.com/nim-lang/Nim/issues/9679
     #   - https://github.com/nim-lang/Nim/issues/9678
 
@@ -115,7 +114,7 @@ const X86_regs: X86_FeatureMap = [
 
 const PageSize* = 512
 
-func x86_ukernel*[POD: SomeNumber](T: type POD, cpu: static CPUFeatureX86): MicroKernel {.inline.}=
+func x86_ukernel*(cpu: static CPUFeatureX86, T: typedesc): MicroKernel {.inline.}=
   when T is SomeFloat:
     result.vecsize =  X86_vecsize_float[cpu]
   else:
@@ -204,7 +203,7 @@ func partition(dim, max_chunk_size, tile_dim: Positive): Positive =
 
 proc newTiles*(
         ukernel: static MicroKernel,
-        T: type,
+        T: typedesc,
         M, N, K: Natural,
         ): Tile[T] =
   # Goto paper [1] section 6.3: choosing kc
