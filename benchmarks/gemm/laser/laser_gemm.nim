@@ -8,15 +8,26 @@ import
   ./laser_gemm_tiling, ./laser_gemm_matrix, ./laser_gemm_utils,
   ./laser_gemm_packing, ./laser_gemm_ukernel_generic
 
-# TODO: vzeroupper?
+withCompilerOptimHints()
 
-proc gemm_mkernel[T](
+# Terminology
+#   - M, Matrix: Both dimension are large or unknown
+#   - P, Panel: one of the dimension is small
+#   - B, Block: both dimension are small
+#
+#   - GEMM: GEneralized Matrix-Matrix multiplication
+#   - GEPP: GEneralized Panel-Panel multiplication
+#   - GEBP: Generalized Block-Panel multiplication
+#   ...
+
+proc gebp_mkernel[T](
       alpha, beta: T,
-      vC: MatrixView[T],
+      mcncC: MatrixView[T],
       tiles: Tile[T],
       ukernel: static MicroKernel
     ) =
-  ## Macro kernel around a mr * nr tile of C
+  ## Macro kernel, multiply:
+  ##  - a block A[mc, kc] * panel B[kc, N]
 
   # Since nr is small this the the good place to parallelize
   # See: Anatomy of High-Performance Many-Threaded Matrix Multiplication
@@ -29,40 +40,49 @@ proc gemm_mkernel[T](
   # Nim doesn't support arbitrary increment with OpenMP
   # So we store indexing/edge case data in tiles
 
-  const mr = ukernel.mr
+  const MR = ukernel.mr
+  const NR = ukernel.nr
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  var tileC = vC
-  var nr = ukernel.nr
+  var nr = NR
+  var jr_mcncC = mcncC
   for jrb in 0||(tiles.jr_num_nr_tiles - 1):
     if jrb == tiles.jr_num_nr_tiles - 1: # last iteration
-      nr = tileC.ncols
+      nr = jr_mcncC.ncols
 
+    var ir_mcnrC = jr_mcncC.sliceCols(nr)          # C[ic:ic+mc, jc+jr:jc+jr+nr]
     # ###################################
     # 5. for ir = 0,...,m−1 in steps of mr
-    doWhile 0 < tileC.nrows:
+    var mr = MR
+    doWhile 0 < ir_mcnrC.nrows:
+      if ir_mcnrC.nrows < MR: # last iteration
+        mr = ir_mcnrC.nrows
+
+      var mrnrC = ir_mcnrC.sliceRows(mr)           # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
+
       # TODO save addr of next panel of A for prefetch
       # and if last iter, save addr of next panel of B
+      var AB{.align_variable.}: array[MR, array[NR, T]]
+      let AB = AB[0][0].addr.toMatrixView(MR, NR, NR, 1)
 
-      if nr <= tileC.nrows and mr <= tileC.ncols:
-        # General case
-        gemm_ukernel_generic(
-          alpha, beta, tileC, tiles, ukernel
+      gemm_ukernel_generic(AB, tiles, ukernel)     # GEBB microkernel + epilogue
+      if nr == NR and mr == MR:                    #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
+        # General case                             #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+        gemm_ukernel_epilogue(                     #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+          alpha, AB, beta, mrnrC                   #    βC[ic:ic+mc, jc:jc+nc]
         )
       else:
         # Matrix edges
-        var bufC{.align_variable.}: array[mr, array[nr, T]]
-        let pbufC = bufC[0][0].addr.toMatrixView(mr, nr, nr, 1)
-
-        gemm_ukernel_generic(
-          alpha, beta, pbufC, tiles, ukernel
+        gemm_ukernel_edge_epilogue(
+          alpha, AB, beta, mrnrC,
+          mr, nr
         )
 
-
-      tileC.incRow(nr)
+      ir_mcnrC.incRow(mr)
     # ###################################
-    tileC.incCol(mr)
+    jr_mcncC.incCol(nr)
+  # #####################################
 
 proc gemm_impl[T](
       alpha: T, vA: MatrixView, vB: MatrixView,
@@ -79,40 +99,47 @@ proc gemm_impl[T](
   #     (But that makes edge cases harder)
   #   - Reducing register pressure. We stress registers a lot, we could
 
-  var incB: int    # stride B, deal with edge cases
-  if tiles.mc < vA.nrows:
-    incB = tiles.kc
-
   # ##################################################################
-  # 1. for jc = 0,...,n−1 in steps of nc   # not partitioned currently
+  # 1. for jc = 0,...,n−1 in steps of nc
+  # not partitioned currently nc = N
+  let jc_kncB = vB                                 # B[0:K, jc:jc+nc]
+  let jc_mncC = vC                                 # C[0:M, jc:jc+nc]
   # ######################################
   # 2.   for pc = 0,...,k−1 in steps of kc
   var kc = tiles.kc
-  doWhile 0 < vA.ncols:
-    if vA.ncols < kc: # last iteration
-      kc = vA.ncols
+  var pc_mkA = vA                                  # A[0:M, 0:K]
+  doWhile 0 < pc_mkA.ncols:
+    if pc_mkA.ncols < kc: # last iteration
+      kc = pc_mkA.ncols
 
-    var pc_a{.restrict.} = vA.sliceCol(kc) # vA[0:M, 0:kc]
-    var pc_b{.restrict.} = vB
-    var pc_c{.restrict.} = vC
-
-    let bufB{.restrict.} = tile.b
-    pack_B_kc_nc(bufB, kc, ukernel, pc_b)
+    var pc_kcncB = jc_kncB.sliceRows(kc)           # B[pc:pc+kc, jc:jc+nc]
+    let bufB{.restrict.} = tile.b                  # panel [kc, nc] (nc is large or unknown)
+    pack_B_kc_nc(bufB, kc, ukernel, pc_kcncB)      # mutate bufB and pc_kcncB
 
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
     var mc = tiles.mc
-    doWhile 0 < pc_a.nrows:
-      if pc_a.nrows < mc: # last iteration
-        mc = pc_a.nrows
+    var ic_mkcA = pc_mkcA.sliceCols(kc)            # A[0:M, pc:pc+kc]
+    doWhile 0 < ic_mkcA.nrows:
+      if ic_mkcA.nrows < mc: # last iteration
+        mc = ic_mkcA.nrows
 
-      let bufA{.restrict.} = assume_aligned tile.a
-      pack_A_mc_kc(bufA, kc, ukernel, pc_a)
+      var jr_mckcA = ic_mkcA.sliceRows(mc)         # A[ic:ic+mc, pc:pc+kc]
+      let bufA{.restrict.} = assume_aligned tile.a # block [mc, kc]
+      pack_A_mc_kc(bufA, kc, ukernel, jr_mckcA)    # mutate bufA and jr_mckcA
 
+      let jr_mcncC = jc_mncC.sliceRows(mc)         # C[ic:ic+mc, jc:jc+nc]
+      gebp_mkernel(                                # GEBP macrokernel:
+          alpha, beta, jr_mcncC,                   #   C[ic:ic+mc, jc:jc+nc] =
+          tiles, ukernel                           #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
+        )                                          #    βC[ic:ic+mc, jc:jc+nc]
 
-
-
-    # increment stride
+      ic_mncC.incRow(mc)
+      ic_mkcA.incRow(mc)
+    # ####################################
+    pc_kncB.incRow(kc)
+    pc_mkA.incCol(kc)
+  # ######################################
 
 proc gemm_strided*[T: SomeNumber](
       M, N, K: int,
@@ -137,9 +164,9 @@ proc gemm_strided*[T: SomeNumber](
 
     # Create a view to abstract deling with strides
     # and passing those in each proc
-    var vA = A.toMatrixView(M, K, incRowA, incColA)
-    var vB = B.toMatrixView(K, N, incRowB, incColB)
-    var vC = C.toMatrixView(M, N, incRowC, incColC)
+    let vA = A.toMatrixView(M, K, incRowA, incColA)
+    let vB = B.toMatrixView(K, N, incRowB, incColB)
+    let vC = C.toMatrixView(M, N, incRowC, incColC)
 
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
     if cpuinfo_has_x86_avx512f(): x86_ukernel(T, x86_AVX512)
