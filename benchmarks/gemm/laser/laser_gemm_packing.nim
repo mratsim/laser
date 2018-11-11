@@ -30,10 +30,13 @@ proc pack_mr_kc[T; ukernel: static MicroKernel](
   ##     and it's the hidden pointer that will be moved :/.
   const MR = ukernel.extract_mr
 
-  for j in 0 ..< kc:
+  assert A.ncols == kc
+  while true:
     for i in `||`(0, MR-1, "simd"): # TODO can use _mm_i32gather_ps on AVX
       buffer[i] = A[i, 0]
     buffer += MR
+    if 0 < A.ncols:
+      break
     A.incCol()
 
 proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
@@ -50,13 +53,13 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
   ##     and it's the hidden pointer that will be moved :/.
 
   # Copy panels of A into the mc*kc buffer
-  # Copy uses a tile of dimension kc*MR
+  # Copy uses a tile of dimension mr*kc
   const MR = ukernel.extract_mr
 
   while MR <= A.nrows:
     pack_mr_kc[T, ukernel](buffer, kc, A)
     buffer += kc*MR
-    A.incCol(MR)
+    A.incRow(MR)
 
   # Process the tail
   if A.nrows != 0:
@@ -81,10 +84,13 @@ proc pack_kc_nr[T; ukernel: static MicroKernel](
   ##     and it's the hidden pointer that will be moved :/.
   const NR = ukernel.extract_nr
 
-  for i in 0 ..< kc:
+  assert B.nrows == kc
+  while true:
     for j in `||`(0, NR-1, "simd"):
       buffer[j] = B[0, j]
     buffer += NR
+    if 0 < B.nrows:
+      break
     B.incRow()
 
 proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
@@ -96,6 +102,12 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
   ## Buffer uses Z-ordering so that the ukernel can access contiguous
   ## chunks of memory for the dot product
 
+  ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
+  ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
+  ##     and it's the hidden pointer that will be moved :/.
+
+  # Copy panels of B into the kc*nc buffer
+  # Copy uses a tile of dimension kc*nr
   const NR = ukernel.extract_nr
 
   while NR <= B.ncols:
