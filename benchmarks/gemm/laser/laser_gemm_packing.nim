@@ -37,29 +37,33 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
   ## Buffer uses Z-ordering so that the ukernel can access contiguous
   ## chunks of memory for the dot product
 
-  ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
-  ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
-  ##     and it's the hidden pointer that will be moved :/.
-  const MR = ukernel.extract_mr
-  let mblock = A.nrows div MR
-  let tail = A.nrows mod MR
+  const MR = ukernel.extract_mr()
+  let unroll_stop = A.nrows.round_step_down(MR)
+  {.emit:"""
+      #pragma omp parallel for
+      for (int i = 0; i < `unroll_stop`; i+=`MR`)
+        for (int k = 0; k < `kc`; k++)
+          // #pragma omp simd // Not used as MR is not of vector size
+          for (int ii = i; ii < i+`MR`; ii++)
+            `buffer`[k*`MR` + ii] = (*`A`).buffer[ii*(*`A`).rowStride + k*(*`A`).colStride];
+  """.}
 
-  for i in 0 ..< mblock:
-    let offset = i * MR
+  let remainder = A.nrows - unroll_stop
+  if remainder > 0:
+    let offBuf = buffer + kc*unroll_stop
     for k in 0 ..< kc:
-      for ii in 0 ..< MR:
-        buffer[0] = A[ii + offset, k]
-        buffer += 1
+      for i in 0 ..< remainder:
+        offBuf[k*MR + i] = A[unroll_stop+i, k]
+      for i in remainder ..< MR:
+        # Pad with 0 if packing over the edge
+        offBuf[k*MR + i] = 0.T
 
-  if tail > 0:
-    let offset = mblock * MR
-    for k in 0 ..< kc:
-      for i in 0 ..< A.nrows:
-        buffer[i] = A[i + offset, k]
-      for i in A.nrows ..< MR:
-        buffer[i] = 0
-      buffer += 1
-
+  block:
+    var bufA: seq[T]
+    for i in 0 ..< A.nrows*kc:
+      bufA.add buffer[i]
+    echo "A buffer: ", bufA
+    echo "###############"
 
 # ##############
 #
@@ -76,32 +80,30 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
   ## Buffer uses Z-ordering so that the ukernel can access contiguous
   ## chunks of memory for the dot product
 
-  ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
-  ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
-  ##     and it's the hidden pointer that will be moved :/.
+  const NR = ukernel.extract_nr()
+  let unroll_stop = B.ncols.round_step_down(NR)
+  {.emit:"""
+      #pragma omp parallel for
+      for (int j = 0; j < `unroll_stop`; j+=`NR`)
+        for (int k = 0; k < `kc`; k++)
+          #pragma omp simd // NR is always of vector size
+          for (int jj = j; jj < `NR`+j; jj++)
+            `buffer`[k*`NR`+jj] = (*`B`).buffer[k*(*`B`).rowStride + jj*(*`B`).colStride];
+  """.}
 
-  # Copy panels of B into the kc*nc buffer
-  # Copy uses a tile of dimension kc*nr
-  const NR = ukernel.extract_nr
-  let nblock = B.ncols div NR
-  let tail = B.ncols mod NR
-  let packedB{.restrict.} = buffer
-
-  assert kc == B.nrows # TODO remove kc param
-
-  # TODO: packing B can be parallel. N/NC is large.
-  for j in 0 ..< nblock:
-    let offset = j * NR
+  let remainder = B.ncols - unroll_stop
+  if remainder > 0:
+    let offBuf = buffer + kc*unroll_stop
     for k in 0 ..< kc:
-      for jj in 0 ..< NR:
-        packedB[0] = B[k, jj+offset]
-        packedB += 1
+      for j in 0 ..< remainder:
+        offBuf[j*NR + k] = B[kc, unroll_stop+j]
+      for j in remainder ..< NR:
+        # Pad with 0 if packing over the edge
+        offBuf[j*NR + k] = 0.T
 
-  if tail > 0:
-    let offset = nblock * NR
-    for k in 0 ..< kc:
-      for j in 0 ..< B.ncols:
-        packedB[j] = B[k, j+offset]
-      for j in B.ncols ..< NR:
-        packedB[j] = 0
-      packedB += 1
+  block:
+    var bufB: seq[T]
+    for i in 0 ..< B.ncols*kc:
+      bufB.add buffer[i]
+    echo "B buffer: ", bufB
+    echo "###############"

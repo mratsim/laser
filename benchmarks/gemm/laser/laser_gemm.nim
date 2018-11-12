@@ -72,6 +72,10 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
         for i in 0 ..< tiles.kc*nc:
           bufB.add tiles.b[i]
         echo "B buffer: ", bufB
+        var tileC: seq[T]
+        for i in 0 ..< tiles.mc*nc:
+          tileC.add mrnrC.at(i)
+        echo "tileC: ", tileC
         echo "###############"
 
       gemm_ukernel_generic(                        # GEBB microkernel + epilogue
@@ -86,12 +90,14 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
       if nr == NR and mr == MR:
         # General case
         gemm_ukernel_epilogue(
-          alpha, AB, beta, mrnrC
+          alpha, AB, beta,
+          mrnrC.stride(ir, jr)
         )
       else:
         # Matrix edges
         gemm_ukernel_edge_epilogue(
-          alpha, AB, beta, mrnrC,
+          alpha, AB, beta,
+          mrnrC.stride(ir, jr),
           mr, nr
         )
 
@@ -132,6 +138,10 @@ proc gemm_impl[T; ukernel: static MicroKernel](
   var pc_mkA = vA                                     # A[0:M, 0:K]
   for pc in countup(0, K-1, tiles.kc):
     let kc = min(K-pc, tiles.kc) # Deal with edges
+
+    # First time writing to C, we scale it, otherwise accumulate
+    let beta = if pc == 0: beta else: 1.T
+
     let pc_kcncB = jc_kncB.sliceRows(kc)              # B[pc:pc+kc, jc:jc+nc]
     pack_B_kc_nc[T, ukernel](tiles.b, kc, pc_kcncB)   # pack panel [kc, nc] (nc is large or unknown)
 
@@ -140,6 +150,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     var ic_mkcA = pc_mkA.sliceCols(kc)                # A[0:M, pc:pc+kc]
     for ic in countup(0, M-1, tiles.mc):
       let mc = min(M-ic, tiles.mc)
+
       let jr_mckcA = ic_mkcA.sliceRows(mc)            # A[ic:ic+mc, pc:pc+kc]
       pack_A_mc_kc[T, ukernel](tiles.a, kc, jr_mckcA) # pack block [mc, kc]
 
@@ -211,31 +222,31 @@ proc gemm_strided*[T: SomeNumber](
 # ########################################################################################
 when isMainModule:
   # Tests
-  block:
-    let a = [[1.0, 2, 3],
-             [1.0, 1, 1],
-             [1.0, 1, 1]]
+  # block:
+  #   let a = [[1.0, 2, 3],
+  #            [1.0, 1, 1],
+  #            [1.0, 1, 1]]
 
-    let b = [[1.0, 1],
-             [1.0, 1],
-             [1.0, 1]]
+  #   let b = [[1.0, 1],
+  #            [1.0, 1],
+  #            [1.0, 1]]
 
-    let ab = [[6.0, 6],
-              [3.0, 3],
-              [3.0, 3]]
+  #   let ab = [[6.0, 6],
+  #             [3.0, 3],
+  #             [3.0, 3]]
 
-    var res_ab: array[3, array[2, float]]
-    gemm_strided(
-      3, 2, 3,
-      1.0,  a[0][0].unsafeAddr, 3, 1,
-            b[0][0].unsafeAddr, 2, 1,
-      0.0,  res_ab[0][0].addr,  2, 1
-      )
+  #   var res_ab: array[3, array[2, float]]
+  #   gemm_strided(
+  #     3, 2, 3,
+  #     1.0,  a[0][0].unsafeAddr, 3, 1,
+  #           b[0][0].unsafeAddr, 2, 1,
+  #     0.0,  res_ab[0][0].addr,  2, 1
+  #     )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+  #   echo "expected: ", ab
+  #   echo "result: ", res_ab
 
-    doAssert res_ab == ab
+  #   doAssert res_ab == ab
 
   block:
     let a = [[1.0, 2, 3],
@@ -287,30 +298,30 @@ when isMainModule:
 
     doAssert res_ab == ab
 
-  block:
-    # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
-    # (M x K) * (K x N) with M < N
-    let a = [[-2,-3,-1],
-             [ 3, 0, 4]]
-    let b = [[ 1, 5, 2,-1],
-             [-3, 0, 3, 4],
-             [ 6,-2, 7,-4]]
+  # block:
+  #   # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
+  #   # (M x K) * (K x N) with M < N
+  #   let a = [[-2,-3,-1],
+  #            [ 3, 0, 4]]
+  #   let b = [[ 1, 5, 2,-1],
+  #            [-3, 0, 3, 4],
+  #            [ 6,-2, 7,-4]]
 
-    let ab = [[ 1,-8,-20, -6],
-              [27, 7, 34,-19]]
+  #   let ab = [[ 1,-8,-20, -6],
+  #             [27, 7, 34,-19]]
 
-    var res_ab: array[2, array[4, int]]
-    gemm_strided(
-      2, 4, 3,
-      1,  a[0][0].unsafeAddr, 3, 1,
-          b[0][0].unsafeAddr, 4, 1,
-      0,  res_ab[0][0].addr,  4, 1
-      )
+  #   var res_ab: array[2, array[4, int]]
+  #   gemm_strided(
+  #     2, 4, 3,
+  #     1,  a[0][0].unsafeAddr, 3, 1,
+  #         b[0][0].unsafeAddr, 4, 1,
+  #     0,  res_ab[0][0].addr,  4, 1
+  #     )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+  #   echo "expected: ", ab
+  #   echo "result: ", res_ab
 
-    doAssert res_ab == ab
+  #   doAssert res_ab == ab
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication_;5;5;5;5?matrix1=[[%225%22,%226%22,%225%22,%228%22],[%228%22,%222%22,%228%22,%228%22],[%220%22,%225%22,%224%22,%220%22],[%224%22,%220%22,%225%22,%226%22],[%224%22,%225%22,%220%22,%223%22]]&matrix2=[[%225%22,%223%22,%226%22,%220%22],[%225%22,%222%22,%223%22,%223%22],[%228%22,%228%22,%222%22,%220%22],[%227%22,%227%22,%220%22,%220%22]]&operator=*

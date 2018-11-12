@@ -21,12 +21,12 @@ func toMatrixView*[T](data: ptr T, nrows, ncols: Positive, rowStride, colStride:
 
 func incRow*[T](view: var MatrixView[T], offset: Natural = 1) {.inline.} =
   # Need to dereference the hidden pointer for var
-  {.emit: "`(*view).buffer` += `(*view).rowStride` * `offset`;".}
+  {.emit: "(*`view`).buffer += (*`view`).rowStride * `offset`;".}
   dec view.nrows, offset
 
 func incCol*[T](view: var MatrixView[T], offset: Natural = 1) {.inline.} =
-    # Need to dereference the hidden pointer for var
-  {.emit: "`(*view).buffer` += `(*view).colStride` * `offset`;".}
+  # Need to dereference the hidden pointer for var
+  {.emit: "(*`view`).buffer += (*`view`).colStride * `offset`;".}
   dec view.ncols, offset
 
 func sliceRows*[T](view: MatrixView[T], size: Natural): MatrixView[T]{.inline.} =
@@ -57,3 +57,14 @@ template `[]=`*[T](view: MatrixView[T], row, col: Natural, value: T) =
   # assert row < view.nrows
   # assert col < view.ncols
   view.buffer[row * view.rowStride + col * view.colStride] = value
+
+func stride*[T](view: MatrixView[T], row, col: Natural): MatrixView[T]{.inline.}=
+  ## Returns a new view offset by the row and column stride
+  # assert row < view.nrows
+  # assert col < view.ncols
+  {. emit: "`result`.buffer = (*`view`).buffer + " &
+                 "`row`*(*`view`).rowStride + `col`*(*`view`).colStride;".}
+  result.nrows = view.nrows - row
+  result.ncols = view.ncols - col
+  result.rowStride = view.rowStride
+  result.colStride = view.colStride
