@@ -13,6 +13,15 @@ import
   ./laser_gemm_utils,
   ./laser_gemm_tiling
 
+# TODO - part of align_unroller
+func round_step_down(x: Natural, step: static Natural): int {.inline.} =
+  ## Round the input to the previous multiple of "step"
+  when (step and (step - 1)) == 0:
+    # Step is a power of 2. (If compiler cannot prove that x>0 it does not make the optim)
+    result = x and not(step - 1)
+  else:
+    result = x - x mod step
+
 # ##############
 #
 # Packing A
@@ -32,25 +41,25 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
   ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
   ##     and it's the hidden pointer that will be moved :/.
   const MR = ukernel.extract_mr
-  let
-    mb = A.nrows div MR
-    mr = A.nrows mod MR
+  let mblock = A.nrows div MR
+  let tail = A.nrows mod MR
 
-  var A = A
-
-  for i in countup(0, A.nrows-1, MR):
+  for i in 0 ..< mblock:
+    let offset = i * MR
     for k in 0 ..< kc:
       for ii in 0 ..< MR:
-        buffer[ii] = A[i*MR+ii, k]
-      buffer += MR
-    buffer += kc*MR
+        buffer[0] = A[ii + offset, k]
+        buffer += 1
 
-  if mr > 0:
-    for i in A.nrows-mr ..< A.nrows+2:
-      buffer[i] = A[i, 0]
-    for i in A.nrows ..< A.nrows + MR:
-      buffer[i] = 0.T
-    buffer += MR
+  if tail > 0:
+    let offset = mblock * MR
+    for k in 0 ..< kc:
+      for i in 0 ..< A.nrows:
+        buffer[i] = A[i + offset, k]
+      for i in A.nrows ..< MR:
+        buffer[i] = 0
+      buffer += 1
+
 
 # ##############
 #
@@ -61,7 +70,7 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
 proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
       kc: int,
-      B: var MatrixView[T]) =
+      B: MatrixView[T]) =
   ## Packs panel [kc, nc] for ~B (half-L1 cache)
   ## Pads if needed
   ## Buffer uses Z-ordering so that the ukernel can access contiguous
@@ -74,23 +83,25 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
   # Copy panels of B into the kc*nc buffer
   # Copy uses a tile of dimension kc*nr
   const NR = ukernel.extract_nr
+  let nblock = B.ncols div NR
+  let tail = B.ncols mod NR
+  let packedB{.restrict.} = buffer
 
+  assert kc == B.nrows # TODO remove kc param
 
-  for j in countup(0, B.ncols-1, NR):
+  # TODO: packing B can be parallel. N/NC is large.
+  for j in 0 ..< nblock:
+    let offset = j * NR
     for k in 0 ..< kc:
       for jj in 0 ..< NR:
-        buffer[jj] = B[k, j*NR+jj]
-      buffer += NR
-    buffer += kc*NR
+        packedB[0] = B[k, jj+offset]
+        packedB += 1
 
-  # Process the tail
-  if B.ncols > 0:
-    let nr = B.ncols
-    for i in 0 ..< kc:
-      for j in 0 ..< nr:
-        buffer[j] = B[0, j]
-      for j in nr ..< NR:
-        # Padding
-        buffer[j] = 0.T
-      buffer += NR
-      B.incRow()
+  if tail > 0:
+    let offset = nblock * NR
+    for k in 0 ..< kc:
+      for j in 0 ..< B.ncols:
+        packedB[j] = B[k, j+offset]
+      for j in B.ncols ..< NR:
+        packedB[j] = 0
+      packedB += 1

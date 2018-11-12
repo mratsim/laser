@@ -44,7 +44,7 @@ func sliceCols*[T](view: MatrixView[T], size: Natural): MatrixView[T]{.inline.} 
 template at*[T](view: MatrixView[T], offset: Natural): T =
   ## Access a specific offset (like a linear memory range)
   assert offset < (view.nrows * view.rowStride) + (view.ncols * view.colStride)
-  view.buffer[idx]
+  view.buffer[offset]
 
 template `[]`*[T](view: MatrixView[T], row, col: Natural): T =
   ## Access like a 2D matrix

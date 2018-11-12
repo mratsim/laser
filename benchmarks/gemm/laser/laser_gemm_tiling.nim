@@ -293,6 +293,9 @@ proc newTiles*(
   let bufA_size = T.sizeof * result.kc * result.mc
   let bufB_size = T.sizeof * result.kc * nr
 
+  # Note, if we parallelize on ic loop
+  # Each thread will access it's own part of A
+  # and so the buffer needs to be multiplied by the number of threads.
   result.allocated_mem = allocShared0(bufA_size + bufB_size + PageSize)
     # PageSize has enough space for 64 bytes alignement
     # This help for prefetching next page in the TLB

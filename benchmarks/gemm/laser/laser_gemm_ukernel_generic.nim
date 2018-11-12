@@ -25,15 +25,16 @@ macro unroll_ukernel[MR, NR: static int, T](
         `AB`[`i`][`j`] += `A`[`i`] * `B`[`j`]
 
 func gemm_ukernel_generic*[T; MR, NR: static int](
+      kc: int,
       AB: var array[MR, array[NR, T]],
-      tiles: Tile[T]
+      packedA, packedB: ptr UncheckedArray[T]
     ) =
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.addr)
-  var  A {.restrict.} = assume_aligned tiles.a # [mr, kc]
-  var  B {.restrict.} = tiles.b                # [kc, nr]
+  var  A {.restrict.} = packedA # [mr, kc]
+  var  B {.restrict.} = packedB # [kc, nr]
 
-  for k in 0 ..< tiles.kc:
+  for k in 0 ..< kc:
     prefetch(B + NR    , Read) # TODO: temporal locality?
     prefetch(B + NR + 8, Read) # AVX SIMD with is 8 and we issue 2 of them
 
