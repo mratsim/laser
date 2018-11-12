@@ -19,26 +19,6 @@ import
 #
 # ##############
 
-proc pack_mr_kc[T; ukernel: static MicroKernel](
-      buffer: ptr UncheckedArray[T],
-      kc: int,
-      A: var MatrixView[T]) {.sideeffect.}=
-  ## Packs micro-panel [mr, kc] for buffer Ã[mc, kc] (half-L2 cache)
-
-  ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
-  ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
-  ##     and it's the hidden pointer that will be moved :/.
-  const MR = ukernel.extract_mr
-
-  assert A.ncols == kc
-  while true:
-    for i in `||`(0, MR-1, "simd"): # TODO can use _mm_i32gather_ps on AVX
-      buffer[i] = A[i, 0]
-    buffer += MR
-    if 0 < A.ncols:
-      break
-    A.incCol()
-
 proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
       kc: int,
@@ -57,8 +37,6 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
     mr = A.nrows mod MR
 
   var A = A
-  echo "MR: ", MR
-  echo "A[3, 3]: ": A[3,  3]
 
   for i in countup(0, A.nrows-1, MR):
     for k in 0 ..< kc:
@@ -67,44 +45,18 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
       buffer += MR
     buffer += kc*MR
 
-  echo "mr: ", mr
-  echo "A[0,  0]: ": A[0,  0]
-  echo "A[0,  1]: ": A[0,  1]
-  echo "A[0,  2]: ": A[0,  2]
-  echo "A[0, -1]: ": A[0, -1]
-  echo "A[0, -2]: ": A[0, -2]
-  echo "A[0, -3]: ": A[0, -3]
-  echo "A[0, -4]: ": A[0, -4]
-
-  echo "A[A.nrows-mr, 0]: ": A[A.nrows-mr, 0]
-  echo "mr: ", mr
   if mr > 0:
     for i in A.nrows-mr ..< A.nrows+2:
       buffer[i] = A[i, 0]
-      echo "buffer i: ", buffer[i]
     for i in A.nrows ..< A.nrows + MR:
       buffer[i] = 0.T
     buffer += MR
 
-proc pack_kc_nr[T; ukernel: static MicroKernel](
-      buffer: ptr UncheckedArray[T],
-      kc: int,
-      B: var MatrixView[T]) {.sideeffect.}=
-  ## Packs micro-panel kc*nr for ~B (half-L1 cache)
-
-  ## ⚠ Warning, the buffer pointer will be moved even though it's not a var.
-  ##     Unfortunately if it's made into a var, Nim will use a hidden pointer
-  ##     and it's the hidden pointer that will be moved :/.
-  const NR = ukernel.extract_nr
-
-  assert B.nrows == kc
-  while true:
-    for j in `||`(0, NR-1, "simd"):
-      buffer[j] = B[0, j]
-    buffer += NR
-    if 0 < B.nrows:
-      break
-    B.incRow()
+# ##############
+#
+# Packing B
+#
+# ##############
 
 proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
       buffer: ptr UncheckedArray[T],
