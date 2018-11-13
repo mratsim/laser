@@ -95,7 +95,7 @@ proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int) =
       0'f32, output, 0, N, 1
     )
 
-proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) =
+proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) {.noinline.}=
   var output = newSeq[float32](out_size)
 
   let pa = a[0].unsafeAddr
@@ -167,9 +167,9 @@ when isMainModule:
     let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
 
-    benchOpenBLAS(a, b, nb_samples = 20)
+    # benchSimpleTiling(a, b, nb_samples = 20) # for some reason stalled with OpenMP
     benchArraymancerFallback(a, b, nb_samples = 20)
-    benchSimpleTiling(a, b, nb_samples = 20)
+    benchOpenBLAS(a, b, nb_samples = 20)
     benchLaserGEMM(a, b, nb_samples = 20)
 
 # Seems like my BLAS has false sharing issue

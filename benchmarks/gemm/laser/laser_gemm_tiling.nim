@@ -226,7 +226,7 @@ proc newTiles*(
   #   - Elements from Bj [kc, nr] must remain in L1 cache.
   #   - kc * nr should occupy less than half the L1 cache
   #     so that bufA and Caux do not evict element of Bj
-  #   - bufA [mc,kc] should occupy
+  #   - bufA [kc, mc] should occupy
   #     a considerable fraction of the L2 cache
   #   In our experience optimal choice is so that "kc" float64 occupy half a page
   #     -> a page is 4096 bytes = 512 float64 -> half a page = 256

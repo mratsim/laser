@@ -31,7 +31,7 @@ func gemm_ukernel_generic*[T; MR, NR: static int](
     ) =
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.addr)
-  var  A {.restrict.} = packedA # [mr, kc]
+  var  A {.restrict.} = packedA # [kc, mr]
   var  B {.restrict.} = packedB # [kc, nr]
 
   for k in 0 ..< kc:
@@ -64,28 +64,25 @@ proc gemm_ukernel_epilogue*[MR, NR: static int, T](
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.unsafeAddr)
 
+  # Beta always = 1 after the first pass on the current C micro-tile
+  # so even if beta = 1 we need to accumulate with `+=`
   if beta == 0.T:
-    if alpha == 1.T:                   # C = AB
-      for i in 0 ..< MR:
-        for j in `||`(0, NR-1, "simd"):
-          vC[i, j] = pAB[i][j]
-    else:                              # C = αAB
-      for i in 0 ..< MR:
-        for j in `||`(0, NR-1, "simd"):
-          vC[i, j] = alpha * pAB[i][j]
-  else:                                # C *= β
+    for i in 0 ..< MR:
+      for j in `||`(0, NR-1, "simd"):
+        vC[i, j] = 0.T
+  elif beta != 1.T:                  # C *= β
     for i in 0 ..< MR:
       for j in `||`(0, NR-1, "simd"):
         vC[i, j] *= beta
 
-    if alpha == 1.T:                   # C += AB
-      for i in 0 ..< MR:
-        for j in `||`(0, NR-1, "simd"):
-          vC[i, j] += pAB[i][j]
-    else:                              # C += αAB
-      for i in 0 ..< MR:
-        for j in `||`(0, NR-1, "simd"):
-          vC[i, j] += alpha * pAB[i][j]
+  if alpha == 1.T:                   # C += AB
+    for i in 0 ..< MR:
+      for j in `||`(0, NR-1, "simd"):
+        vC[i, j] += pAB[i][j]
+  else:                              # C += αAB
+    for i in 0 ..< MR:
+      for j in `||`(0, NR-1, "simd"):
+        vC[i, j] += alpha * pAB[i][j]
 
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well

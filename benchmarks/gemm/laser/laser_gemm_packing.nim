@@ -35,8 +35,9 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
       tiles: Tile[T],
       mc, kc: int,
       A: MatrixView[T]) =
-  ## Packs panel [mc, kc] into buffer Ã (size ~half-L2 cache)
+  ## Packs panel [kc, mc] into buffer Ã (size ~half-L2 cache)
   ## Pads if needed
+  ## Note that A is of shape [M, K] so it is transposed.
   ##
   ## Concretely the outer dimension of packed matrices
   ## is k so that C[i, j] = A[i, k] * B[k, j]
@@ -48,9 +49,8 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
       #pragma omp parallel for
       for (int i = 0; i < `unroll_stop`; i+=`MR`)
         for (int k = 0; k < `kc`; k++)
-          // #pragma omp simd // Not used as MR is not of vector size
-          for (int ii = i; ii < i+`MR`; ii++)
-            `buffer`[k*`MR` + ii] = `A`.buffer[ii * `A`.rowStride + k * `A`.colStride];
+          for (int ii = 0; ii < `MR`; ii++)
+            `buffer`[i*`kc`+k*`MR`+ii] = `A`.buffer[(i+ii)*`A`.rowStride + k*`A`.colStride];
   """.}
 
   let remainder = mc - unroll_stop
@@ -62,6 +62,17 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
       for i in remainder ..< MR:
         # Pad with 0 if packing over the edge
         offBuf[k*MR + i] = 0.T
+
+  block:
+    echo "[kc, mc]: [", kc, ", ", mc, "] = ", kc*mc
+    var mA: seq[T]
+    var bufA: seq[T]
+    for i in 0 ..< mc*kc:
+      mA.add A.buffer[i]
+      bufA.add buffer[i]
+    echo "A view: ", mA
+    echo "A buffer: ", bufA
+    echo "###############"
 
 # ##############
 #
@@ -83,21 +94,41 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
   const NR = ukernel.extract_nr()
   let unroll_stop = nc.round_step_down(NR)
 
+  # 1. Pack nc/nr matrices of size kc*nr
   {.emit:"""
       #pragma omp parallel for
       for (int j = 0; j < `unroll_stop`; j+=`NR`)
         for (int k = 0; k < `kc`; k++)
           // #pragma omp simd // NR is always of vector size - special case unit stride for SIMD
-          for (int jj = j; jj < `NR`+j; jj++)
-            `buffer`[k*`NR`+jj] = `B`.buffer[k * `B`.rowStride + jj * `B`.colStride];
+          for (int jj = 0; jj < `NR`; jj++)
+            `buffer`[j*`kc`+k*`NR`+jj] = `B`.buffer[k*`B`.rowStride + (j+jj)*`B`.colStride];
   """.}
 
+  # for j in countup(0, unroll_stop-1, NR):
+  #   for k in 0 ..< kc:
+  #     for jj in 0 ..< NR:
+  #       buffer[j*kc+k*NR+jj] = B[k, j+jj]
+
+  # 2. Process the tail
   let remainder = nc - unroll_stop
   if remainder > 0:
     let offBuf = buffer + kc*unroll_stop
     for k in 0 ..< kc:
       for j in 0 ..< remainder:
+        echo "B[", k, ", ", unroll_stop, "+", j, "] = ", B[k, unroll_stop+j]
+        echo "buffer[", k, "*", NR, "+", j,"] = ", k*NR + j
         offBuf[k*NR + j] = B[k, unroll_stop+j]
       for j in remainder ..< NR:
         # Pad with 0 if packing over the edge
         offBuf[k*NR + j] = 0.T
+
+  block:
+    echo "[kc, nc]: [", kc, ", ", nc, "] = ", kc*nc
+    var mB: seq[T]
+    var bufB: seq[T]
+    for i in 0 ..< kc*nc:
+      mB.add B.buffer[i]
+      bufB.add buffer[i]
+    echo "B view: ", mB
+    echo "B buffer: ", bufB
+    echo "###############"
