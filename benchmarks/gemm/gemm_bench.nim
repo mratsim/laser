@@ -50,9 +50,10 @@ import
   ./laser/laser_gemm
 
 const
-  M     =  224
-  K     =  16*3*20*3*3 # to make required ops similar to conv
-  N     =  224
+  M     =  1500
+  K     =  1500 # 16*3*20*3*3 # to make required ops similar to conv
+  N     =  1500
+  NbSamples = 1 # This might stresss the allocator when packing if the matrices are big
 
 const
   ashape: MatrixShape = (M, K)
@@ -167,10 +168,10 @@ when isMainModule:
     let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
 
-    # benchSimpleTiling(a, b, nb_samples = 20) # for some reason stalled with OpenMP
-    benchArraymancerFallback(a, b, nb_samples = 20)
-    benchOpenBLAS(a, b, nb_samples = 20)
-    benchLaserGEMM(a, b, nb_samples = 20)
+    # benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
+    # benchArraymancerFallback(a, b, NbSamples)
+    benchOpenBLAS(a, b, NbSamples)
+    benchLaserGEMM(a, b, NbSamples)
 
 # Seems like my BLAS has false sharing issue
 

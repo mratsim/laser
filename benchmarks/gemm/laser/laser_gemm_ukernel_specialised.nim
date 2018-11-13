@@ -25,6 +25,7 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
     vec_size = ukernel.extract_vecsize
     simd = ukernel.extract_cpu_simd
     NbElems = 8
+    NbVecs = NR div NbElems
 
   static:
     assert vecsize == 32
@@ -32,32 +33,27 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
     assert NR div 8 == 0 # Unrolling checks
     assert MR div 2 == 0
 
-  var AB{.align_variable.}: array[MR, array[NR div NbElems, m256]]
+  var AB{.align_variable.}: array[MR, array[NR, float32]]
+  # var AB{.align_variable.}: array[MR, m256]
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-  var mA: array[2, m256]
-  template A0 = mA[0]
-  template A1 = mA[1]
+  var mA, mB: m256
 
-  var mB: array[NR div NbElems, m256]
-
-  for i, bval in mB.mpairs:
-    bval = mm256_load_ps(B[i*NbElems].addr)
+  # TODO prefetch
+  # for k in 0 ..< kc:
+  #   for i in 0 ..< MR:
+  #     for j in 0 ..< NR:
+  #       AB[i][j] += A[k*MR+i] * B[k*NR+j]
 
   for k in 0 ..< kc:
-    # TODO prefetch
-    for i in countup(0, MR-1, 2):
-      let A0 = mm256_set1_ps(A[0])
-      let A1 = mm256_set1_ps((A+1)[0])
-      for j in 0 ..< NR div NbElems:
-        when simd == x86_AVX:
-          AB[i  ][j] = mm256_add_ps(mm256_mul_ps(A0, mB[j]), AB[i  ][j])
-          AB[i+1][j] = mm256_add_ps(mm256_mul_ps(A1, mB[j]), AB[i+1][j])
-        else:
-          AB[i  ][j] = mm256_fmadd_ps(A0, mB[j], AB[i  ][j])
-          AB[i+1][j] = mm256_fmadd_ps(A1, mB[j], AB[i+1][j])
-      A += MR
+    mB = mm256_load_ps(B[0].addr)
+    for i in 0 ..< MR:
+      mA = mm256_set1_ps(A[k*MR+i])
+      when simd == x86_AVX:
+        AB[i] = mm256_add_ps(mm256_mul_ps(mA, mB), AB[i])
+      else:
+        AB[i] = mm256_fmadd_ps(mA, mB, AB[i])
 
   gebb_ukernel_epilogue(
     alpha, cast[array[MR, array[NR, float32]]](AB),

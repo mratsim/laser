@@ -91,17 +91,6 @@ func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well
 
-macro unroll_ukernel[MR, NR: static int, T](
-      AB: array[MR, array[NR, T]],
-      A, B: ptr
-    ): untyped =
-
-  result = newStmtList()
-  for i in 0 .. MR - 1:
-    for j in 0 .. NR - 1:
-      result.add quote do:
-        `AB`[`i`][`j`] += `A`[`i`] * `B`[`j`]
-
 template ukernel_impl(){.dirty.} =
   const
     MR = ukernel.extract_mr()
@@ -113,12 +102,11 @@ template ukernel_impl(){.dirty.} =
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
+  # TODO prefetch
   for k in 0 ..< kc:
-    # TODO prefetch
-    unroll_ukernel(AB, A, B)   # 95% of GEMM time is here
-
-    A += MR
-    B += NR
+    for i in 0 ..< MR:
+      for j in `||`(0, NR-1, "simd"):
+        AB[i][j] += A[k*MR+i] * B[k*NR+j]
 
 proc gebb_ukernel_generic*[T; ukernel: static MicroKernel](
       kc: int,
