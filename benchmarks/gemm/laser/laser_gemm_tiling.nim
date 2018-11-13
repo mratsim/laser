@@ -132,7 +132,7 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
   # in the inner loop and untranspose in the epilogue
 
   ukernel.mr = X86_regs[cpu]
-  ukernel.nr = ukernel.vecsize div sizeof(T)
+  ukernel.nr = max(1, ukernel.vecsize div sizeof(T))
 
   when sizeof(int) == 8: # 64-bit - use 8/12 out of the 16 XMM/YMM registers
     ukernel.nr *= 2

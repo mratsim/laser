@@ -161,8 +161,7 @@ proc gemm_strided*[T: SomeNumber](
 
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
     template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
-      # const ukernel = cpu_features.x86_ukernel(T)
-      const ukernel = MicroKernel(mr: 3, nr: 3)
+      const ukernel = cpu_features.x86_ukernel(T)
       let tiles = ukernel.newTiles(T, M, N, K)
       gemm_impl[T, ukernel](
         M, N, K,
