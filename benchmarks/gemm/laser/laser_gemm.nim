@@ -55,29 +55,23 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
       # TODO save addr of next panel of A for prefetch
       # and if last iter, save addr of next panel of B
-      var AB{.align_variable.}: array[MR, array[NR, T]]
-
-      gebb_ukernel_generic(                        # GEBB microkernel + epilogue
-        kc,                                        #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
-        AB,                                        #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
-        tiles.a + ir*kc,                           #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
-        tiles.b + jr*kc                            #    βC[ic:ic+mc, jc:jc+nc]
-      )
-      # echo "AB: ", AB
 
       if nr == NR and mr == MR:
         # General case
-        gebb_ukernel_epilogue(                     # Epilogue: update C
-          alpha, AB, beta,
-          mcncC.stride(ir, jr)
-        )
+        gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
+                kc,                                  #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
+          alpha, tiles.a + ir*kc, tiles.b + jr*kc,   #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+          beta, mcncC.stride(ir, jr)                 #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+        )                                            #    βC[ic:ic+mc, jc:jc+nc]
+
       else:
         # Matrix edges
-        gebb_ukernel_edge_epilogue(                # Epilogue: update C on the edges
-          alpha, AB, beta,
-          mcncC.stride(ir, jr),
-          mr, nr
-        )
+        gebb_ukernel_edge[T, ukernel](               # GEBB microkernel + epilogue
+          mr, nr, kc,                                #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
+          alpha, tiles.a + ir*kc, tiles.b + jr*kc,   #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+          beta, mcncC.stride(ir, jr)                 #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+        )                                            #    βC[ic:ic+mc, jc:jc+nc]
+
     # ###################################
   # #####################################
 

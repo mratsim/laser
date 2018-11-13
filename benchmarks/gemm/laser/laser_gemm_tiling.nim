@@ -160,11 +160,14 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
 # the static MicroKernel.
 import macros
 macro extract_mr*(ukernel: static MicroKernel): untyped =
-  let mr = ukernel.mr
-  result = newLit mr
+  result = newLit ukernel.mr
 macro extract_nr*(ukernel: static MicroKernel): untyped =
-  let nr = ukernel.nr
-  result = newLit nr
+  result = newLit ukernel.nr
+macro extract_vecsize*(ukernel: static MicroKernel): untyped =
+  result = newLit ukernel.vecsize
+macro extract_cpu_simd*(ukernel: static MicroKernel): untyped =
+  let simd = ukernel.cpu_simd
+  result = quote do: CPUFeatureX86(`simd`)
 
 # ##########################################################################################
 

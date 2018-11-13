@@ -13,37 +13,6 @@ import
 # TODO: vzeroupper for AVX version.
 withCompilerOptimHints()
 
-macro unroll_ukernel[MR, NR: static int, T](
-      AB: ptr array[MR, array[NR, T]],
-      A, B: ptr
-    ): untyped =
-
-  result = newStmtList()
-  for i in 0 .. MR - 1:
-    for j in 0 .. NR - 1:
-      result.add quote do:
-        `AB`[`i`][`j`] += `A`[`i`] * `B`[`j`]
-
-func gebb_ukernel_generic*[T; MR, NR: static int](
-      kc: int,
-      AB: var array[MR, array[NR, T]],
-      packedA, packedB: ptr UncheckedArray[T]
-    ) =
-
-  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.addr)
-  var  A {.restrict.} = packedA # [kc, mr]
-  var  B {.restrict.} = packedB # [kc, nr]
-
-  for k in 0 ..< kc:
-    prefetch(B + NR    , Read) # TODO: temporal locality?
-    prefetch(B + NR + 8, Read) # AVX SIMD with is 8 and we issue 2 of them
-
-    # ⚠ Warning AB result is transposed
-    unroll_ukernel(pAB, A, B)   # 95% of GEMM time is here
-
-    A += static(MR) # Codegen bug, Nim doesn't transform to its value
-    B += static(NR) # This crashes the C compiled
-
 # ########################
 # Epilogue
 #
@@ -56,6 +25,7 @@ func gebb_ukernel_generic*[T; MR, NR: static int](
 #
 # TODO: Fused operations like relu/sigmoid/tanh
 #       should be done here as well
+
 
 proc gebb_ukernel_epilogue*[MR, NR: static int, T](
       alpha: T, AB: array[MR, array[NR, T]],
@@ -120,3 +90,50 @@ func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
 
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well
+
+macro unroll_ukernel[MR, NR: static int, T](
+      AB: array[MR, array[NR, T]],
+      A, B: ptr
+    ): untyped =
+
+  result = newStmtList()
+  for i in 0 .. MR - 1:
+    for j in 0 .. NR - 1:
+      result.add quote do:
+        `AB`[`i`][`j`] += `A`[`i`] * `B`[`j`]
+
+template ukernel_impl(){.dirty.} =
+  const
+    MR = ukernel.extract_mr()
+    NR = ukernel.extract_nr()
+    vec_size = ukernel.extract_vecsize
+    simd = ukernel.extract_cpu_simd
+
+  var AB{.align_variable.}: array[MR, array[NR, T]]
+  var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
+  var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
+
+  for k in 0 ..< kc:
+    # TODO prefetch
+
+    # ⚠ Warning AB result is transposed
+    unroll_ukernel(AB, A, B)   # 95% of GEMM time is here
+
+    A += MR
+    B += NR
+
+proc gebb_ukernel*[T; ukernel: static MicroKernel](
+      kc: int,
+      alpha: T, packedA, packedB: ptr UncheckedArray[T],
+      beta: T, vC: MatrixView[T]
+    ) =
+  ukernel_impl()
+  gebb_ukernel_epilogue(alpha, AB, beta, vC)
+
+proc gebb_ukernel_edge*[T; ukernel: static MicroKernel](
+      mr, nr, kc: int,
+      alpha: T, packedA, packedB: ptr UncheckedArray[T],
+      beta: T, vC: MatrixView[T]
+    ) =
+  ukernel_impl()
+  gebb_ukernel_edge_epilogue(alpha, AB, beta, vC, mr, nr)
