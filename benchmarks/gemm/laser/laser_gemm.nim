@@ -57,7 +57,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
       # and if last iter, save addr of next panel of B
       var AB{.align_variable.}: array[MR, array[NR, T]]
 
-      gemm_ukernel_generic(                        # GEBB microkernel + epilogue
+      gebb_ukernel_generic(                        # GEBB microkernel + epilogue
         kc,                                        #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
         AB,                                        #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
         tiles.a + ir*kc,                           #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
@@ -67,13 +67,13 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
       if nr == NR and mr == MR:
         # General case
-        gemm_ukernel_epilogue(                     # Epilogue: update C
+        gebb_ukernel_epilogue(                     # Epilogue: update C
           alpha, AB, beta,
           mcncC.stride(ir, jr)
         )
       else:
         # Matrix edges
-        gemm_ukernel_edge_epilogue(                # Epilogue: update C on the edges
+        gebb_ukernel_edge_epilogue(                # Epilogue: update C on the edges
           alpha, AB, beta,
           mcncC.stride(ir, jr),
           mr, nr

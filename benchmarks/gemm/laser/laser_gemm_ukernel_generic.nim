@@ -24,7 +24,7 @@ macro unroll_ukernel[MR, NR: static int, T](
       result.add quote do:
         `AB`[`i`][`j`] += `A`[`i`] * `B`[`j`]
 
-func gemm_ukernel_generic*[T; MR, NR: static int](
+func gebb_ukernel_generic*[T; MR, NR: static int](
       kc: int,
       AB: var array[MR, array[NR, T]],
       packedA, packedB: ptr UncheckedArray[T]
@@ -57,7 +57,7 @@ func gemm_ukernel_generic*[T; MR, NR: static int](
 # TODO: Fused operations like relu/sigmoid/tanh
 #       should be done here as well
 
-proc gemm_ukernel_epilogue*[MR, NR: static int, T](
+proc gebb_ukernel_epilogue*[MR, NR: static int, T](
       alpha: T, AB: array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T]
     ) =
@@ -87,7 +87,7 @@ proc gemm_ukernel_epilogue*[MR, NR: static int, T](
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well
 
-func gemm_ukernel_edge_epilogue*[MR, NR: static int, T](
+func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
       alpha: T, AB: array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T],
       mr, nr: int # Tail to process
