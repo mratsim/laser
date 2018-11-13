@@ -73,16 +73,16 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
         # Pad with 0 if packing over the edge
         offBuf[k*MR + i] = 0.T
 
-  block:
-    echo "[kc, mc]: [", kc, ", ", mc, "] = ", kc*mc
-    var mA: seq[T]
-    var bufA: seq[T]
-    for i in 0 ..< mc*kc:
-      mA.add A.buffer[i]
-      bufA.add buffer[i]
-    echo "A view: ", mA
-    echo "A buffer: ", bufA
-    echo "###############"
+  # block:
+  #   echo "[kc, mc]: [", kc, ", ", mc, "] = ", kc*mc
+  #   var mA = newSeq[T](mc*kc)
+  #   var bufA = newSeq[T](mc*kc)
+  #   for i in 0 ..< mc*kc:
+  #     mA[i] = A.buffer[i]
+  #     bufA[i] = buffer[i]
+  #   echo "A view: ", mA
+  #   echo "A buffer: ", bufA
+  #   echo "###############"
 
 # ##############
 #
@@ -127,20 +127,18 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
     let offBuf = buffer + kc*unroll_stop
     for k in 0 ..< kc:
       for j in 0 ..< remainder:
-        echo "B[", k, ", ", unroll_stop, "+", j, "] = ", B[k, unroll_stop+j]
-        echo "buffer[", k, "*", NR, "+", j,"] = ", k*NR + j
         offBuf[k*NR + j] = B[k, unroll_stop+j]
       for j in remainder ..< NR:
         # Pad with 0 if packing over the edge
         offBuf[k*NR + j] = 0.T
 
-  block:
-    echo "[kc, nc]: [", kc, ", ", nc, "] = ", kc*nc
-    var mB: seq[T]
-    var bufB: seq[T]
-    for i in 0 ..< kc*nc:
-      mB.add B.buffer[i]
-      bufB.add buffer[i]
-    echo "B view: ", mB
-    echo "B buffer: ", bufB
-    echo "###############"
+  # block:
+  #   echo "[kc, nc]: [", kc, ", ", nc, "] = ", kc*nc
+  #   var mB = newSeq[T](kc*nc)
+  #   var bufB = newSeq[T](kc*nc)
+  #   for i in 0 ..< kc*nc:
+  #     mB[i] = B.buffer[i]
+  #     bufB[i] = buffer[i]
+  #   echo "B view: ", mB
+  #   echo "B buffer: ", bufB
+  #   echo "###############"

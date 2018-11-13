@@ -63,7 +63,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
         tiles.a + ir*kc,                           #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
         tiles.b + jr*kc                            #    βC[ic:ic+mc, jc:jc+nc]
       )
-      echo "AB: ", AB
+      # echo "AB: ", AB
 
       if nr == NR and mr == MR:
         # General case
@@ -104,14 +104,10 @@ proc gemm_impl[T; ukernel: static MicroKernel](
   # not partitioned currently nc = N
   let nc = N                                          # B[0:K, jc:jc+nc]
                                                       # C[0:M, jc:jc+nc]
-  echo "M: ", M
-  echo "N: ", N
-  echo "K: ", K
   # ######################################
   # 2.   for pc = 0,...,k−1 in steps of kc
   for pc in countup(0, K-1, tiles.kc):
     let kc = min(K - pc, tiles.kc) # Deal with edges  # A[0:M, pc:pc+kc]
-    echo "kc: ", kc
 
     let kcncB = vB.stride(pc, 0)                      # B[pc:pc+kc, jc:jc+nc]
     pack_B_kc_nc[T, ukernel](tiles, kc, nc, kcncB)    # PackB panel [kc, nc] (nc is large or unknown)
@@ -166,7 +162,7 @@ proc gemm_strided*[T: SomeNumber](
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
     template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
       # const ukernel = cpu_features.x86_ukernel(T)
-      const ukernel = MicroKernel(mr: 2, nr: 2)
+      const ukernel = MicroKernel(mr: 3, nr: 3)
       let tiles = ukernel.newTiles(T, M, N, K)
       gemm_impl[T, ukernel](
         M, N, K,
@@ -212,11 +208,11 @@ when isMainModule:
       0.0,  res_ab[0][0].addr,  2, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+    # echo "expected: ", ab
+    # echo "result: ", res_ab
 
     doAssert res_ab == ab
-    echo '\n'
+    # echo '\n'
 
   block:
     let a = [[1.0, 2, 3],
@@ -239,11 +235,11 @@ when isMainModule:
       0.0,  res_ab[0][0].addr,  2, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+    # echo "expected: ", ab
+    # echo "result: ", res_ab
 
     doAssert res_ab == ab
-    echo '\n'
+    # echo '\n'
 
   block:
     let a = [[1.0,2,3],
@@ -264,11 +260,11 @@ when isMainModule:
       0.0,  res_ab[0][0].addr,  2, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+    # echo "expected: ", ab
+    # echo "result: ", res_ab
 
     doAssert res_ab == ab
-    echo '\n'
+    # echo '\n'
 
   block:
     # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
@@ -290,11 +286,11 @@ when isMainModule:
       0,  res_ab[0][0].addr,  4, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+    # echo "expected: ", ab
+    # echo "result: ", res_ab
 
     doAssert res_ab == ab
-    echo '\n'
+    # echo '\n'
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication_;5;5;5;5?matrix1=[[%225%22,%226%22,%225%22,%228%22],[%228%22,%222%22,%228%22,%228%22],[%220%22,%225%22,%224%22,%220%22],[%224%22,%220%22,%225%22,%226%22],[%224%22,%225%22,%220%22,%223%22]]&matrix2=[[%225%22,%223%22,%226%22,%220%22],[%225%22,%222%22,%223%22,%223%22],[%228%22,%228%22,%222%22,%220%22],[%227%22,%227%22,%220%22,%220%22]]&operator=*
@@ -323,11 +319,11 @@ when isMainModule:
       0,  res_ab[0][0].addr,  4, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+    # echo "expected: ", ab
+    # echo "result: ", res_ab
 
     doAssert res_ab == ab
-    echo '\n'
+    # echo '\n'
 
   block:
     let a =  [[2, 4,  3,  1,  3,  1,  3,  1],
@@ -354,48 +350,48 @@ when isMainModule:
       0,  res_ab[0][0].addr,  2, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+    # echo "expected: ", ab
+    # echo "result: ", res_ab
 
     doAssert res_ab == ab
-    echo '\n'
+    # echo '\n'
 
-  # block:
-  #   let a =  [[2, 1],
-  #             [1, 3],
-  #             [2, 1],
-  #             [1, 0],
-  #             [3, 4],
-  #             [2, 4],
-  #             [3, 1],
-  #             [4, 0]]
+  block:
+    let a =  [[2, 1],
+              [1, 3],
+              [2, 1],
+              [1, 0],
+              [3, 4],
+              [2, 4],
+              [3, 1],
+              [4, 0]]
 
 
-  #   let b =  [[2, 2,  0,  4,  0,  0,  4,  2],
-  #             [2, 1,  2,  1,  2,  4,  4,  1]]
+    let b =  [[2, 2,  0,  4,  0,  0,  4,  2],
+              [2, 1,  2,  1,  2,  4,  4,  1]]
 
-  #   let ab = [[ 6,  5,  2,  9,  2,  4, 12,  5],
-  #             [ 8,  5,  6,  7,  6, 12, 16,  5],
-  #             [ 6,  5,  2,  9,  2,  4, 12,  5],
-  #             [ 2,  2,  0,  4,  0,  0,  4,  2],
-  #             [14, 10,  8, 16,  8, 16, 28, 10],
-  #             [12,  8,  8, 12,  8, 16, 24,  8],
-  #             [ 8,  7,  2, 13,  2,  4, 16,  7],
-  #             [ 8,  8,  0, 16,  0,  0, 16,  8]]
+    let ab = [[ 6,  5,  2,  9,  2,  4, 12,  5],
+              [ 8,  5,  6,  7,  6, 12, 16,  5],
+              [ 6,  5,  2,  9,  2,  4, 12,  5],
+              [ 2,  2,  0,  4,  0,  0,  4,  2],
+              [14, 10,  8, 16,  8, 16, 28, 10],
+              [12,  8,  8, 12,  8, 16, 24,  8],
+              [ 8,  7,  2, 13,  2,  4, 16,  7],
+              [ 8,  8,  0, 16,  0,  0, 16,  8]]
 
-  #   var res_ab: array[8, array[8, int]]
-  #   gemm_strided(
-  #     8, 2, 8,
-  #     1,  a[0][0].unsafeAddr, 2, 1,
-  #         b[0][0].unsafeAddr, 8, 1,
-  #     0,  res_ab[0][0].addr,  8, 1
-  #     )
+    var res_ab: array[8, array[8, int]]
+    gemm_strided(
+      8, 8, 2,
+      1,  a[0][0].unsafeAddr, 2, 1,
+          b[0][0].unsafeAddr, 8, 1,
+      0,  res_ab[0][0].addr,  8, 1
+      )
 
-  #   echo "expected: ", ab
-  #   echo "result: ",   res_ab
+    # echo "expected: ", ab
+    # echo "result: ",   res_ab
 
-  #   doAssert res_ab == ab
-  #   echo '\n'
+    doAssert res_ab == ab
+    # echo '\n'
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication?matrix1=[[%222%22,%224%22,%223%22,%221%22,%223%22,%221%22,%223%22,%221%22],[%221%22,%222%22,%221%22,%221%22,%222%22,%220%22,%224%22,%223%22],[%222%22,%220%22,%220%22,%223%22,%220%22,%224%22,%224%22,%221%22],[%221%22,%221%22,%224%22,%220%22,%223%22,%221%22,%223%22,%220%22],[%223%22,%224%22,%221%22,%221%22,%224%22,%222%22,%223%22,%224%22],[%222%22,%224%22,%220%22,%222%22,%223%22,%223%22,%223%22,%224%22],[%223%22,%220%22,%220%22,%223%22,%221%22,%224%22,%223%22,%221%22],[%224%22,%223%22,%222%22,%224%22,%221%22,%220%22,%220%22,%220%22]]&matrix2=[[%222%22,%222%22,%220%22,%224%22,%220%22,%220%22,%224%22,%222%22],[%222%22,%220%22,%220%22,%221%22,%221%22,%221%22,%223%22,%221%22],[%220%22,%222%22,%222%22,%220%22,%222%22,%222%22,%223%22,%223%22],[%220%22,%220%22,%221%22,%220%22,%224%22,%222%22,%224%22,%221%22],[%220%22,%220%22,%221%22,%223%22,%224%22,%222%22,%224%22,%222%22],[%224%22,%223%22,%224%22,%221%22,%224%22,%224%22,%220%22,%223%22],[%223%22,%223%22,%220%22,%222%22,%221%22,%222%22,%223%22,%223%22],[%222%22,%221%22,%222%22,%221%22,%222%22,%224%22,%224%22,%221%22]]&operator=*
@@ -437,8 +433,8 @@ when isMainModule:
       0,  res_ab[0][0].addr,  8, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ",   res_ab
+    # echo "expected: ", ab
+    # echo "result: ",   res_ab
 
     doAssert res_ab == ab
-    echo '\n'
+    # echo '\n'
