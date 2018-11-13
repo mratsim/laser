@@ -45,6 +45,8 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
   let buffer{.restrict.} = assume_aligned tiles.a
   const MR = ukernel.extract_mr()
   let unroll_stop = mc.round_step_down(MR)
+
+  # 1. Pack mc/mr matrices of size kc*mr
   {.emit:"""
       #pragma omp parallel for
       for (int i = 0; i < `unroll_stop`; i+=`MR`)
@@ -53,6 +55,14 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
             `buffer`[i*`kc`+k*`MR`+ii] = `A`.buffer[(i+ii)*`A`.rowStride + k*`A`.colStride];
   """.}
 
+  # block:
+  #   for i in countup(0, unroll_stop-1, MR):
+  #     for k in 0 ..< kc:
+  #       for ii in 0 ..< MR:
+  #         echo "bufA: ", i*kc+k*MR+ii
+  #         buffer[i*kc+k*MR+ii] = A[i+ii, k]
+
+  # 2. Process the tail
   let remainder = mc - unroll_stop
   if remainder > 0:
     let offBuf = buffer + kc*unroll_stop
@@ -104,10 +114,12 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
             `buffer`[j*`kc`+k*`NR`+jj] = `B`.buffer[k*`B`.rowStride + (j+jj)*`B`.colStride];
   """.}
 
-  # for j in countup(0, unroll_stop-1, NR):
-  #   for k in 0 ..< kc:
-  #     for jj in 0 ..< NR:
-  #       buffer[j*kc+k*NR+jj] = B[k, j+jj]
+  # block:
+  #   for j in countup(0, unroll_stop-1, NR):
+  #     for k in 0 ..< kc:
+  #       for jj in 0 ..< NR:
+  #         echo "bufB: ", j*kc+k*NR+jj
+  #         buffer[j*kc+k*NR+jj] = B[k, j+jj]
 
   # 2. Process the tail
   let remainder = nc - unroll_stop
