@@ -24,7 +24,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
       mc, nc, kc: int,
       alpha, beta: T,
       mcncC: MatrixView[T],
-      tiles: Tile[T]
+      tiles: Tiles[T]
     ) =
   ## Macro kernel, multiply:
   ##  - a block A[mc, kc] * panel B[kc, N]
@@ -85,7 +85,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
       M, N, K: int,
       alpha: T, vA: MatrixView[T], vB: MatrixView[T],
       beta: T, vC: MatrixView[T],
-      tiles: Tile[T]
+      tiles: Tiles[T]
     ) =
   # Loop concerns:
   #   - Which one to parallelize
@@ -161,7 +161,8 @@ proc gemm_strided*[T: SomeNumber](
 
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
     template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
-      const ukernel = cpu_features.x86_ukernel(T)
+      # const ukernel = cpu_features.x86_ukernel(T)
+      const ukernel = MicroKernel(mr: 4, nr: 4)
       let tiles = ukernel.newTiles(T, M, N, K)
       gemm_impl[T, ukernel](
         M, N, K,

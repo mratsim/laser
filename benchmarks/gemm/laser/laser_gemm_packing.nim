@@ -32,7 +32,7 @@ func round_step_down(x: Natural, step: static Natural): int {.inline.} =
 # ##############
 
 proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
-      tiles: Tile[T],
+      tiles: Tiles[T],
       mc, kc: int,
       A: MatrixView[T]) =
   ## Packs panel [kc, mc] into buffer Ã (size ~half-L2 cache)
@@ -91,7 +91,7 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
 # ##############
 
 proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
-      tiles: Tile[T],
+      tiles: Tiles[T],
       kc, nc: int,
       B: MatrixView[T]) =
   ## Packs panel [kc, nc] for ~B (half-L1 cache)

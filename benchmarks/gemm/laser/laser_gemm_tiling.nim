@@ -5,7 +5,7 @@
 
 ####################################
 #
-# Runtime tile dimensioning for GEMM
+# Runtime tiles dimensioning for GEMM
 #
 ####################################
 
@@ -112,8 +112,6 @@ const X86_regs: X86_FeatureMap = [
   x86_AVX512:  6  # 32 ZMM registers
 ]
 
-const PageSize* = 512
-
 func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
   # Cannot reproduce a small case :/
   var ukernel: MicroKernel # triggers "Object Constructor needs an object type)"
@@ -170,18 +168,21 @@ macro extract_nr*(ukernel: static MicroKernel): untyped =
 
 # ##########################################################################################
 
-type Tile*[T] = object
+type Tiles*[T] = ref object
   a*: ptr UncheckedArray[T]
   b*: ptr UncheckedArray[T]
   mc*, nc*, kc*: int
   # Nim doesn't support arbitrary increment with OpenMP
-  # So we store indexing/edge case data in tiles
+  # So we store indexing/edge case data in tiles for the parallelized loop
   jr_num_nr_tiles*: int
-  allocated_mem: pointer # TODO Save on cache line, use an aligned allocator to not track this
+  a_alloc_mem: pointer # TODO Save on cache line, use an aligned allocator to not track this
+  b_alloc_mem: pointer
 
-proc `=destroy`[T](tile: var Tile[T]) =
-  if not tile.allocated_mem.isNil:
-    deallocShared tile.allocated_mem
+proc deallocTiles[T](tiles: Tiles[T]) =
+  if not tiles.a_alloc_mem.isNil:
+    deallocShared tiles.a_alloc_mem
+  if not tiles.b_alloc_mem.isNil:
+    deallocShared tiles.b_alloc_mem
 
 func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
   static: assert T.supportsCopyMem
@@ -200,7 +201,7 @@ func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
 func partition(dim, max_chunk_size, tile_dim: Natural): Natural =
   # Partition a dimension into mc, nc or kc chunks.
   # Chunks are chosen according to max_chunk_size which depends on the L1/L2 cache
-  # and according to the microkernel tile dimension
+  # and according to the microkernel tiles dimension
   #
   # Return a chunk size
 
@@ -220,7 +221,7 @@ proc newTiles*(
         ukernel: static MicroKernel,
         T: typedesc,
         M, N, K: Natural,
-        ): Tile[T] =
+        ): Tiles[T] =
   # Goto paper [1] section 6.3: choosing kc
   #   - kc should be as large as possible to amortize the mr*nr updates of Cj
   #   - Elements from Bj [kc, nr] must remain in L1 cache.
@@ -240,6 +241,7 @@ proc newTiles*(
   #   - kc * nr in L1 cache µkernel
   #   - mc * kc in L2 cache Ã
   #   - kc * nc in L3 cache ~B (no L3 in Xeon Phi ¯\_(ツ)_/¯)
+  new result, deallocTiles[T]
   const
     nr = ukernel.nr
     mr = ukernel.mr
@@ -262,7 +264,7 @@ proc newTiles*(
   #       under the constraint that mckc ≤ K is the problem
   #       of maximizing the area of a rectangle
   #       while minimizing the perimeter,
-  let TLB = PageSize + 2*(nr*line_size + nr*mr * T.sizeof)
+  let TLB = 512 + 2*(nr*line_size + nr*mr * T.sizeof)
 
   let halfPerimeter = T.sizeof * (mr + nr)
 
@@ -290,17 +292,17 @@ proc newTiles*(
   #
   #   -> kc = 304, mc = 120
 
-  let bufA_size = T.sizeof * result.kc * result.mc
-  let bufB_size = T.sizeof * result.kc * nr
+  # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
+  let bufA_size = T.sizeof * result.kc*(result.mc+1) # Size + Padding when packing
+  let bufB_size = T.sizeof * result.kc*(result.nc+1) # Size + Padding when packing
 
   # Note, if we parallelize on ic loop
-  # Each thread will access it's own part of A
-  # and so the buffer needs to be multiplied by the number of threads.
-  result.allocated_mem = allocShared0(bufA_size + bufB_size + PageSize)
-    # PageSize has enough space for 64 bytes alignement
-    # This help for prefetching next page in the TLB
-  result.a = assume_aligned align_raw_data(T, result.allocated_mem)
-  result.b = result.a + bufA_size # TODO: align as well?
+  #   Each thread will access it's own part of A
+  #   and so the buffer needs to be multiplied by the number of threads.
+  result.a_alloc_mem = allocShared0(bufA_size + 63)
+  result.b_alloc_mem = allocShared0(bufB_size + 63)
+  result.a = assume_aligned align_raw_data(T, result.a_alloc_mem)
+  result.b = assume_aligned align_raw_data(T, result.b_alloc_mem)
 
   # Workaround for Nim OpenMP for loop not supporting non-unit increment
   # we don't partition N so N = NC
