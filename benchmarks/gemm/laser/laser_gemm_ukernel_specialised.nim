@@ -11,8 +11,17 @@ import
   macros,
   ./laser_gemm_ukernel_generic, ./laser_gemm_ukernel_aux
 
-# TODO: the generic template in laser_gemm_ukernel_aux
-# causes crashes.
+macro B_load(mB, B: untyped, NbVecs: static int, k: int): untyped =
+  result = newStmtList()
+  for z in 0 ..< NbVecs:
+    result.add quote do:
+      `mB`[`z`] = mm256_load_ps(`B`[`k`*NR+`z`*MR].addr)
+
+macro A_set1(mA, A: untyped, NbVecs: static int, k, i: int): untyped =
+  result = newStmtList()
+  for z in 0 ..< NbVecs:
+    result.add quote do:
+      `mA`[`z`] = mm256_set1_ps(`A`[`k`*MR+`z`*NR+`i`])
 
 proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
       kc: int,
@@ -33,28 +42,42 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
     assert NR div 8 == 0 # Unrolling checks
     assert MR div 2 == 0
 
-  var AB{.align_variable.}: array[MR, array[NR, float32]]
-  # var AB{.align_variable.}: array[MR, m256]
+  # var AB{.align_variable.}: array[MR, array[NR, float32]]
+  var AB{.align_variable.}: array[MR, array[NbVecs, m256]]
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-  var mA, mB: m256
+  var mA, mB: array[NbVecs, m256]
 
-  # TODO prefetch
+  for k in 0 ..< kc:
+    B_load(mB, B, NbVecs, k)
+    for i in 0 ..< MR:
+      A_set1(mA, A, NbVecs, k, i)
+      for z in 0 ..< NbVecs:
+        when simd == x86_AVX:
+          AB[i][z] = mm256_add_ps(mm256_mul_ps(mA[z], mB[z]), AB[i][z])
+        else:
+          AB[i][z] = mm256_fmadd_ps(mA[z], mB[z], AB[i][z])
+
+  gebb_ukernel_epilogue(
+    alpha, cast[array[MR, array[NR, float32]]](AB),
+    beta, vC)
+
+
+# #################################################
+  # Reference loop -  AB: array[MR, array[NR, float32]]
   # for k in 0 ..< kc:
   #   for i in 0 ..< MR:
   #     for j in 0 ..< NR:
   #       AB[i][j] += A[k*MR+i] * B[k*NR+j]
 
-  for k in 0 ..< kc:
-    mB = mm256_load_ps(B[0].addr)
-    for i in 0 ..< MR:
-      mA = mm256_set1_ps(A[k*MR+i])
-      when simd == x86_AVX:
-        AB[i] = mm256_add_ps(mm256_mul_ps(mA, mB), AB[i])
-      else:
-        AB[i] = mm256_fmadd_ps(mA, mB, AB[i])
-
-  gebb_ukernel_epilogue(
-    alpha, cast[array[MR, array[NR, float32]]](AB),
-    beta, vC)
+  # Reference AVX - AB: array[MR, m256] and NR == 8
+  # for k in 0 ..< kc:
+  #   for z in 0 ..< NbVecs:
+  #     mB[z] = mm256_load_ps(B[k*NR+MR*z].addr)
+  #   for i in 0 ..< MR:
+  #     mA = mm256_set1_ps(A[k*MR+i])
+  #     when simd == x86_AVX:
+  #       AB[i] = mm256_add_ps(mm256_mul_ps(mA, mB), AB[i])
+  #     else:
+  #       AB[i] = mm256_fmadd_ps(mA, mB, AB[i])

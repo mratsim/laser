@@ -17,7 +17,7 @@ proc gebb_ukernel*[T; ukernel: static MicroKernel](
     ){.inline.} =
   const simd = ukernel.extract_cpu_simd()
 
-  when false: #T is float32 and simd in {x86_AVX, x86_AVX2, x86_AVX512}:
+  when T is float32 and simd in {x86_AVX, x86_AVX2, x86_AVX512}:
     gebb_ukernel_f32_avx[ukernel](
             kc,
       alpha, packedA, packedB,
