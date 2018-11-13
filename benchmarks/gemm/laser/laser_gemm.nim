@@ -21,6 +21,7 @@ withCompilerOptimHints()
 #   ...
 
 proc gebp_mkernel[T; ukernel: static MicroKernel](
+      mc, nc, kc: int,
       alpha, beta: T,
       mcncC: MatrixView[T],
       tiles: Tile[T]
@@ -38,75 +39,50 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # Nim doesn't support arbitrary increment with OpenMP
   # So we store indexing/edge case data in tiles
-
   const MR = ukernel.extract_mr
   const NR = ukernel.extract_nr
-  let kc = tiles.kc
-  let nc = mcncC.ncols # equals N as we don't partition over N
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  var jr_mcncC = mcncC # TODO - not thread safe
   for jrb in 0||(tiles.jr_num_nr_tiles - 1):
     let jr = jrb * NR
-    let nr = min(nc - jr, NR)
+    let nr = min(nc - jr, NR)                      # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
     # ###################################
     # 5. for ir = 0,...,m−1 in steps of mr
-    var ir_mcnrC = jr_mcncC.sliceCols(nr)          # C[ic:ic+mc, jc+jr:jc+jr+nr]
-    for ir in countup(0, tiles.mc-1, MR):
-      let mr = min(tiles.mc-ir, MR)
-      var mrnrC = ir_mcnrC.sliceRows(mr)           # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
+    for ir in countup(0, mc-1, MR):
+      let mr = min(mc - ir, MR)                    # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
 
       # TODO save addr of next panel of A for prefetch
       # and if last iter, save addr of next panel of B
       var AB{.align_variable.}: array[MR, array[NR, T]]
 
-      block:
-        echo "\n###############"
-        var bufA: seq[T]
-        for i in 0 ..< tiles.mc*kc:
-          bufA.add tiles.a[i]
-        echo "A buffer: ", bufA
-        var bufB: seq[T]
-        for i in 0 ..< tiles.kc*nc:
-          bufB.add tiles.b[i]
-        echo "B buffer: ", bufB
-        var tileC: seq[T]
-        for i in 0 ..< tiles.mc*nc:
-          tileC.add mrnrC.at(i)
-        echo "tileC: ", tileC
-        echo "###############"
-
       gemm_ukernel_generic(                        # GEBB microkernel + epilogue
-        tiles.kc,                                  #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
+        kc,                                        #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
         AB,                                        #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
         tiles.a + ir*kc,                           #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
         tiles.b + jr*kc                            #    βC[ic:ic+mc, jc:jc+nc]
       )
       echo "AB: ", AB
-      echo '\n'
 
       if nr == NR and mr == MR:
         # General case
-        gemm_ukernel_epilogue(
+        gemm_ukernel_epilogue(                     # Epilogue: update C
           alpha, AB, beta,
-          mrnrC.stride(ir, jr)
+          mcncC.stride(ir, jr)
         )
       else:
         # Matrix edges
-        gemm_ukernel_edge_epilogue(
+        gemm_ukernel_edge_epilogue(                # Epilogue: update C on the edges
           alpha, AB, beta,
-          mrnrC.stride(ir, jr),
+          mcncC.stride(ir, jr),
           mr, nr
         )
-
-      ir_mcnrC.incRow(mr)
     # ###################################
-    jr_mcncC.incCol(nr)
   # #####################################
 
 proc gemm_impl[T; ukernel: static MicroKernel](
+      M, N, K: int,
       alpha: T, vA: MatrixView[T], vB: MatrixView[T],
       beta: T, vC: MatrixView[T],
       tiles: Tile[T]
@@ -122,49 +98,37 @@ proc gemm_impl[T; ukernel: static MicroKernel](
   #     the number of loop variables would allow the compiler
   #     to dedicate more registers to compute
 
-  let
-    M = vA.nrows
-    N = vB.ncols
-    K = vA.ncols
-  assert vA.ncols == vB.nrows
-
+                                                      # A[0:M, 0:K]
   # ##################################################################
   # 1. for jc = 0,...,n−1 in steps of nc
   # not partitioned currently nc = N
-  var jc_kncB = vB                                    # B[0:K, jc:jc+nc]
-  var jc_mncC = vC                                    # C[0:M, jc:jc+nc]
+  let nc = N                                          # B[0:K, jc:jc+nc]
+                                                      # C[0:M, jc:jc+nc]
   # ######################################
   # 2.   for pc = 0,...,k−1 in steps of kc
-  var pc_mkA = vA                                     # A[0:M, 0:K]
   for pc in countup(0, K-1, tiles.kc):
-    let kc = min(K-pc, tiles.kc) # Deal with edges
+    let kc = min(K - pc, tiles.kc) # Deal with edges  # A[0:M, pc:pc+kc]
+
+    let kcncB = vB.stride(pc, 0)                      # B[pc:pc+kc, jc:jc+nc]
+    pack_B_kc_nc[T, ukernel](tiles, kc, nc, kcncB)    # PackB panel [kc, nc] (nc is large or unknown)
 
     # First time writing to C, we scale it, otherwise accumulate
     let beta = if pc == 0: beta else: 1.T
 
-    let pc_kcncB = jc_kncB.sliceRows(kc)              # B[pc:pc+kc, jc:jc+nc]
-    pack_B_kc_nc[T, ukernel](tiles.b, kc, pc_kcncB)   # pack panel [kc, nc] (nc is large or unknown)
-
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
-    var ic_mkcA = pc_mkA.sliceCols(kc)                # A[0:M, pc:pc+kc]
     for ic in countup(0, M-1, tiles.mc):
-      let mc = min(M-ic, tiles.mc)
+      let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
-      let jr_mckcA = ic_mkcA.sliceRows(mc)            # A[ic:ic+mc, pc:pc+kc]
-      pack_A_mc_kc[T, ukernel](tiles.a, kc, jr_mckcA) # pack block [mc, kc]
+      let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
+      pack_A_mc_kc[T, ukernel](tiles, mc, kc, mckcA)  # PackA block [mc, kc]
 
-      let jr_mcncC = jc_mncC.sliceRows(mc)            # C[ic:ic+mc, jc:jc+nc]
       gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
-          alpha, beta, jr_mcncC,                      #   C[ic:ic+mc, jc:jc+nc] =
-          tiles                                       #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
-        )                                             #    βC[ic:ic+mc, jc:jc+nc]
-
-      jc_mncC.incRow(mc)
-      ic_mkcA.incRow(mc)
+          mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
+          alpha, beta, vC.stride(ic, 0),              #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
+          tiles                                       #    βC[ic:ic+mc, jc:jc+nc]
+        )
     # ####################################
-    jc_kncB.incRow(kc)
-    pc_mkA.incCol(kc)
   # ######################################
 
 proc gemm_strided*[T: SomeNumber](
@@ -185,9 +149,9 @@ proc gemm_strided*[T: SomeNumber](
 
     # Create a view to abstract deling with strides
     # and passing those in each proc
-    let vA = A.toMatrixView(M, K, rowStrideA, colStrideA)
-    let vB = B.toMatrixView(K, N, rowStrideB, colStrideB)
-    let vC = C.toMatrixView(M, N, rowStrideC, colStrideC)
+    let vA = A.toMatrixView(rowStrideA, colStrideA)
+    let vB = B.toMatrixView(rowStrideB, colStrideB)
+    let vC = C.toMatrixView(rowStrideC, colStrideC)
 
     # Cache hierarchy:
     #   - block C: mr*nr registers
@@ -198,9 +162,10 @@ proc gemm_strided*[T: SomeNumber](
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
     template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
       # const ukernel = cpu_features.x86_ukernel(T)
-      const ukernel = MicroKernel(mr: 2, nr: 2)
+      const ukernel = MicroKernel(mr: 3, nr: 3)
       let tiles = ukernel.newTiles(T, M, N, K)
       gemm_impl[T, ukernel](
+        M, N, K,
         alpha, vA, vB,
         beta, vC,
         tiles
@@ -247,32 +212,34 @@ when isMainModule:
   #   echo "result: ", res_ab
 
   #   doAssert res_ab == ab
+  #   echo '\n'
 
-  block:
-    let a = [[1.0, 2, 3],
-             [4.0, 5, 6],
-             [7.0, 8, 9]]
+  # block:
+  #   let a = [[1.0, 2, 3],
+  #            [4.0, 5, 6],
+  #            [7.0, 8, 9]]
 
-    let b = [[1.0, 1],
-             [1.0, 1],
-             [1.0, 1]]
+  #   let b = [[1.0, 1],
+  #            [1.0, 1],
+  #            [1.0, 1]]
 
-    let ab = [[ 6.0,  6],
-              [15.0, 15],
-              [24.0, 24]]
+  #   let ab = [[ 6.0,  6],
+  #             [15.0, 15],
+  #             [24.0, 24]]
 
-    var res_ab: array[3, array[2, float]]
-    gemm_strided(
-      3, 2, 3,
-      1.0,  a[0][0].unsafeAddr, 3, 1,
-            b[0][0].unsafeAddr, 2, 1,
-      0.0,  res_ab[0][0].addr,  2, 1
-      )
+  #   var res_ab: array[3, array[2, float]]
+  #   gemm_strided(
+  #     3, 2, 3,
+  #     1.0,  a[0][0].unsafeAddr, 3, 1,
+  #           b[0][0].unsafeAddr, 2, 1,
+  #     0.0,  res_ab[0][0].addr,  2, 1
+  #     )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+  #   echo "expected: ", ab
+  #   echo "result: ", res_ab
 
-    doAssert res_ab == ab
+  #   doAssert res_ab == ab
+  #   echo '\n'
 
   block:
     let a = [[1.0,2,3],
@@ -297,31 +264,33 @@ when isMainModule:
     echo "result: ", res_ab
 
     doAssert res_ab == ab
+    echo '\n'
 
-  # block:
-  #   # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
-  #   # (M x K) * (K x N) with M < N
-  #   let a = [[-2,-3,-1],
-  #            [ 3, 0, 4]]
-  #   let b = [[ 1, 5, 2,-1],
-  #            [-3, 0, 3, 4],
-  #            [ 6,-2, 7,-4]]
+  block:
+    # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
+    # (M x K) * (K x N) with M < N
+    let a = [[-2,-3,-1],
+             [ 3, 0, 4]]
+    let b = [[ 1, 5, 2,-1],
+             [-3, 0, 3, 4],
+             [ 6,-2, 7,-4]]
 
-  #   let ab = [[ 1,-8,-20, -6],
-  #             [27, 7, 34,-19]]
+    let ab = [[ 1,-8,-20, -6],
+              [27, 7, 34,-19]]
 
-  #   var res_ab: array[2, array[4, int]]
-  #   gemm_strided(
-  #     2, 4, 3,
-  #     1,  a[0][0].unsafeAddr, 3, 1,
-  #         b[0][0].unsafeAddr, 4, 1,
-  #     0,  res_ab[0][0].addr,  4, 1
-  #     )
+    var res_ab: array[2, array[4, int]]
+    gemm_strided(
+      2, 4, 3,
+      1,  a[0][0].unsafeAddr, 3, 1,
+          b[0][0].unsafeAddr, 4, 1,
+      0,  res_ab[0][0].addr,  4, 1
+      )
 
-  #   echo "expected: ", ab
-  #   echo "result: ", res_ab
+    echo "expected: ", ab
+    echo "result: ", res_ab
 
-  #   doAssert res_ab == ab
+    doAssert res_ab == ab
+    echo '\n'
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication_;5;5;5;5?matrix1=[[%225%22,%226%22,%225%22,%228%22],[%228%22,%222%22,%228%22,%228%22],[%220%22,%225%22,%224%22,%220%22],[%224%22,%220%22,%225%22,%226%22],[%224%22,%225%22,%220%22,%223%22]]&matrix2=[[%225%22,%223%22,%226%22,%220%22],[%225%22,%222%22,%223%22,%223%22],[%228%22,%228%22,%222%22,%220%22],[%227%22,%227%22,%220%22,%220%22]]&operator=*
@@ -354,6 +323,7 @@ when isMainModule:
     echo "result: ", res_ab
 
     doAssert res_ab == ab
+    echo '\n'
 
   block:
     let a =  [[2, 4,  3,  1,  3,  1,  3,  1],
@@ -384,6 +354,7 @@ when isMainModule:
     echo "result: ", res_ab
 
     doAssert res_ab == ab
+    echo '\n'
 
   block:
     let a =  [[2, 1],
@@ -420,6 +391,7 @@ when isMainModule:
     echo "result: ",   res_ab
 
     doAssert res_ab == ab
+    echo '\n'
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication?matrix1=[[%222%22,%224%22,%223%22,%221%22,%223%22,%221%22,%223%22,%221%22],[%221%22,%222%22,%221%22,%221%22,%222%22,%220%22,%224%22,%223%22],[%222%22,%220%22,%220%22,%223%22,%220%22,%224%22,%224%22,%221%22],[%221%22,%221%22,%224%22,%220%22,%223%22,%221%22,%223%22,%220%22],[%223%22,%224%22,%221%22,%221%22,%224%22,%222%22,%223%22,%224%22],[%222%22,%224%22,%220%22,%222%22,%223%22,%223%22,%223%22,%224%22],[%223%22,%220%22,%220%22,%223%22,%221%22,%224%22,%223%22,%221%22],[%224%22,%223%22,%222%22,%224%22,%221%22,%220%22,%220%22,%220%22]]&matrix2=[[%222%22,%222%22,%220%22,%224%22,%220%22,%220%22,%224%22,%222%22],[%222%22,%220%22,%220%22,%221%22,%221%22,%221%22,%223%22,%221%22],[%220%22,%222%22,%222%22,%220%22,%222%22,%222%22,%223%22,%223%22],[%220%22,%220%22,%221%22,%220%22,%224%22,%222%22,%224%22,%221%22],[%220%22,%220%22,%221%22,%223%22,%224%22,%222%22,%224%22,%222%22],[%224%22,%223%22,%224%22,%221%22,%224%22,%224%22,%220%22,%223%22],[%223%22,%223%22,%220%22,%222%22,%221%22,%222%22,%223%22,%223%22],[%222%22,%221%22,%222%22,%221%22,%222%22,%224%22,%224%22,%221%22]]&operator=*
@@ -465,3 +437,4 @@ when isMainModule:
     echo "result: ",   res_ab
 
     doAssert res_ab == ab
+    echo '\n'

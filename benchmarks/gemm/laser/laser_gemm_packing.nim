@@ -9,9 +9,12 @@
 #   - 2. object constructor needs and object type when workaround first issue with macro
 
 import
+  ../../../laser/compiler_optim_hints,
   ./laser_gemm_matrix,
   ./laser_gemm_utils,
   ./laser_gemm_tiling
+
+withCompilerOptimHints()
 
 # TODO - part of align_unroller
 func round_step_down(x: Natural, step: static Natural): int {.inline.} =
@@ -29,26 +32,28 @@ func round_step_down(x: Natural, step: static Natural): int {.inline.} =
 # ##############
 
 proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
-      buffer: ptr UncheckedArray[T],
-      kc: int,
+      tiles: Tile[T],
+      mc, kc: int,
       A: MatrixView[T]) =
   ## Packs panel [mc, kc] into buffer Ã (size ~half-L2 cache)
   ## Pads if needed
-  ## Buffer uses Z-ordering so that the ukernel can access contiguous
-  ## chunks of memory for the dot product
-
+  ##
+  ## Concretely the outer dimension of packed matrices
+  ## is k so that C[i, j] = A[i, k] * B[k, j]
+  ## does not require strided access
+  let buffer{.restrict.} = assume_aligned tiles.a
   const MR = ukernel.extract_mr()
-  let unroll_stop = A.nrows.round_step_down(MR)
+  let unroll_stop = mc.round_step_down(MR)
   {.emit:"""
       #pragma omp parallel for
       for (int i = 0; i < `unroll_stop`; i+=`MR`)
         for (int k = 0; k < `kc`; k++)
           // #pragma omp simd // Not used as MR is not of vector size
           for (int ii = i; ii < i+`MR`; ii++)
-            `buffer`[k*`MR` + ii] = (*`A`).buffer[ii*(*`A`).rowStride + k*(*`A`).colStride];
+            `buffer`[k*`MR` + ii] = `A`.buffer[ii * `A`.rowStride + k * `A`.colStride];
   """.}
 
-  let remainder = A.nrows - unroll_stop
+  let remainder = mc - unroll_stop
   if remainder > 0:
     let offBuf = buffer + kc*unroll_stop
     for k in 0 ..< kc:
@@ -58,13 +63,6 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
         # Pad with 0 if packing over the edge
         offBuf[k*MR + i] = 0.T
 
-  block:
-    var bufA: seq[T]
-    for i in 0 ..< A.nrows*kc:
-      bufA.add buffer[i]
-    echo "A buffer: ", bufA
-    echo "###############"
-
 # ##############
 #
 # Packing B
@@ -72,38 +70,34 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
 # ##############
 
 proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
-      buffer: ptr UncheckedArray[T],
-      kc: int,
+      tiles: Tile[T],
+      kc, nc: int,
       B: MatrixView[T]) =
   ## Packs panel [kc, nc] for ~B (half-L1 cache)
   ## Pads if needed
-  ## Buffer uses Z-ordering so that the ukernel can access contiguous
-  ## chunks of memory for the dot product
-
+  ##
+  ## Concretely the outer dimension of packed matrices
+  ## is k so that C[i, j] = A[i, k] * B[k, j]
+  ## does not require strided access
+  let buffer{.restrict.} = tiles.b # TODO align B for SIMD
   const NR = ukernel.extract_nr()
-  let unroll_stop = B.ncols.round_step_down(NR)
+  let unroll_stop = nc.round_step_down(NR)
+
   {.emit:"""
       #pragma omp parallel for
       for (int j = 0; j < `unroll_stop`; j+=`NR`)
         for (int k = 0; k < `kc`; k++)
-          #pragma omp simd // NR is always of vector size
+          // #pragma omp simd // NR is always of vector size - special case unit stride for SIMD
           for (int jj = j; jj < `NR`+j; jj++)
-            `buffer`[k*`NR`+jj] = (*`B`).buffer[k*(*`B`).rowStride + jj*(*`B`).colStride];
+            `buffer`[k*`NR`+jj] = `B`.buffer[k * `B`.rowStride + jj * `B`.colStride];
   """.}
 
-  let remainder = B.ncols - unroll_stop
+  let remainder = nc - unroll_stop
   if remainder > 0:
     let offBuf = buffer + kc*unroll_stop
     for k in 0 ..< kc:
       for j in 0 ..< remainder:
-        offBuf[j*NR + k] = B[kc, unroll_stop+j]
+        offBuf[k*NR + j] = B[k, unroll_stop+j]
       for j in remainder ..< NR:
         # Pad with 0 if packing over the edge
-        offBuf[j*NR + k] = 0.T
-
-  block:
-    var bufB: seq[T]
-    for i in 0 ..< B.ncols*kc:
-      bufB.add buffer[i]
-    echo "B buffer: ", bufB
-    echo "###############"
+        offBuf[k*NR + j] = 0.T

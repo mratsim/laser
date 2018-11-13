@@ -173,8 +173,7 @@ macro extract_nr*(ukernel: static MicroKernel): untyped =
 type Tile*[T] = object
   a*: ptr UncheckedArray[T]
   b*: ptr UncheckedArray[T]
-  kc*: int
-  mc*: int
+  mc*, nc*, kc*: int
   # Nim doesn't support arbitrary increment with OpenMP
   # So we store indexing/edge case data in tiles
   jr_num_nr_tiles*: int
@@ -255,6 +254,7 @@ proc newTiles*(
   # First determine a candidate kc depending on l2 cache constraints
   result.kc = (l2h - M * nr * T.sizeof) div ((M+nr)*T.sizeof)
   result.mc = M
+  result.nc = N # We don't partition over N
 
   # TLB constraint
   # TA ̃ + 2(TBj + TCj)≤T
