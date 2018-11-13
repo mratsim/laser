@@ -104,8 +104,8 @@ const X86_vecsize_int: X86_FeatureMap = [
 # mr * nr < number of registers - 4
 # 4 registers are needed to hold bufA and bufB
 const X86_regs: X86_FeatureMap = [
-  x86_Generic: 1,
-  x86_SSE:     4, # 8 XMM regs in 32-bit, 16 in 64-bit (we assume 32-bit mode)
+  x86_Generic: 2,
+  x86_SSE:     2, # 8 XMM regs in 32-bit, 16 in 64-bit (we assume 32-bit mode)
   x86_SSE2:    6,
   x86_AVX:     6, # 16 YMM registers
   x86_AVX2:    6,
@@ -114,12 +114,10 @@ const X86_regs: X86_FeatureMap = [
 
 func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
   # Cannot reproduce a small case :/
-  var ukernel: MicroKernel # triggers "Object Constructor needs an object type)"
-
   when T is SomeFloat:
-    ukernel.vecsize =  X86_vecsize_float[cpu]
+    result.vecsize =  X86_vecsize_float[cpu]
   else:
-    ukernel.vecsize =  X86_vecsize_int[cpu]
+    result.vecsize =  X86_vecsize_int[cpu]
   # TODO: Complex support
 
   # The inner microkernel loop does:
@@ -129,14 +127,12 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
   # This avoids dealing with transpose
   # in the inner loop and untranspose in the epilogue
 
-  ukernel.mr = X86_regs[cpu]
-  ukernel.nr = max(1, ukernel.vecsize div sizeof(T))
+  result.mr = X86_regs[cpu] # Base nb of registers
+  result.nr = max(1, result.vecsize div sizeof(T))
 
-  when sizeof(int) == 8: # 64-bit - use 8/12 out of the 16 XMM/YMM registers
-    ukernel.nr *= 2
-  ukernel.cpu_simd = cpu
-
-  return ukernel
+  # 64-bit - use 8/12 out of the 16 XMM/YMM registers
+  result.nr *= 2            # base regs * 2 - TODO: 32-bit run out of regs.
+  result.cpu_simd = cpu
 
   # TODO: For AVX-512, we assume that CPU have 2 AVX512 units
   #       This is true on Skylake-X and Xeon-W and Xeon-SP Gold 6XXX

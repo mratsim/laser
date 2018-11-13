@@ -16,16 +16,16 @@ when defined(i386) or defined(amd64):
     {.pragma: x86, noDecl, header:"<x86intrin.h>".}
   type
     m128* {.importc: "__m128", x86_type.} = object
-      f0, f1, f2, f3: float32
+      raw: array[4, float32]
     m128d* {.importc: "__m128d", x86_type.} = object
-      d0, d1: float64
+      raw: array[2, float64]
 
   ## SSE
   # Reminder: x86 is little-endian, order is [low part, high part]
   func mm_setzero_ps*(): m128 {.importc: "_mm_setzero_ps", x86.}
     ## [float32 0, 0, 0, 0]
   func mm_set1_ps*(a: float32): m128 {.importc: "_mm_set1_ps", x86.}
-    ## [a, a, a, a]
+    ## [float32 a, a, a, a]
   func mm_load_ps*(aligned_data: ptr float32): m128 {.importc: "_mm_load_ps", x86.}
     ## Load 4 packed float32 in __m128. They must be aligned on 16-byte boundary.
   func mm_load_ss*(aligned_data: ptr float32): m128 {.importc: "_mm_load_ss", x86.}
@@ -83,18 +83,26 @@ when defined(i386) or defined(amd64):
   ## AVX
   type
     m256* {.importc: "__m256", x86_type.} = object
-      f0, f1, f2, f3, f4, f5, f6, f7: float32
+      raw: array[8, float32]
     m256d* {.importc: "__m256d", x86_type.} = object
-      f0, f1, f2, f3: float64
+      raw: array[4, float64]
 
   func mm256_setzero_ps*(): m256 {.importc: "_mm256_setzero_ps", x86.}
-    ## [float32 0, 0, 0, 0]
+    ## [float32 0, 0, 0, 0, 0, 0, 0, 0]
+  func mm256_set1_ps*(a: float32): m128 {.importc: "_mm256_set1_ps", x86.}
+    ## [float32 a, a, a, a, a, a, a, a]
   func mm256_load_ps*(aligned_data: ptr float32): m256 {.importc: "_mm256_load_ps", x86.}
-    ## Load 4 packed float32 in __m128. They must be aligned on 16-byte boundary.
+    ## Load 8 packed float32 in __m128. They must be aligned on 16-byte boundary.
   func mm256_add_ps*(a, b: m256): m256 {.importc: "_mm256_add_ps", x86.}
     ## Vector addition
+  func mm256_mul_ps*(a, b: m256): m256 {.importc: "_mm256_mul_ps", x86.}
+    ## Vector multiplication
   func mm256_castps256_ps128*(a: m256): m128 {.importc: "_mm256_castps256_ps128", x86.}
     ## Returns the lower part of a m256 in a m128
   func mm256_extractf128_ps*(v: m256, m: cint{lit}): m128 {.importc: "_mm256_extractf128_ps", x86.}
     ## Extracts the low part (m = 0) or high part (m = 1) of a m256 into a m128
     ## m must be a literal
+
+  ## FMA
+  func mm256_fmadd_ps*(a, b, c: m256): m256 {.importc: "_mm256_fmadd_ps", x86.}
+    ## a*b + c
