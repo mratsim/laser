@@ -89,7 +89,7 @@ when defined(i386) or defined(amd64):
 
   func mm256_setzero_ps*(): m256 {.importc: "_mm256_setzero_ps", x86.}
     ## [float32 0, 0, 0, 0, 0, 0, 0, 0]
-  func mm256_set1_ps*(a: float32): m128 {.importc: "_mm256_set1_ps", x86.}
+  func mm256_set1_ps*(a: float32): m256 {.importc: "_mm256_set1_ps", x86.}
     ## [float32 a, a, a, a, a, a, a, a]
   func mm256_load_ps*(aligned_data: ptr float32): m256 {.importc: "_mm256_load_ps", x86.}
     ## Load 8 packed float32 in __m128. They must be aligned on 16-byte boundary.

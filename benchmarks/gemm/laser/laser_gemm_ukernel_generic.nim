@@ -115,14 +115,12 @@ template ukernel_impl(){.dirty.} =
 
   for k in 0 ..< kc:
     # TODO prefetch
-
-    # ⚠ Warning AB result is transposed
     unroll_ukernel(AB, A, B)   # 95% of GEMM time is here
 
     A += MR
     B += NR
 
-proc gebb_ukernel*[T; ukernel: static MicroKernel](
+proc gebb_ukernel_generic*[T; ukernel: static MicroKernel](
       kc: int,
       alpha: T, packedA, packedB: ptr UncheckedArray[T],
       beta: T, vC: MatrixView[T]
