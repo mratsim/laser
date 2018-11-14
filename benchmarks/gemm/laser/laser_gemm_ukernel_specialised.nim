@@ -58,11 +58,21 @@ macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, M
 
   ## Interleaved broadcast and FMA
   var bcast_fma = newStmtList()
-  for i in countup(0, MR-1, 2):
+  block:
+    let a0 = rA[0]
+    bcast_fma.add quote do:
+      `a0` = mm256_set1_ps(`A`[`k`*MR])
+
+  for i in countup(0, MR-1, 2): #  to MR inclusive
     for ii in 0 ..< NbVecs:
+      if i != MR:
+        # broadcast next iteration
+        let a_next = rA[(ii+1) mod NbVecs]
+        bcast_fma.add quote do:
+          `a_next` = mm256_set1_ps(`A`[`k`*MR+(`i`+1)+`ii`*`NBElems`])
+
+      # Do FMA on the current one
       let a = rA[ii]
-      bcast_fma.add quote do:
-        `a` = mm256_set1_ps(`A`[`k`*MR+`i`+`ii`*`NBElems`])
       for jj in 0 ..< NbVecs:
         let b = rB[jj]
         let AB = rAB[min(MR-1, i + ii)][jj]
