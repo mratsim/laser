@@ -3,11 +3,11 @@
 # Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
 # This file may not be copied, modified, or distributed except according to those terms.
 
-####################################
+# ############################################################
 #
-# Runtime tiles dimensioning for GEMM
+#               Cache and register optimizations
 #
-####################################
+# ############################################################
 
 # Papers:
 #   [1] Anatomy of High-Performance Matrix Multiplication (Revised)
@@ -33,24 +33,23 @@
 # We assume that the CPU has at least 2 levels of cache
 
 import
-  ../../../laser/[cpuinfo, compiler_optim_hints],
-  typetraits,
-  ./laser_gemm_utils
+  ../../cpuinfo, ../../compiler_optim_hints,
+  ../../private/memory,
+  typetraits, macros,
+  ./gemm_utils
 
-# ##########################################################################################
-
-# #####################
+# ############################################################
 #
-# Microkernel (µkernel)
+#                    Microkernel (µkernel)
 #
-# #####################
+# ############################################################
 
 # We have to take into account vectorisation
 # so that the microkernel can be processed with vectorized intrinsics.
 #
 # Caux [mr, nr] must stay in register.
 #   - mr ~= nr is optimal to amortize register load cost
-#   - some registers must be left to prefetch bufA and bufB
+#   - some registers must be left to prefetch Ã and ~B (PackedA and PackedB)
 #   - nr >= (flops/cycle) / (bytes/cycle) * sizeof(element)
 #
 # For example Haswell is capable of
@@ -68,7 +67,7 @@ type
     vec_size*: int
     cpu_simd*: CPUFeatureX86
 
-    # TODO: ARM support with a when arm ...
+    # TODO: ARM support
     #   - https://github.com/nim-lang/Nim/issues/9679
     #   - https://github.com/nim-lang/Nim/issues/9678
 
@@ -102,7 +101,7 @@ const X86_vecsize_int: X86_FeatureMap = [
 ]
 
 # mr * nr < number of registers - 4
-# 4 registers are needed to hold bufA and bufB
+# 4 registers are needed to hold Ã and ~B and loop index
 const X86_regs: X86_FeatureMap = [
   x86_Generic: 2,
   x86_SSE:     2, # 8 XMM regs in 32-bit, 16 in 64-bit (we assume 32-bit mode)
@@ -113,7 +112,6 @@ const X86_regs: X86_FeatureMap = [
 ]
 
 func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
-  # Cannot reproduce a small case :/
   when T is SomeFloat:
     result.vecsize =  X86_vecsize_float[cpu]
   else:
@@ -123,7 +121,7 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
   # The inner microkernel loop does:
   #   AB[m][n] = A[m] * B[n]
   # So n should be the vector size
-  # if most compute are row-Major.
+  # if most matrices are row-Major.
   # This avoids dealing with transpose
   # in the inner loop and untranspose in the epilogue
 
@@ -146,7 +144,7 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
   # the difference being between the broadcast and shuffle
   # operations. In implementation they use 6x16 ukernel.
   #
-  # OpenBLAS uses 16x4 for float and 4x8 for double
+  # OpenBLAS uses 12x4 for float and 4x8 for double
   # MKLDNN also uses 16x6 for float and 8x6 for double (?)
   #   see unroll_factor: https://github.com/intel/mkl-dnn/blob/21fb5f2af1dd14e132af4f1b79160977ee487818/src/cpu/gemm/gemm_utils.hpp#L30-L48
 
@@ -154,7 +152,7 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
 # Workaround "undeclared identifier mr or nr"
 # for some reason the compiler cannot access fields in
 # the static MicroKernel.
-import macros
+
 macro extract_mr*(ukernel: static MicroKernel): untyped =
   result = newLit ukernel.mr
 macro extract_nr*(ukernel: static MicroKernel): untyped =
@@ -165,7 +163,11 @@ macro extract_cpu_simd*(ukernel: static MicroKernel): untyped =
   let simd = ukernel.cpu_simd
   result = quote do: CPUFeatureX86(`simd`)
 
-# ##########################################################################################
+# ############################################################
+#
+#                    Loop tiling
+#
+# ############################################################
 
 type Tiles*[T] = ref object
   a*: ptr UncheckedArray[T]
@@ -176,26 +178,14 @@ type Tiles*[T] = ref object
   jr_num_nr_tiles*: int
   a_alloc_mem: pointer # TODO Save on cache line, use an aligned allocator to not track this
   b_alloc_mem: pointer
+  # The Tiles data structure takes 64-byte = 1 cache-line
+  # TODO: packed and aligned
 
 proc deallocTiles[T](tiles: Tiles[T]) =
   if not tiles.a_alloc_mem.isNil:
     deallocShared tiles.a_alloc_mem
   if not tiles.b_alloc_mem.isNil:
     deallocShared tiles.b_alloc_mem
-
-func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
-  static: assert T.supportsCopyMem
-
-  withCompilerOptimHints()
-  let address = cast[ByteAddress](p)
-  let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
-    let remainder = address and (LASER_MEM_ALIGN - 1) # mod power of 2
-    if remainder == 0:
-      assume_aligned cast[ptr UncheckedArray[T]](p)
-    else:
-      let offset = LASER_MEM_ALIGN - remainder
-      assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
-  return aligned_ptr
 
 proc newTiles*(
         ukernel: static MicroKernel,
@@ -236,7 +226,6 @@ proc newTiles*(
   #     by the TLB and (2) the L2 cache
   #     In practice mc is chosen so that A occupies about half the smaller of (1) and (2)
 
-
   # TODO: heuristics to compute the size
   result.mc = min(120, M)
   result.kc = min(240, K)
@@ -253,6 +242,6 @@ proc newTiles*(
   result.a = assume_aligned align_raw_data(T, result.a_alloc_mem)
   result.b = assume_aligned align_raw_data(T, result.b_alloc_mem)
 
+  # jr loop is parallel
   # Workaround for Nim OpenMP for loop not supporting non-unit increment
-  # we don't partition N so N = NC
-  result.jr_num_nr_tiles = (N+nr-1) div nr
+  result.jr_num_nr_tiles = (result.nc+nr-1) div nr

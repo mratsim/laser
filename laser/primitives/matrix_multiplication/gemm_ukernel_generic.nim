@@ -6,15 +6,17 @@
 # Generic microkernel for matrix multiplication
 
 import
-  ./laser_gemm_tiling, ./laser_gemm_matrix, ./laser_gemm_utils,
-  ../../../laser/[cpuinfo, compiler_optim_hints],
+  ../../cpuinfo, ../../compiler_optim_hints,
+  ./gemm_tiling, ./gemm_utils,
   macros
 
-# TODO: vzeroupper for AVX version.
 withCompilerOptimHints()
 
-# ########################
-# Epilogue
+# ############################################################
+#
+#          Epilogue: update the result C matrix
+#
+# ############################################################
 #
 # Cases
 # 1. C *=   β, starting default
@@ -25,7 +27,6 @@ withCompilerOptimHints()
 #
 # TODO: Fused operations like relu/sigmoid/tanh
 #       should be done here as well
-
 
 proc gebb_ukernel_epilogue*[MR, NR: static int, T](
       alpha: T, AB: array[MR, array[NR, T]],
@@ -91,6 +92,12 @@ func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well
 
+# ############################################################
+#
+#          Internal GEBB microkernel implementation
+#
+# ############################################################
+
 template ukernel_impl(){.dirty.} =
   const
     MR = ukernel.extract_mr()
@@ -107,6 +114,12 @@ template ukernel_impl(){.dirty.} =
     for i in 0 ..< MR:
       for j in `||`(0, NR-1, "simd"):
         AB[i][j] += A[k*MR+i] * B[k*NR+j]
+
+# ############################################################
+#
+#               Exported functions
+#
+# ############################################################
 
 proc gebb_ukernel_generic*[T; ukernel: static MicroKernel](
       kc: int,

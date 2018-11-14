@@ -4,11 +4,29 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  ../../../laser/[cpuinfo, compiler_optim_hints],
-  ./laser_gemm_tiling, ./laser_gemm_matrix, ./laser_gemm_utils,
-  ./laser_gemm_ukernel_dispatch, ./laser_gemm_packing
+  ../../cpuinfo, ../../compiler_optim_hints,
+  ./gemm_tiling, ./gemm_utils,
+  ./gemm_ukernel_dispatch, ./gemm_packing
 
 withCompilerOptimHints()
+
+# ############################################################
+#
+#      Optimized GEMM (Generalized Matrix-Multiplication)
+#
+# ############################################################
+
+# Features
+#  - Arbitrary stride support
+#  - Efficient implementation (within 90% of the speed of OpenBLAS, more tuning to expect)
+#  - Parallel and scale linearly with number of cores
+#
+# Future
+#  - Implementation extended to integers
+#  - ARM Neon optimisation
+#  - Small matrix multiply optimisation
+#  - Pre-packing to when computing using the same matrix
+#  - batched matrix multiplication
 
 # Terminology
 #   - M, Matrix: Both dimension are large or unknown
@@ -17,8 +35,15 @@ withCompilerOptimHints()
 #
 #   - GEMM: GEneralized Matrix-Matrix multiplication
 #   - GEPP: GEneralized Panel-Panel multiplication
-#   - GEBP: Generalized Block-Panel multiplication
+#   - GEBP: Generalized Block-Panel multiplication (macrokernel)
+#   - GEBB: GEneralized Block-Block multiplication (microkernel)
 #   ...
+
+# ############################################################
+#
+#                     GEBP Macrokernel
+#
+# ############################################################
 
 proc gebp_mkernel[T; ukernel: static MicroKernel](
       mc, nc, kc: int,
@@ -63,7 +88,6 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
           alpha, tiles.a + ir*kc, tiles.b + jr*kc,   #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
           beta, mcncC.stride(ir, jr)                 #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
         )                                            #    βC[ic:ic+mc, jc:jc+nc]
-
       else:
         # Matrix edges
         gebb_ukernel_edge[T, ukernel](               # GEBB microkernel + epilogue
@@ -72,8 +96,11 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
           beta, mcncC.stride(ir, jr)                 #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
         )                                            #    βC[ic:ic+mc, jc:jc+nc]
 
-    # ###################################
-  # #####################################
+# ###########################################################################################
+#
+#              GEMM Internal Implementation
+#
+# ###########################################################################################
 
 proc gemm_impl[T; ukernel: static MicroKernel](
       M, N, K: int,
@@ -81,19 +108,8 @@ proc gemm_impl[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T],
       tiles: Tiles[T]
     ) =
-  # Loop concerns:
-  #   - Which one to parallelize
-  #   - Handling edge cases where tile does not divide the dimension
-  #   - Reducing indexing overhead. For example Arraymancer fallback BLAS
-  #     requires to multiply the iteration index by the dimension stride.
-  #     We can increment the index by the stride directly instead.
-  #     (But that makes edge cases harder)
-  #   - Reducing register pressure. We stress registers a lot, reducing
-  #     the number of loop variables would allow the compiler
-  #     to dedicate more registers to compute
-
                                                       # A[0:M, 0:K]
-  # ##################################################################
+  # ####################################################################
   # 1. for jc = 0,...,n−1 in steps of nc
   # not partitioned currently nc = N
   let nc = N                                          # B[0:K, jc:jc+nc]
@@ -122,8 +138,12 @@ proc gemm_impl[T; ukernel: static MicroKernel](
           alpha, beta, vC.stride(ic, 0),              #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
           tiles                                       #    βC[ic:ic+mc, jc:jc+nc]
         )
-    # ####################################
-  # ######################################
+
+# ############################################################
+#
+#   Exported function and dispatch with CPU runtime detection
+#
+# ############################################################
 
 proc gemm_strided*[T: SomeNumber](
       M, N, K: int,
@@ -136,9 +156,8 @@ proc gemm_strided*[T: SomeNumber](
       C: ptr T,
       rowStrideC, colStrideC: int) =
 
-    # TODO detect colMajor / transpose for contiguous iteration
-    # TODO shortcut alpha = 0 or K = 0
-    # TODO: custom epilogue fusion like relu/tanh/sigmoid
+    # TODO: shortcut alpha = 0 or K = 0
+    # TODO: elementwise epilogue fusion like relu/tanh/sigmoid
     # TODO: shortcut for small gemm
 
     # Create a view to abstract deling with strides
@@ -153,10 +172,8 @@ proc gemm_strided*[T: SomeNumber](
     #   - block A: mc*kc L2 cache
     #   - panel B: kc*nc L3 cache
 
-    # Dispatch - TODO, support for element-wise epilogue like relu or tanh
     template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
       const ukernel = cpu_features.x86_ukernel(T)
-      # const ukernel = MicroKernel(mr: 6, nr: 16, vec_size: 32, cpu_simd: x86_AVX2)
       let tiles = ukernel.newTiles(T, M, N, K)
       gemm_impl[T, ukernel](
         M, N, K,
@@ -179,7 +196,12 @@ proc gemm_strided*[T: SomeNumber](
         elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
     dispatch(x86_Generic)
 
-# ########################################################################################
+# ############################################################
+#
+#                       Private tests
+#
+# ############################################################
+
 when isMainModule:
   # Tests
   block:

@@ -4,11 +4,17 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  ./laser_gemm_tiling, ./laser_gemm_matrix,
-  ./laser_gemm_ukernel_generic,
-  ./laser_gemm_ukernel_specialised
+  ./gemm_tiling, ./gemm_utils,
+  ./gemm_ukernel_generic,
+  ./gemm_ukernel_avx
 
 export gebb_ukernel_edge
+
+# ############################################################
+#
+#         Dispatch according to runtime CPU detection
+#
+# ############################################################
 
 proc gebb_ukernel*[T; ukernel: static MicroKernel](
       kc: int,

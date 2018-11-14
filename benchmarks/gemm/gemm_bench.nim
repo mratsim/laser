@@ -47,7 +47,7 @@ import
   ./gemm_common,
   ../blas,
   ./arraymancer/blas_l3_gemm,
-  ./laser/laser_gemm
+  ../../laser/primitives/matrix_multiplication/gemm
 
 const
   M     =  16*6*20  # 1500
@@ -134,7 +134,7 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int) =
   let a_ptr{.restrict.} = a[0].unsafeAddr
   let b_ptr{.restrict.} = b[0].unsafeAddr
   let c_ptr{.restrict.} = output[0].addr
-  bench("New Laser GEMM implementation - Generic SIMD"):
+  bench("Laser production implementation"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
     zeroMem(output[0].addr, out_size) # We zero memory between computation
   do:

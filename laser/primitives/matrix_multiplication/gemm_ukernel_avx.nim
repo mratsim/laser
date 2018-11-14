@@ -6,10 +6,17 @@
 # Specialized microkernels for matrix multiplication
 
 import
-  ./laser_gemm_tiling, ./laser_gemm_matrix, ./laser_gemm_utils,
-  ../../../laser/[cpuinfo, compiler_optim_hints],
+  ../../cpuinfo, ../../compiler_optim_hints,
+  ../../simd,
   macros,
-  ./laser_gemm_ukernel_generic, ./laser_gemm_ukernel_aux
+  ./gemm_tiling, ./gemm_utils,
+  ./gemm_ukernel_generic
+
+# ############################################################
+#
+#               AVX, AVX + FMA (AVX2) Microkernels
+#
+# ############################################################
 
 macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, MR, NR: static int, kc: int): untyped =
 
@@ -121,7 +128,7 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
     alpha, AB,
     beta, vC)
 
-# #################################################
+# #####################################################
   # Reference loop -  AB: array[MR, array[NR, float32]]
   # for k in 0 ..< kc:
   #   for i in 0 ..< MR:
