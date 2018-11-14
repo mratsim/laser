@@ -68,9 +68,11 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
     let offBuf = buffer + kc*unroll_stop
     for k in 0 ..< kc:
       for i in 0 ..< remainder:
+        # echo "offbuf[",k,"*",MR,"+",i,"=",k*MR+i,"] - ", "A[",unroll_stop,"+",i,", ",k,"=", (unroll_stop+i)*A.rowStride+k,"] = ", A[unroll_stop+i, k]
         offBuf[k*MR + i] = A[unroll_stop+i, k]
       for i in remainder ..< MR:
         # Pad with 0 if packing over the edge
+        # echo "offbuf[",k,"*",MR,"+",i,"=",k*MR+i,"]"
         offBuf[k*MR + i] = 0.T
 
   # block:

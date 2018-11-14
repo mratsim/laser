@@ -155,8 +155,8 @@ proc gemm_strided*[T: SomeNumber](
 
     # Dispatch - TODO, support for element-wise epilogue like relu or tanh
     template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
-      # const ukernel = cpu_features.x86_ukernel(T)
-      const ukernel = MicroKernel(mr: 4, nr: 8, vec_size: 32, cpu_simd: x86_AVX2)
+      const ukernel = cpu_features.x86_ukernel(T)
+      # const ukernel = MicroKernel(mr: 6, nr: 16, vec_size: 32, cpu_simd: x86_AVX2)
       let tiles = ukernel.newTiles(T, M, N, K)
       gemm_impl[T, ukernel](
         M, N, K,
@@ -344,8 +344,8 @@ when isMainModule:
       0,  res_ab[0][0].addr,  2, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ", res_ab
+    # echo "expected: ", ab
+    # echo "result: ", res_ab
 
     doAssert res_ab == ab
     # echo '\n'
@@ -381,8 +381,8 @@ when isMainModule:
       0,  res_ab[0][0].addr,  8, 1
       )
 
-    echo "expected: ", ab
-    echo "result: ",   res_ab
+    # echo "expected: ", ab
+    # echo "result: ",   res_ab
 
     doAssert res_ab == ab
     # echo '\n'

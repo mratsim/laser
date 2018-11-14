@@ -280,6 +280,8 @@ proc newTiles*(
     result.mc = (l2h - result.kc * nr * T.sizeof)
     result.mc = result.mc div (T.sizeof * (result.kc + nr))
     result.mc = partition(M, result.mc, nr)
+    # Round so that it's a multiple of mr
+    result.mc = result.mc mod mr + mr
   else:
     result.kc = partition(K, result.kc, mr)
 
@@ -288,18 +290,19 @@ proc newTiles*(
   #   - 32768 l1 and 262144 l2 cache
   #   - float32
   #   - mr*nr microkernel = 12*6
+  #   - MxNxK = 1500x1500x1500
   #
   #   -> kc = 304, mc = 120
 
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
-  let bufA_size = T.sizeof * result.kc*(result.mc+1) # Size + Padding when packing
-  let bufB_size = T.sizeof * result.kc*(result.nc+1) # Size + Padding when packing
+  let bufA_size = T.sizeof * result.kc*(result.mc+mr) # Size + Padding when packing
+  let bufB_size = T.sizeof * result.kc*(result.nc+nr) # Size + Padding when packing
 
   # Note, if we parallelize on ic loop
   #   Each thread will access it's own part of A
   #   and so the buffer needs to be multiplied by the number of threads.
-  result.a_alloc_mem = allocShared0(bufA_size + 63)
-  result.b_alloc_mem = allocShared0(bufB_size + 63)
+  result.a_alloc_mem = allocShared(bufA_size + 63)
+  result.b_alloc_mem = allocShared(bufB_size + 63)
   result.a = assume_aligned align_raw_data(T, result.a_alloc_mem)
   result.b = assume_aligned align_raw_data(T, result.b_alloc_mem)
 
