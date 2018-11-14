@@ -173,65 +173,115 @@ when isMainModule:
     let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
 
-    # benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
-    # benchArraymancerFallback(a, b, NbSamples)
+    when not defined(openmp):
+      benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
+    benchArraymancerFallback(a, b, NbSamples)
     benchOpenBLAS(a, b, NbSamples)
     benchLaserGEMM(a, b, NbSamples)
 
-# Seems like my BLAS has false sharing issue
+# Seems like my original Arraymancer BLAS has false sharing issue
 
 ###############################
-# OpenMP
+# OpenMP (The simple loop tiling doesn't run properly for unknown reason so deactivated)
 
-# Warmup: 1.3832 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1915 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
-# A matrix shape: (M: 224, N: 8640)
-# B matrix shape: (M: 8640, N: 224)
-# Output shape: (M: 224, N: 224)
-# Required number of operations:   867.041 millions
-# Required bytes:                   15.483 MB
-# Arithmetic intensity:             56.000 FLOP/byte
-
-# OpenBLAS benchmark
-# Collected 20 samples in 0.412 seconds
-# Average time: 20.614 ms
-# Stddev  time: 5.328 ms
-# Min     time: 12.964 ms
-# Max     time: 33.944 ms
-# Perf:         42.060 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 2158.1591796875
+# A matrix shape: (M: 1920, N: 1920)
+# B matrix shape: (M: 1920, N: 1920)
+# Output shape: (M: 1920, N: 1920)
+# Required number of operations: 14155.776 millions
+# Required bytes:                   29.491 MB
+# Arithmetic intensity:            480.000 FLOP/byte
+# Theoretical peak single-core:     86.400 GFLOP/s
+# Theoretical peak multi:          172.800 GFLOP/s
 
 # Arraymancer fallback BLAS
-# Collected 20 samples in 4.727 seconds
-# Average time: 236.333 ms
-# Stddev  time: 24.520 ms
-# Min     time: 212.795 ms
-# Max     time: 313.838 ms
-# Perf:         3.669 GFLOP/s
+# Collected 10 samples in 24.931 seconds
+# Average time: 2492.867 ms
+# Stddev  time: 42.635 ms
+# Min     time: 2459.191 ms
+# Max     time: 2587.520 ms
+# Perf:         5.679 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
-# 2158.158935546875
+# 470.778076171875
+
+# OpenBLAS benchmark
+# Collected 10 samples in 1.101 seconds
+# Average time: 109.882 ms
+# Stddev  time: 3.064 ms
+# Min     time: 107.750 ms
+# Max     time: 117.494 ms
+# Perf:         128.827 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 470.7781677246094
+
+# New Laser GEMM implementation - Generic SIMD
+# Collected 10 samples in 1.205 seconds
+# Average time: 120.216 ms
+# Stddev  time: 2.914 ms
+# Min     time: 117.720 ms
+# Max     time: 127.660 ms
+# Perf:         117.753 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 470.7781677246094
 
 ###############################
-# Serial
+# Serial (openBLAS is still parallel)
 
-# OpenBLAS benchmark
-# Collected 20 samples in 0.558 seconds
-# Average time: 27.884 ms
-# Stddev  time: 10.439 ms
-# Min     time: 14.651 ms
-# Max     time: 47.797 ms
-# Perf:         31.094 GFLOP/s
+# Warmup: 1.1933 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A matrix shape: (M: 1920, N: 1920)
+# B matrix shape: (M: 1920, N: 1920)
+# Output shape: (M: 1920, N: 1920)
+# Required number of operations: 14155.776 millions
+# Required bytes:                   29.491 MB
+# Arithmetic intensity:            480.000 FLOP/byte
+# Theoretical peak single-core:     86.400 GFLOP/s
+# Theoretical peak multi:          172.800 GFLOP/s
+
+# Simple Tiling
+# Collected 10 samples in 23.062 seconds
+# Average time: 2305.908 ms
+# Stddev  time: 8.366 ms
+# Min     time: 2297.823 ms
+# Max     time: 2326.359 ms
+# Perf:         6.139 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
-# 2158.1591796875
+# 470.7776184082031
 
 # Arraymancer fallback BLAS
-# Collected 20 samples in 1.925 seconds
-# Average time: 96.261 ms
-# Stddev  time: 33.895 ms
-# Min     time: 74.643 ms
-# Max     time: 201.256 ms
-# Perf:         9.007 GFLOP/s
+# Collected 10 samples in 9.289 seconds
+# Average time: 928.651 ms
+# Stddev  time: 26.071 ms
+# Min     time: 911.806 ms
+# Max     time: 997.996 ms
+# Perf:         15.243 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 470.778076171875
+
+# OpenBLAS benchmark
+# Collected 10 samples in 1.107 seconds
+# Average time: 110.437 ms
+# Stddev  time: 3.799 ms
+# Min     time: 107.482 ms
+# Max     time: 119.737 ms
+# Perf:         128.180 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 470.7781677246094
+
+# New Laser GEMM implementation - Generic SIMD
+# Collected 10 samples in 2.177 seconds
+# Average time: 217.430 ms
+# Stddev  time: 9.996 ms
+# Min     time: 208.479 ms
+# Max     time: 233.767 ms
+# Perf:         65.105 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 470.7781677246094
