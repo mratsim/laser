@@ -11,31 +11,61 @@ import
   macros,
   ./laser_gemm_ukernel_generic, ./laser_gemm_ukernel_aux
 
-macro B_load(mB, B: untyped, NbVecs, NBElems: static int, k: int): untyped =
-  result = newStmtList()
-  for jj in 0 ..< NbVecs:
-    result.add quote do:
-      `mB`[`jj`] = mm256_load_ps(`B`[`k`*NR+`jj`*`NBElems`].addr)
+macro ukernel_impl(simd: static CPUFeatureX86, AB, A, B: untyped, NbVecs, NBElems, MR: static int, kc: int): untyped =
 
-macro B_prefetch(B: untyped, NbVecs, NBElems: static int, k: int): untyped =
   result = newStmtList()
+  var mA: seq[NimNode]
+  var mB: seq[NimNode]
+  for i in 0 ..< NbVecs:
+    mA.add genSym(nskVar, "A" & $i)
+    mB.add genSym(nskVar, "B" & $i)
+  let k = genSym(nskForVar)
+
+  ## Declare
+  var declBody = newStmtList()
+  for a in mA:
+    declBody.add quote do:
+      var `a`: m256
+  for b in mB:
+    declBody.add quote do:
+      var `b`: m256
+
+  ## Prefetch
+  var prefetchBody = newStmtList()
   for jj in 0 ..< NbVecs:
-    result.add quote do:
+    prefetchBody.add quote do:
       prefetch(`B`[(`k`+1)*NR+`jj`*`NBElems`].addr) # Read, High temp locality (L1+L2 eviction cache rule)
 
-macro broadcast_and_fma(simd: static CPUFeatureX86, AB, A, mA, mB: untyped, NbVecs, NBElems: static int, k, i: int): untyped =
-  # Interleave the broadcast and FMA
-  result = newStmtList()
-  for ii in 0 ..< NbVecs:
-    result.add quote do:
-      `mA`[`ii`] = mm256_set1_ps(`A`[`k`*MR+`i`+`ii`*NBElems])
-    for jj in 0 ..< NbVecs:
-      if simd == x86_AVX:
-        result.add quote do:
-          `AB`[`i`+`ii`][`jj`] = mm256_add_ps(mm256_mul_ps(`mA`[`ii`], `mB`[`jj`]), `AB`[`i`+`ii`][`jj`])
-      else:
-        result.add quote do:
-          `AB`[`i`+`ii`][`jj`] = mm256_fmadd_ps(`mA`[`ii`], `mB`[`jj`], `AB`[`i`+`ii`][`jj`])
+  ## Load
+  var loadBody = newStmtList()
+  for jj in 0 ..< NbVecs:
+    let b = mb[jj]
+    loadBody.add quote do:
+      `b` = mm256_load_ps(`B`[`k`*NR+`jj`*`NBElems`].addr)
+
+  ## Interleaved broadcast and FMA
+  var bcast_fma = newStmtList()
+  for i in countup(0, MR-1, 2):
+    for ii in 0 ..< NbVecs:
+      let a = mA[ii]
+      bcast_fma.add quote do:
+        `a` = mm256_set1_ps(`A`[`k`*MR+`i`+`ii`*`NBElems`])
+      for jj in 0 ..< NbVecs:
+        let b = mb[jj]
+        if simd == x86_AVX:
+          bcast_fma.add quote do:
+            `AB`[`i`+`ii`][`jj`] = mm256_add_ps(mm256_mul_ps(`a`, `b`), `AB`[`i`+`ii`][`jj`])
+        else:
+          bcast_fma.add quote do:
+            `AB`[`i`+`ii`][`jj`] = mm256_fmadd_ps(`a`, `b`, `AB`[`i`+`ii`][`jj`])
+
+  ## Assemble:
+  result = quote do:
+    `declBody`
+    for `k` in 0 ..< `kc`:
+      `prefetchBody`
+      `loadBody`
+      `bcast_fma`
 
 proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
       kc: int,
@@ -61,18 +91,11 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-  var mA, mB: array[NbVecs, m256] # we unroll in both direction by NbVecs (usually 2 except for AVX512)
-
-  for k in 0 ..< kc:
-    B_prefetch(B, NbVecs, NbElems, k)
-    B_load(mB, B, NbVecs, NbElems, k)
-    for i in countup(0, MR-1, 2):
-      simd.broadcast_and_fma(AB, A, mA, mB, NbVecs, NbElems, k, i)
+  simd.ukernel_impl(AB, A, B, NbVecs, NBElems, MR, kc)
 
   gebb_ukernel_epilogue(
     alpha, cast[array[MR, array[NR, float32]]](AB),
     beta, vC)
-
 
 # #################################################
   # Reference loop -  AB: array[MR, array[NR, float32]]
