@@ -11,24 +11,37 @@ import
   macros,
   ./laser_gemm_ukernel_generic, ./laser_gemm_ukernel_aux
 
-macro ukernel_impl(simd: static CPUFeatureX86, AB, A, B: untyped, NbVecs, NBElems, MR: static int, kc: int): untyped =
+macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, MR, NR: static int, kc: int): untyped =
 
   result = newStmtList()
-  var mA: seq[NimNode]
-  var mB: seq[NimNode]
-  for i in 0 ..< NbVecs:
-    mA.add genSym(nskVar, "A" & $i)
-    mB.add genSym(nskVar, "B" & $i)
   let k = genSym(nskForVar)
+
+  ## Registers
+  var rA: seq[NimNode]           # array[MR div 2, m256] - TODO, support NbVecs != 2
+  var rB: seq[NimNode]           # array[NR div vecsize, m256]
+  for i in 0 ..< NbVecs:
+    rA.add genSym(nskVar, "A" & $i)
+    rB.add genSym(nskVar, "B" & $i)
+  var rAB = nnkBracket.newTree() # array[MR, array[NbVecs, m256]]
+  for i in 0 ..< MR:
+    var rABi = nnkBracket.newTree()
+    for j in 0 ..< NbVecs:
+      rABi.add genSym(nskVar, "AB" & $i & "__" & $j)
+    rAB.add rABi
 
   ## Declare
   var declBody = newStmtList()
-  for a in mA:
+  for a in rA:
     declBody.add quote do:
-      var `a`: m256
-  for b in mB:
+      var `a`{.noinit.}: m256
+  for b in rB:
     declBody.add quote do:
-      var `b`: m256
+      var `b`{.noinit.}: m256
+  for i in 0 ..< MR:
+    for j in 0 ..< NbVecs:
+      let ab = rAB[i][j]
+      declBody.add quote do:
+        var `ab` = mm256_setzero_ps()
 
   ## Prefetch
   var prefetchBody = newStmtList()
@@ -39,7 +52,7 @@ macro ukernel_impl(simd: static CPUFeatureX86, AB, A, B: untyped, NbVecs, NBElem
   ## Load
   var loadBody = newStmtList()
   for jj in 0 ..< NbVecs:
-    let b = mb[jj]
+    let b = rB[jj]
     loadBody.add quote do:
       `b` = mm256_load_ps(`B`[`k`*NR+`jj`*`NBElems`].addr)
 
@@ -47,25 +60,28 @@ macro ukernel_impl(simd: static CPUFeatureX86, AB, A, B: untyped, NbVecs, NBElem
   var bcast_fma = newStmtList()
   for i in countup(0, MR-1, 2):
     for ii in 0 ..< NbVecs:
-      let a = mA[ii]
+      let a = rA[ii]
       bcast_fma.add quote do:
         `a` = mm256_set1_ps(`A`[`k`*MR+`i`+`ii`*`NBElems`])
       for jj in 0 ..< NbVecs:
-        let b = mb[jj]
+        let b = rB[jj]
+        let AB = rAB[min(MR-1, i + ii)][jj]
         if simd == x86_AVX:
           bcast_fma.add quote do:
-            `AB`[`i`+`ii`][`jj`] = mm256_add_ps(mm256_mul_ps(`a`, `b`), `AB`[`i`+`ii`][`jj`])
+            `AB` = mm256_add_ps(mm256_mul_ps(`a`, `b`), `AB`)
         else:
           bcast_fma.add quote do:
-            `AB`[`i`+`ii`][`jj`] = mm256_fmadd_ps(`a`, `b`, `AB`[`i`+`ii`][`jj`])
+            `AB` = mm256_fmadd_ps(`a`, `b`, `AB`)
 
   ## Assemble:
   result = quote do:
     `declBody`
     for `k` in 0 ..< `kc`:
-      `prefetchBody`
       `loadBody`
+      `prefetchBody`
       `bcast_fma`
+    ## Write registers to a MR/NR array
+    cast[array[MR, array[NR, float32]]](`rAB`)
 
 proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
       kc: int,
@@ -86,15 +102,13 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
     assert NR div 8 == 0 # Unrolling checks
     assert MR div 2 == 0
 
-  # var AB{.align_variable.}: array[MR, array[NR, float32]]
-  var AB{.align_variable.}: array[MR, array[NbVecs, m256]]
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-  simd.ukernel_impl(AB, A, B, NbVecs, NBElems, MR, kc)
+  let AB = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
 
   gebb_ukernel_epilogue(
-    alpha, cast[array[MR, array[NR, float32]]](AB),
+    alpha, AB,
     beta, vC)
 
 # #################################################
@@ -107,10 +121,10 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   # Reference AVX - AB: array[MR, m256] and NR == 8
   # for k in 0 ..< kc:
   #   for z in 0 ..< NbVecs:
-  #     mB[z] = mm256_load_ps(B[k*NR+MR*z].addr) # probably wrong
+  #     rB[z] = mm256_load_ps(B[k*NR+MR*z].addr) # probably wrong
   #   for i in 0 ..< MR:
-  #     mA = mm256_set1_ps(A[k*MR+i])
+  #     rA = mm256_set1_ps(A[k*MR+i])
   #     when simd == x86_AVX:
-  #       AB[i] = mm256_add_ps(mm256_mul_ps(mA, mB), AB[i])
+  #       AB[i] = mm256_add_ps(mm256_mul_ps(rA, rB), AB[i])
   #     else:
-  #       AB[i] = mm256_fmadd_ps(mA, mB, AB[i])
+  #       AB[i] = mm256_fmadd_ps(rA, rB, AB[i])
