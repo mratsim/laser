@@ -26,11 +26,8 @@
 #       Michael Lehn
 #     - http://apfel.mathematik.uni-ulm.de/~lehn/sghpc/gemm/index.html
 #
-#   [5] On Composing Matrix Multiplication from Kernels
-#       Bryan marker
-#     - http://www.cs.utexas.edu/users/flame/pubs/bamarker_thesis.pdf
-
-# We assume that the CPU has at least 2 levels of cache
+#   Laser wiki - GEMM optimization resources
+#     - https://github.com/numforge/laser/wiki/GEMM-optimization-resources
 
 import
   ../../cpuinfo, ../../compiler_optim_hints,
