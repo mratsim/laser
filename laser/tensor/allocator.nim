@@ -4,7 +4,7 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  ./datatypes, ../compiler_optim_hints, typetraits
+  ./datatypes, ../compiler_optim_hints, typetraits, ../private/memory
 
 # Storage backend allocation primitives
 
@@ -13,20 +13,6 @@ proc finalizer[T](storage: CpuStorage[T]) =
 
   if storage.memowner and not storage.memalloc.isNil:
     storage.memalloc.deallocShared()
-
-func align_raw_data(T: typedesc, p: pointer): ptr UncheckedArray[T] =
-  static: assert T.supportsCopyMem, "Tensors of seq, strings, ref types and types with non-trivial destructors cannot be aligned"
-
-  withCompilerOptimHints()
-  let address = cast[ByteAddress](p)
-  let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
-    let remainder = address and (LASER_MEM_ALIGN - 1) # modulo LASER_MEM_ALIGN (power of 2)
-    if remainder == 0:
-      assume_aligned cast[ptr UncheckedArray[T]](address)
-    else:
-      let offset = LASER_MEM_ALIGN - remainder
-      assume_aligned cast[ptr UncheckedArray[T]](address +% offset)
-  return aligned_ptr
 
 proc allocCpuStorage*[T](storage: var CpuStorage[T], size: int) =
   ## Allocate aligned memory to hold `size` elements of type T.

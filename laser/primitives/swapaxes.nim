@@ -7,8 +7,7 @@
 ## It is about 3xfaster than naive transposition
 
 import
-  ../compiler_optim_hints,
-  ./private/ptr_arithmetic
+  ../compiler_optim_hints
 
 when defined(openmp):
   {.passC: "-fopenmp".}
