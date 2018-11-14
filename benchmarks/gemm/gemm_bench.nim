@@ -50,9 +50,9 @@ import
   ./laser/laser_gemm
 
 const
-  M     =  1500
-  K     =  1500 # 16*3*20*3*3 # to make required ops similar to conv
-  N     =  1500
+  M     =  16*6*20 # 1500
+  K     =  16*6*20 # 1500 # 16*3*20*3*3 # to make required ops similar to conv
+  N     =  16*6*20 # 1500
   NbSamples = 1 # This might stresss the allocator when packing if the matrices are big
 
 const

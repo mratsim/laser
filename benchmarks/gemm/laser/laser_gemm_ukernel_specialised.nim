@@ -11,17 +11,23 @@ import
   macros,
   ./laser_gemm_ukernel_generic, ./laser_gemm_ukernel_aux
 
-macro B_load(mB, B: untyped, NbVecs: static int, k: int): untyped =
+macro B_load(mB, B: untyped, NbVecs, NBElems: static int, k: int): untyped =
   result = newStmtList()
   for z in 0 ..< NbVecs:
     result.add quote do:
-      `mB`[`z`] = mm256_load_ps(`B`[`k`*NR+`z`*MR].addr)
+      `mB`[`z`] = mm256_load_ps(`B`[`k`*NR+`z`*`NBElems`].addr)
 
-macro A_set1(mA, A: untyped, NbVecs: static int, k, i: int): untyped =
+macro A_set1(mA, A: untyped, NbVecs, NBElems: static int, k, i: int): untyped =
   result = newStmtList()
   for z in 0 ..< NbVecs:
     result.add quote do:
-      `mA`[`z`] = mm256_set1_ps(`A`[`k`*MR+`z`*NR+`i`])
+      `mA`[`z`] = mm256_set1_ps(`A`[`k`*MR+`i`+`z`*NBElems])
+
+macro B_prefetch(B: untyped, NbVecs, NBElems: static int, k: int): untyped =
+  result = newStmtList()
+  for z in 0 ..< NbVecs:
+    result.add quote do:
+      prefetch(`B`[(`k`+1)*NR+`z`*`NBElems`].addr) # Read, High temp locality (L1+L2 eviction cache rule)
 
 proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
       kc: int,
@@ -50,9 +56,10 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   var mA, mB: array[NbVecs, m256]
 
   for k in 0 ..< kc:
-    B_load(mB, B, NbVecs, k)
-    for i in 0 ..< MR:
-      A_set1(mA, A, NbVecs, k, i)
+    B_prefetch(B, NbVecs, NbElems, k)
+    B_load(mB, B, NbVecs, NbElems, k)
+    for i in countup(0, MR-1, 2):
+      A_set1(mA, A, NbVecs, NbElems, k, i)
       for z in 0 ..< NbVecs:
         when simd == x86_AVX:
           AB[i][z] = mm256_add_ps(mm256_mul_ps(mA[z], mB[z]), AB[i][z])
@@ -74,7 +81,7 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   # Reference AVX - AB: array[MR, m256] and NR == 8
   # for k in 0 ..< kc:
   #   for z in 0 ..< NbVecs:
-  #     mB[z] = mm256_load_ps(B[k*NR+MR*z].addr)
+  #     mB[z] = mm256_load_ps(B[k*NR+MR*z].addr) # probably wrong
   #   for i in 0 ..< MR:
   #     mA = mm256_set1_ps(A[k*MR+i])
   #     when simd == x86_AVX:
