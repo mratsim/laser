@@ -115,7 +115,7 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-  let AB = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
+  let AB{.align_variable,noinit.} = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
 
   gebb_ukernel_epilogue(
     alpha, AB,
@@ -127,14 +127,3 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   #   for i in 0 ..< MR:
   #     for j in 0 ..< NR:
   #       AB[i][j] += A[k*MR+i] * B[k*NR+j]
-
-  # Reference AVX - AB: array[MR, m256] and NR == 8
-  # for k in 0 ..< kc:
-  #   for z in 0 ..< NbVecs:
-  #     rB[z] = mm256_load_ps(B[k*NR+MR*z].addr) # probably wrong
-  #   for i in 0 ..< MR:
-  #     rA = mm256_set1_ps(A[k*MR+i])
-  #     when simd == x86_AVX:
-  #       AB[i] = mm256_add_ps(mm256_mul_ps(rA, rB), AB[i])
-  #     else:
-  #       AB[i] = mm256_fmadd_ps(rA, rB, AB[i])

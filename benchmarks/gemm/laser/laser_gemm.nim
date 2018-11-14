@@ -46,12 +46,12 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
   # 4. for jr = 0,...,nc−1 in steps of nr
   for jrb in 0||(tiles.jr_num_nr_tiles - 1):
     let jr = jrb * NR
-    let nr = min(nc - jr, NR)                      # C[ic:ic+mc, jc+jr:jc+jr+nr]
+    let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
     # ###################################
     # 5. for ir = 0,...,m−1 in steps of mr
     for ir in countup(0, mc-1, MR):
-      let mr = min(mc - ir, MR)                    # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
+      let mr = min(mc - ir, MR)                      # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
 
       # TODO save addr of next panel of A for prefetch
       # and if last iter, save addr of next panel of B

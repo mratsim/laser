@@ -221,12 +221,31 @@ proc newTiles*(
         T: typedesc,
         M, N, K: Natural,
         ): Tiles[T] =
+  # BLIS paper [2] section II Figure 2:
+  #   - kc * nr in L1 cache µkernel
+  #   - mc * kc in L2 cache Ã
+  #   - kc * nc in L3 cache ~B (no L3 in Xeon Phi ¯\_(ツ)_/¯)
+  new result, deallocTiles[T]
+  const
+    nr = ukernel.nr
+    mr = ukernel.mr
+
+  result.nc = N # We don't partition over N
+
+  # ## Panel sizes
+  # - TLB constraint
+  #   TA ̃ + 2(TBj + TCj)≤T
+  #   Note: optimizing the similar problem mckc/(2mc+2kc)
+  #         under the constraint that mckc ≤ K is the problem
+  #         of maximizing the area of a rectangle
+  #         while minimizing the perimeter,
+  #
   # Goto paper [1] section 6.3: choosing kc
   #   - kc should be as large as possible to amortize the mr*nr updates of Cj
   #   - Elements from Bj [kc, nr] must remain in L1 cache.
   #   - kc * nr should occupy less than half the L1 cache
-  #     so that bufA and Caux do not evict element of Bj
-  #   - bufA [kc, mc] should occupy
+  #     so that Ã and Caux do not evict element of Bj
+  #   - Ã [kc, mc] should occupy
   #     a considerable fraction of the L2 cache
   #   In our experience optimal choice is so that "kc" float64 occupy half a page
   #     -> a page is 4096 bytes = 512 float64 -> half a page = 256
@@ -236,63 +255,10 @@ proc newTiles*(
   #     by the TLB and (2) the L2 cache
   #     In practice mc is chosen so that A occupies about half the smaller of (1) and (2)
 
-  # BLIS paper [2] section II Figure 2:
-  #   - kc * nr in L1 cache µkernel
-  #   - mc * kc in L2 cache Ã
-  #   - kc * nc in L3 cache ~B (no L3 in Xeon Phi ¯\_(ツ)_/¯)
-  new result, deallocTiles[T]
-  const
-    nr = ukernel.nr
-    mr = ukernel.mr
-  let
-    l1 = cpuinfo_get_l1d_caches().size.int              # L1 cache
-    l2h = cpuinfo_get_l2_caches().size.int * 3 div 5    # More than half L2 cache
-    line_size = cpuinfo_get_l1d_caches().line_size.int
 
-  const Kc_Threshold = 240
-  # We use Mir-GLAS approach here
-
-  # First determine a candidate kc depending on l2 cache constraints
-  result.kc = (l2h - M * nr * T.sizeof) div ((M+nr)*T.sizeof)
-  result.mc = M
-  result.nc = N # We don't partition over N
-
-  # TLB constraint
-  # TA ̃ + 2(TBj + TCj)≤T
-  # Note: optimizing the similar problem mckc/(2mc+2kc)
-  #       under the constraint that mckc ≤ K is the problem
-  #       of maximizing the area of a rectangle
-  #       while minimizing the perimeter,
-  let TLB = 512 + 2*(nr*line_size + nr*mr * T.sizeof)
-
-  let halfPerimeter = T.sizeof * (mr + nr)
-
-  # Second, check if we have a small gemm
-  #         or if we don't fit kc*nr in TLB or L1 cache
-  if result.kc < Kc_Threshold or
-      l1 < TLB + result.kc * halfPerimeter:
-
-    result.kc = (l1 - TLB) div halfPerimeter
-    result.kc = partition(K, result.kc, mr)
-
-    # Now compute mc*kc so that it takes half the L2 cache
-    # Loading it in L1 must not evict kc*nr in L1
-    result.mc = (l2h - result.kc * nr * T.sizeof)
-    result.mc = result.mc div (T.sizeof * (result.kc + nr))
-    result.mc = partition(M, result.mc, nr)
-    # Round so that it's a multiple of mr
-    result.mc = result.mc mod mr + mr
-  else:
-    result.kc = partition(K, result.kc, mr)
-
-  # Example:
-  #   - AVX2 Broadwell
-  #   - 32768 l1 and 262144 l2 cache
-  #   - float32
-  #   - mr*nr microkernel = 12*6
-  #   - MxNxK = 1500x1500x1500
-  #
-  #   -> kc = 304, mc = 120
+  # TODO: heuristics to compute the size
+  result.mc = min(120, M)
+  result.kc = min(240, K)
 
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
   let bufA_size = T.sizeof * result.kc*(result.mc+mr) # Size + Padding when packing

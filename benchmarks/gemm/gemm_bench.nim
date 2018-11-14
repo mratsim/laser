@@ -50,10 +50,13 @@ import
   ./laser/laser_gemm
 
 const
-  M     =  16*6*20 # 1500
-  K     =  16*6*20 # 1500 # 16*3*20*3*3 # to make required ops similar to conv
-  N     =  16*6*20 # 1500
-  NbSamples = 10 # This might stresss the allocator when packing if the matrices are big
+  M     =  16*6*20  # 1500
+  K     =  16*6*20  # 1500 # 16*3*20*3*3 # to make required ops similar to conv
+  N     =  16*6*20  # 1500
+  NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
+  CpuGhz = 2.7      # Assuming no turbo
+  NumCpuCores = 2
+  CpuFlopCycle = 32 # AVX2: 2xFMA/cycle = 2x8x2 - 2 x 8 floats x (1 add + 1 mul)
 
 const
   ashape: MatrixShape = (M, K)
@@ -164,6 +167,8 @@ when isMainModule:
   echo &"Required number of operations: {req_ops.float / float(10^6):>9.3f} millions"
   echo &"Required bytes:                {req_bytes.float / float(10^6):>9.3f} MB"
   echo &"Arithmetic intensity:          {req_ops.float / req_bytes.float:>9.3f} FLOP/byte"
+  echo &"Theoretical peak single-core:  {CpuGhz * CpuFlopCycle:>9.3f} GFLOP/s"
+  echo &"Theoretical peak multi:        {CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GFLOP/s"
   block:
     let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
