@@ -17,29 +17,23 @@ macro B_load(mB, B: untyped, NbVecs, NBElems: static int, k: int): untyped =
     result.add quote do:
       `mB`[`jj`] = mm256_load_ps(`B`[`k`*NR+`jj`*`NBElems`].addr)
 
-macro A_set1(mA, A: untyped, NbVecs, NBElems: static int, k, i: int): untyped =
-  result = newStmtList()
-  for ii in 0 ..< NbVecs:
-    result.add quote do:
-      `mA`[`ii`] = mm256_set1_ps(`A`[`k`*MR+`i`+`ii`*NBElems])
-
 macro B_prefetch(B: untyped, NbVecs, NBElems: static int, k: int): untyped =
   result = newStmtList()
   for jj in 0 ..< NbVecs:
     result.add quote do:
       prefetch(`B`[(`k`+1)*NR+`jj`*`NBElems`].addr) # Read, High temp locality (L1+L2 eviction cache rule)
 
-macro AB_fma(simd: static CPUFeatureX86, AB, mA, mB: untyped, NbVecs: static int, i: int): untyped =
-
+macro broadcast_and_fma(simd: static CPUFeatureX86, AB, A, mA, mB: untyped, NbVecs, NBElems: static int, k, i: int): untyped =
+  # Interleave the broadcast and FMA
   result = newStmtList()
-  if simd == x86_AVX:
-    for ii in 0 ..< NbVecs:
-      for jj in 0 ..< NbVecs:
+  for ii in 0 ..< NbVecs:
+    result.add quote do:
+      `mA`[`ii`] = mm256_set1_ps(`A`[`k`*MR+`i`+`ii`*NBElems])
+    for jj in 0 ..< NbVecs:
+      if simd == x86_AVX:
         result.add quote do:
           `AB`[`i`+`ii`][`jj`] = mm256_add_ps(mm256_mul_ps(`mA`[`ii`], `mB`[`jj`]), `AB`[`i`+`ii`][`jj`])
-  else:
-    for ii in 0 ..< NbVecs:
-      for jj in 0 ..< NbVecs:
+      else:
         result.add quote do:
           `AB`[`i`+`ii`][`jj`] = mm256_fmadd_ps(`mA`[`ii`], `mB`[`jj`], `AB`[`i`+`ii`][`jj`])
 
@@ -73,8 +67,7 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
     B_prefetch(B, NbVecs, NbElems, k)
     B_load(mB, B, NbVecs, NbElems, k)
     for i in countup(0, MR-1, 2):
-      A_set1(mA, A, NbVecs, NbElems, k, i)
-      simd.AB_fma(AB, mA, mB, NbVecs, i)
+      simd.broadcast_and_fma(AB, A, mA, mB, NbVecs, NbElems, k, i)
 
   gebb_ukernel_epilogue(
     alpha, cast[array[MR, array[NR, float32]]](AB),
