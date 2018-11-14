@@ -30,7 +30,7 @@ withCompilerOptimHints()
 proc gebb_ukernel_epilogue*[MR, NR: static int, T](
       alpha: T, AB: array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T]
-    ) =
+    ) {.inline.}=
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.unsafeAddr)
 
@@ -61,7 +61,7 @@ func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
       alpha: T, AB: array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T],
       mr, nr: int # Tail to process
-    ) =
+    ) {.inline.}=
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.unsafeAddr)
 
