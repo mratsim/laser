@@ -24,9 +24,12 @@ proc gebb_ukernel*[T; ukernel: static MicroKernel](
     ){.inline.} =
   const simd = ukernel.extract_cpu_simd()
   const MR = ukernel.extract_MR()
+  const NbElems = 8 # TODO
 
+  prefetch(packedB, Read, LowTemporalLocality)
+  prefetch(packedB + NbElems, Read, LowTemporalLocality)
   for i in 0 ..< MR:
-    prefetch(vC[i, 0].addr, Write, ModerateTemporalLocality)
+    prefetch(vC[i, 0].addr, Write, HighTemporalLocality)
 
   when T is float32 and simd in {x86_AVX, x86_AVX2, x86_AVX512}:
     gebb_ukernel_f32_avx[ukernel](
