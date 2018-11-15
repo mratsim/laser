@@ -79,21 +79,23 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
       let mr = min(mc - ir, MR)
       let c_aux = mcncC.stride(ir, jr)               # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
 
-      # TODO save addr of next panel of A for prefetch
-      # and if last iter, save addr of next panel of B
+      let upanel_b = tiles.b + jr*kc
+      prefetch(upanel_b, Read, ModerateTemporalLocality)
+      let upanel_a = tiles.a + ir*kc
+      prefetch(upanel_a, Read, ModerateTemporalLocality)
 
       if nr == NR and mr == MR:
         # General case
         gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
                 kc,                                  #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
-          alpha, tiles.a + ir*kc, tiles.b + jr*kc,   #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+          alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
           beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
         )                                            #    βC[ic:ic+mc, jc:jc+nc]
       else:
         # Matrix edges
         gebb_ukernel_edge[T, ukernel](               # GEBB microkernel + epilogue
           mr, nr, kc,                                #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
-          alpha, tiles.a + ir*kc, tiles.b + jr*kc,   #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+          alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
           beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
         )                                            #    βC[ic:ic+mc, jc:jc+nc]
 
@@ -118,6 +120,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
   # ######################################
   # 2.   for pc = 0,...,k−1 in steps of kc
   for pc in countup(0, K-1, tiles.kc):
+    prefetch(tiles.b, Write, LowTemporalLocality)
     let kc = min(K - pc, tiles.kc) # Deal with edges  # A[0:M, pc:pc+kc]
 
     let kcncB = vB.stride(pc, 0)                      # B[pc:pc+kc, jc:jc+nc]
@@ -129,6 +132,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
     for ic in countup(0, M-1, tiles.mc):
+      prefetch(tiles.a, Write, LowTemporalLocality)
       let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
       let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]

@@ -50,9 +50,9 @@ import
   ../../laser/primitives/matrix_multiplication/gemm
 
 const
-  M     =  1500 # 16*6*20
-  K     =  1500 # 16*6*20 # 16*3*20*3*3 # to make required ops similar to conv
-  N     =  1500 # 16*6*20
+  M     =  16*6*20
+  K     =  16*6*20 
+  N     =  16*6*20
   NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
   CpuGhz = 2.7      # Assuming no turbo
   NumCpuCores = 2
