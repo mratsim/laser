@@ -22,7 +22,7 @@ withCompilerOptimHints()
 # ############################################################
 
 proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
-      tiles: Tiles[T],
+      packedA: ptr UncheckedArray[T],
       mc, kc: int,
       A: MatrixView[T]) =
   ## Packs panel [kc, mc] into buffer Ã (size ~half-L2 cache)
@@ -32,13 +32,12 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
   ## Concretely the outer dimension of packed matrices
   ## is k so that C[i, j] = A[i, k] * B[k, j]
   ## does not require strided access
-  let buffer{.restrict.} = assume_aligned tiles.a
+  let buffer{.restrict.} = assume_aligned packedA
   const MR = ukernel.extract_mr()
   let unroll_stop = mc.round_step_down(MR)
 
   # 1. Pack m matrices of size kc*mr, m = mc/mr
   {.emit:"""
-      // #pragma omp parallel for - no speed improvement
       for (int i = 0; i < `unroll_stop`; i+=`MR`)
         for (int k = 0; k < `kc`; k++)
           for (int ii = 0; ii < `MR`; ii++)
@@ -62,7 +61,7 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
 # ############################################################
 
 proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
-      tiles: Tiles[T],
+      packedB: ptr UncheckedArray[T],
       kc, nc: int,
       B: MatrixView[T]) =
   ## Packs panel [kc, nc] for ~B (half-L1 cache)
@@ -71,19 +70,28 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
   ## Concretely the outer dimension of packed matrices
   ## is k so that C[i, j] = A[i, k] * B[k, j]
   ## does not require strided access
-  let buffer{.restrict.} = tiles.b
+  let buffer{.restrict.} = assume_aligned packedB
   const NR = ukernel.extract_nr()
   let unroll_stop = nc.round_step_down(NR)
 
   # 1. Pack n matrices of size kc*nr, n = nc/nr
-  {.emit:"""
-      // #pragma omp parallel for - no speed improvement
-      for (int j = 0; j < `unroll_stop`; j+=`NR`)
-        for (int k = 0; k < `kc`; k++)
-          // #pragma omp simd // TODO - NR is always of vector size - special case unit stride for SIMD
-          for (int jj = 0; jj < `NR`; jj++)
-            `buffer`[j*`kc`+k*`NR`+jj] = `B`.buffer[k*`B`.rowStride + (j+jj)*`B`.colStride];
-  """.}
+  if B.colStride == 1:
+    {.emit:"""
+        #pragma omp parallel for
+        for (int j = 0; j < `unroll_stop`; j+=`NR`)
+          for (int k = 0; k < `kc`; k++)
+            #pragma omp simd
+            for (int jj = 0; jj < `NR`; jj++)
+              `buffer`[j*`kc`+k*`NR`+jj] = `B`.buffer[k*`B`.rowStride + j+jj];
+    """.}
+  else:
+    {.emit:"""
+        #pragma omp parallel for
+        for (int j = 0; j < `unroll_stop`; j+=`NR`)
+          for (int k = 0; k < `kc`; k++)
+            for (int jj = 0; jj < `NR`; jj++)
+              `buffer`[j*`kc`+k*`NR`+jj] = `B`.buffer[k*`B`.rowStride + (j+jj)*`B`.colStride];
+    """.}
 
   # 2. Process the tail
   let remainder = nc - unroll_stop

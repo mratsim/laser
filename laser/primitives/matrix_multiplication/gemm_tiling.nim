@@ -170,17 +170,25 @@ macro extract_c_unit_stride*(ukernel: static MicroKernel): untyped =
 #
 # ############################################################
 
+# multithreading info in [2] and https://github.com/flame/blis/blob/master/docs/Multithreading.md
+
 type Tiles*[T] = ref object
   a*: ptr UncheckedArray[T]
   b*: ptr UncheckedArray[T]
   mc*, nc*, kc*: int
-  # Nim doesn't support arbitrary increment with OpenMP
-  # So we store indexing/edge case data in tiles for the parallelized loop
-  jr_num_nr_tiles*: int
-  a_alloc_mem: pointer # TODO Save on cache line, use an aligned allocator to not track this
+
+  # Multithreading
+    # Nim doesn't support arbitrary increment with OpenMP
+    # So we store indexing/edge case data in tiles for the parallelized loop
+  ic_num_mc_tiles*: int   # For private L1-L2 and shared L3
+  # jr_num_nr_tiles*: int # For private L1 and shared L2 cache
+
+  # Allocation data
+    # TODO Save on cache line, use an aligned allocator to not track this
+  a_alloc_mem: pointer
   b_alloc_mem: pointer
   # The Tiles data structure takes 64-byte = 1 cache-line
-  # TODO: packed and aligned
+
 
 proc deallocTiles[T](tiles: Tiles[T]) =
   if not tiles.a_alloc_mem.isNil:
@@ -231,18 +239,16 @@ proc newTiles*(
   result.mc = min(120, M)
   result.kc = min(360, K)
 
-  # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
-  let bufA_size = T.sizeof * result.kc*(result.mc+mr) # Size + Padding when packing
-  let bufB_size = T.sizeof * result.kc*(result.nc+nr) # Size + Padding when packing
+  # Parallel config
+  # Ic loop parallel means that each thread will share a panel B and pack a different A
+  result.ic_num_mc_tiles = (M+result.mc-1) div result.mc
 
-  # Note, if we parallelize on ic loop
-  #   Each thread will access it's own part of A
-  #   and so the buffer needs to be multiplied by the number of threads.
+  # Packing
+  # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
+  let bufA_size = T.sizeof * result.kc*(result.mc+mr) * result.ic_num_mc_tiles
+  let bufB_size = T.sizeof * result.kc*(result.nc+nr)
+
   result.a_alloc_mem = allocShared(bufA_size + 63)
   result.b_alloc_mem = allocShared(bufB_size + 63)
   result.a = assume_aligned align_raw_data(T, result.a_alloc_mem)
   result.b = assume_aligned align_raw_data(T, result.b_alloc_mem)
-
-  # jr loop is parallel
-  # Workaround for Nim OpenMP for loop not supporting non-unit increment
-  result.jr_num_nr_tiles = (result.nc+nr-1) div nr

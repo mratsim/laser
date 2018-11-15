@@ -50,9 +50,9 @@ import
   ../../laser/primitives/matrix_multiplication/gemm
 
 const
-  M     =  16*6*20
-  K     =  16*6*20
-  N     =  16*6*20
+  M     = 16*6*20
+  K     = 16*6*20
+  N     = 16*6*20
   NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
   CpuGhz = 2.7      # Assuming no turbo
   NumCpuCores = 2
@@ -187,7 +187,7 @@ when isMainModule:
 # OpenMP
 
 # $  ./build/laser_gemm_omp
-# Warmup: 1.1952 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1928 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 1920, N: 1920)
 # B matrix shape: (M: 1920, N: 1920)
@@ -200,23 +200,23 @@ when isMainModule:
 # Make sure to not bench Apple Accelerate or the default Linux BLAS.
 
 # OpenBLAS benchmark
-# Collected 10 samples in 0.968 seconds
-# Average time: 96.496 ms
-# Stddev  time: 0.880 ms
-# Min     time: 95.785 ms
-# Max     time: 98.727 ms
-# Perf:         146.699 GFLOP/s
+# Collected 10 samples in 0.990 seconds
+# Average time: 98.702 ms
+# Stddev  time: 1.344 ms
+# Min     time: 97.223 ms
+# Max     time: 100.845 ms
+# Perf:         143.419 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 470.7781372070312
 
 # Laser production implementation
-# Collected 10 samples in 1.145 seconds
-# Average time: 114.264 ms
-# Stddev  time: 4.730 ms
-# Min     time: 111.161 ms
-# Max     time: 126.365 ms
-# Perf:         123.886 GFLOP/s
+# Collected 10 samples in 1.052 seconds
+# Average time: 104.914 ms
+# Stddev  time: 3.925 ms
+# Min     time: 101.871 ms
+# Max     time: 115.172 ms
+# Perf:         134.927 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 470.7781677246094
@@ -225,7 +225,7 @@ when isMainModule:
 # Serial
 
 # $  OPENBLAS_NUM_THREADS=1 ./build/laser_gemm_serial
-# Warmup: 1.1977 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1938 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 1920, N: 1920)
 # B matrix shape: (M: 1920, N: 1920)
@@ -235,25 +235,26 @@ when isMainModule:
 # Arithmetic intensity:            480.000 FLOP/byte
 # Theoretical peak single-core:     86.400 GFLOP/s
 # Theoretical peak multi:          172.800 GFLOP/s
+# Make sure to not bench Apple Accelerate or the default Linux BLAS.
 
 # OpenBLAS benchmark
-# Collected 10 samples in 1.861 seconds
-# Average time: 185.885 ms
-# Stddev  time: 1.281 ms
-# Min     time: 184.036 ms
-# Max     time: 187.755 ms
-# Perf:         76.153 GFLOP/s
+# Collected 10 samples in 1.921 seconds
+# Average time: 191.824 ms
+# Stddev  time: 5.071 ms
+# Min     time: 187.060 ms
+# Max     time: 203.692 ms
+# Perf:         73.796 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 470.7781372070312
 
 # Laser production implementation
-# Collected 10 samples in 1.943 seconds
-# Average time: 194.051 ms
-# Stddev  time: 3.630 ms
-# Min     time: 187.158 ms
-# Max     time: 197.342 ms
-# Perf:         72.949 GFLOP/s
+# Collected 10 samples in 1.958 seconds
+# Average time: 195.540 ms
+# Stddev  time: 4.404 ms
+# Min     time: 189.699 ms
+# Max     time: 203.276 ms
+# Perf:         72.393 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 470.7781677246094

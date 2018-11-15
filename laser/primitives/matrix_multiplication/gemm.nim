@@ -4,7 +4,7 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  ../../cpuinfo, ../../compiler_optim_hints,
+  ../../cpuinfo, ../../compiler_optim_hints, ../../openmp,
   ./gemm_tiling, ./gemm_utils,
   ./gemm_ukernel_dispatch, ./gemm_packing
 
@@ -69,8 +69,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  for jrb in 0||(tiles.jr_num_nr_tiles - 1):
-    let jr = jrb * NR
+  for jr in countup(0, nc-1, NR):
     let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
     # ###################################
@@ -124,19 +123,22 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     let kc = min(K - pc, tiles.kc) # Deal with edges  # A[0:M, pc:pc+kc]
 
     let kcncB = vB.stride(pc, 0)                      # B[pc:pc+kc, jc:jc+nc]
-    pack_B_kc_nc[T, ukernel](tiles, kc, nc, kcncB)    # PackB panel [kc, nc] (nc is large or unknown)
+    pack_B_kc_nc[T, ukernel](tiles.b, kc, nc, kcncB)    # PackB panel [kc, nc] (nc is large or unknown)
 
     # First time writing to C, we scale it, otherwise accumulate
     let beta = if pc == 0: beta else: 1.T
 
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
-    for ic in countup(0, M-1, tiles.mc):
-      prefetch(tiles.a, Write, LowTemporalLocality)
+    for icb in 0||(tiles.ic_num_mc_tiles - 1):
+      let thread_id = omp_get_thread_num()
+      let packA_offset = tiles.a + thread_id * tiles.mc * kc
+      prefetch(packA_offset, Write, LowTemporalLocality)
+      let ic = icb * tiles.mc
       let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
       let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
-      pack_A_mc_kc[T, ukernel](tiles, mc, kc, mckcA)  # PackA block [mc, kc]
+      pack_A_mc_kc[T, ukernel](packA_offset, mc, kc, mckcA)  # PackA block [mc, kc]
 
       gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
           mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
