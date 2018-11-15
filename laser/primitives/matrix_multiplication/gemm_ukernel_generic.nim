@@ -28,32 +28,37 @@ withCompilerOptimHints()
 # TODO: Fused operations like relu/sigmoid/tanh
 #       should be done here as well
 
+template at(vC: MatrixView, i, j: int): untyped {.dirty.}=
+  when is_c_unit_stride:
+    # Expose to the compiler that C is contiguous along j
+    vC.buffer[i * vC.rowStride + j]
+  else:
+    vC.buffer[i * vC.rowStride + j * vC.colStride]
+
 proc gebb_ukernel_epilogue*[MR, NR: static int, T](
       alpha: T, AB: ptr array[MR, array[NR, T]],
-      beta: T,  vC: MatrixView[T]
+      beta: T,  vC: MatrixView[T], is_c_unit_stride: static bool
     ) {.inline.}=
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
 
-  # Beta always = 1 after the first pass on the current C micro-tile
-  # so even if beta = 1 we need to accumulate with `+=`
   if beta == 0.T:
     for i in 0 ..< MR:
       for j in `||`(0, NR-1, "simd"):
-        vC[i, j] = 0.T
+        vC.at(i, j) = 0.T
   elif beta != 1.T:                  # C *= β
     for i in 0 ..< MR:
       for j in `||`(0, NR-1, "simd"):
-        vC[i, j] *= beta
+        vC.at(i, j) *= beta
 
   if alpha == 1.T:                   # C += AB
     for i in 0 ..< MR:
       for j in `||`(0, NR-1, "simd"):
-        vC[i, j] += pAB[i][j]
+        vC.at(i, j) += pAB[i][j]
   else:                              # C += αAB
     for i in 0 ..< MR:
       for j in `||`(0, NR-1, "simd"):
-        vC[i, j] += alpha * pAB[i][j]
+        vC.at(i, j) += alpha * pAB[i][j]
 
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well
@@ -130,7 +135,9 @@ proc gebb_ukernel_generic*[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T]
     ) =
   ukernel_impl()
-  gebb_ukernel_epilogue(alpha, to_ptr(AB, MR, NR, T), beta, vC)
+
+  const is_c_unit_stride = ukernel.extract_c_unit_stride
+  gebb_ukernel_epilogue(alpha, to_ptr(AB, MR, NR, T), beta, vC, is_c_unit_stride)
 
 proc gebb_ukernel_edge*[T; ukernel: static MicroKernel](
       mr, nr, kc: int,

@@ -173,16 +173,22 @@ proc gemm_strided*[T: SomeNumber](
     #   - block A: mc*kc L2 cache
     #   - panel B: kc*nc L3 cache
 
-    template dispatch(cpu_features: static CPUFeatureX86){.dirty.} =
-      const ukernel = cpu_features.x86_ukernel(T)
-      let tiles = ukernel.newTiles(T, M, N, K)
-      gemm_impl[T, ukernel](
-        M, N, K,
-        alpha, vA, vB,
-        beta, vC,
-        tiles
-      )
-      return
+    template dispatch(cpu_features: static CPUFeatureX86): untyped{.dirty.} =
+      template apply(ukernel: MicroKernel): untyped {.dirty.} =
+        let tiles = ukernel.newTiles(T, M, N, K)
+        gemm_impl[T, ukernel](
+          M, N, K,
+          alpha, vA, vB,
+          beta, vC,
+          tiles
+        )
+        return
+      if colStrideC == 1:
+        const ukernel = cpu_features.x86_ukernel(T, true)
+        apply(ukernel)
+      else:
+        const ukernel = cpu_features.x86_ukernel(T, false)
+        apply(ukernel)
 
     when defined(i386) or defined(amd64):
       when T is SomeFloat:

@@ -18,6 +18,34 @@ import
 #
 # ############################################################
 
+proc gebb_ukernel_epilogue_f32_avx[MR, NbVecs: static int, T](
+      alpha: T, AB: array[MR, array[NbVecs, m256]],
+      beta: T, vC: MatrixView[float32]
+    ) {.inline.} =
+
+  let C{.restrict.} = cast[ptr UncheckedArray[m256]](vC.buffer[0].addr)
+
+  if beta == 0.T:
+    for i in 0 ..< MR:
+      for j in 0 ..< NbVecs:
+        C[i*vC.rowStride + j] = mm256_setzero_ps()
+  elif beta != 1.T:
+    let beta_vec = mm256_set1_ps(beta)
+    for i in 0 ..< MR:
+      for j in 0 ..< NbVecs:
+        C[i*vC.rowStride + j] = mm256_mul_ps(C[i*vC.rowStride + j], beta_vec)
+
+  if alpha == 1.T:
+    for i in 0 ..< MR:
+      for j in 0 ..< NbVecs:
+        C[i*vC.rowStride + j] = mm256_add_ps(C[i*vC.rowStride + j], AB[i][j])
+  else:
+    let alpha_vec = mm256_set1_ps(alpha)
+    # TODO - non FMA
+    for i in 0 ..< MR:
+      for j in 0 ..< NbVecs:
+        C[i*vC.rowStride + j] = mm256_fmadd_ps(C[i*vC.rowStride + j], AB[i][j], alpha_vec)
+
 macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, MR, NR: static int, kc: int): untyped =
 
   result = newStmtList()
@@ -124,9 +152,16 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
 
   let AB{.align_variable,noinit.} = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
 
-  gebb_ukernel_epilogue(
-    alpha, to_ptr(AB, MR, NR, float32),
-    beta, vC)
+  const is_c_unit_stride = ukernel.extract_c_unit_stride
+  when is_c_unit_stride:
+    gebb_ukernel_epilogue_f32_avx(
+      alpha, AB,
+      beta, vC
+    )
+  else:
+    gebb_ukernel_epilogue(
+      alpha, to_ptr(AB, MR, NR, float32),
+      beta, vC, is_c_unit_stride)
 
 # #####################################################
   # Reference loop -  AB: array[MR, array[NR, float32]]

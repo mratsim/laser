@@ -63,6 +63,7 @@ type
     mr*, nr*: int
     vec_size*: int
     cpu_simd*: CPUFeatureX86
+    c_unit_stride*: bool # We can use SIMD for the epilogue of C has a unit_stride
 
     # TODO: ARM support
     #   - https://github.com/nim-lang/Nim/issues/9679
@@ -108,7 +109,8 @@ const X86_regs: X86_FeatureMap = [
   x86_AVX512:  6  # 32 ZMM registers
 ]
 
-func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc): MicroKernel =
+func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc, c_unit_stride: bool): MicroKernel =
+  result.c_unit_stride = c_unit_stride
   when T is SomeFloat:
     result.vecsize =  X86_vecsize_float[cpu]
   else:
@@ -159,6 +161,8 @@ macro extract_vecsize*(ukernel: static MicroKernel): untyped =
 macro extract_cpu_simd*(ukernel: static MicroKernel): untyped =
   let simd = ukernel.cpu_simd
   result = quote do: CPUFeatureX86(`simd`)
+macro extract_c_unit_stride*(ukernel: static MicroKernel): untyped =
+  result = newLit ukernel.c_unit_stride
 
 # ############################################################
 #
