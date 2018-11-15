@@ -98,7 +98,7 @@ macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, M
       `prefetchBody`
       `bcast_fma`
     ## Write registers to a MR/NR array
-    cast[array[MR, array[NR, float32]]](`rAB`)
+    `rAB`
 
 proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
       kc: int,
@@ -125,7 +125,7 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   let AB{.align_variable,noinit.} = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
 
   gebb_ukernel_epilogue(
-    alpha, AB,
+    alpha, to_ptr(AB, MR, NR, float32),
     beta, vC)
 
 # #####################################################

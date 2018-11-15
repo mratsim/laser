@@ -29,11 +29,11 @@ withCompilerOptimHints()
 #       should be done here as well
 
 proc gebb_ukernel_epilogue*[MR, NR: static int, T](
-      alpha: T, AB: array[MR, array[NR, T]],
+      alpha: T, AB: ptr array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T]
     ) {.inline.}=
 
-  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.unsafeAddr)
+  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
 
   # Beta always = 1 after the first pass on the current C micro-tile
   # so even if beta = 1 we need to accumulate with `+=`
@@ -59,7 +59,7 @@ proc gebb_ukernel_epilogue*[MR, NR: static int, T](
   #       should be done here as well
 
 func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
-      alpha: T, AB: array[MR, array[NR, T]],
+      alpha: T, AB: ptr array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T],
       mr, nr: int # Tail to process
     ) {.inline.}=
@@ -121,13 +121,16 @@ template ukernel_impl(){.dirty.} =
 #
 # ############################################################
 
+template to_ptr*(AB: typed, MR, NR: static int, T: typedesc): untyped =
+  assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeaddr)
+
 proc gebb_ukernel_generic*[T; ukernel: static MicroKernel](
       kc: int,
       alpha: T, packedA, packedB: ptr UncheckedArray[T],
       beta: T, vC: MatrixView[T]
     ) =
   ukernel_impl()
-  gebb_ukernel_epilogue(alpha, AB, beta, vC)
+  gebb_ukernel_epilogue(alpha, to_ptr(AB, MR, NR, T), beta, vC)
 
 proc gebb_ukernel_edge*[T; ukernel: static MicroKernel](
       mr, nr, kc: int,
@@ -135,4 +138,4 @@ proc gebb_ukernel_edge*[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T]
     ) =
   ukernel_impl()
-  gebb_ukernel_edge_epilogue(alpha, AB, beta, vC, mr, nr)
+  gebb_ukernel_edge_epilogue(alpha, to_ptr(AB, MR, NR, T), beta, vC, mr, nr)

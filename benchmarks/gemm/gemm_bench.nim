@@ -173,9 +173,9 @@ when isMainModule:
     let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
 
-    when not defined(openmp):
-      benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
-    benchArraymancerFallback(a, b, NbSamples)
+    # when not defined(openmp):
+    #   benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
+    # benchArraymancerFallback(a, b, NbSamples)
     benchOpenBLAS(a, b, NbSamples)
     benchLaserGEMM(a, b, NbSamples)
 
