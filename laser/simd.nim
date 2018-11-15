@@ -92,7 +92,11 @@ when defined(i386) or defined(amd64):
   func mm256_set1_ps*(a: float32): m256 {.importc: "_mm256_set1_ps", x86.}
     ## [float32 a, a, a, a, a, a, a, a]
   func mm256_load_ps*(aligned_data: ptr float32): m256 {.importc: "_mm256_load_ps", x86.}
-    ## Load 8 packed float32 in __m128. They must be aligned on 16-byte boundary.
+    ## Load 8 packed float32 in __m128. They must be aligned on 32-byte boundary or General Protection Fault
+  func mm256_loadu_ps*(aligned_data: ptr float32): m256 {.importc: "_mm256_loadu_ps", x86.}
+    ## Load 8 packed float32 in __m128. No specific alignmend
+  func mm256_storeu_ps*(mem_addr: ptr float32, a: m256) {.importc: "_mm256_storeu_ps", x86.}
+    ## Store 8 packed float32 from a in memory, no specific alignement.
   func mm256_add_ps*(a, b: m256): m256 {.importc: "_mm256_add_ps", x86.}
     ## Vector addition
   func mm256_mul_ps*(a, b: m256): m256 {.importc: "_mm256_mul_ps", x86.}

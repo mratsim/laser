@@ -34,7 +34,7 @@ template at(vC: MatrixView, i, j: int): untyped =
 proc gebb_ukernel_epilogue*[MR, NR: static int, T](
       alpha: T, AB: ptr array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T], is_c_unit_stride: static bool
-    ) =
+    ){.inline.} =
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
 
@@ -82,7 +82,7 @@ func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
       alpha: T, AB: ptr array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T],
       mr, nr: int # Tail to process
-    ) =
+    ){.inline.} =
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
 

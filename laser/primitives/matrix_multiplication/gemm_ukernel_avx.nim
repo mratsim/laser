@@ -23,28 +23,29 @@ proc gebb_ukernel_epilogue_f32_avx[MR, NbVecs: static int, T](
       beta: T, vC: MatrixView[float32]
     ) {.inline.} =
 
-  let C{.restrict.} = cast[ptr UncheckedArray[m256]](vC.buffer[0].addr)
+  const VecSize = 8
+  template C(i,j: int): untyped {.dirty.} = vC.buffer[i*vC.rowStride + j*VecSize]
 
   if beta == 0.T:
     for i in 0 ..< MR:
       for j in 0 ..< NbVecs:
-        C[i*vC.rowStride + j] = mm256_setzero_ps()
+        mm256_storeu_ps(C(i,j).addr, mm256_setzero_ps())
   elif beta != 1.T:
     let beta_vec = mm256_set1_ps(beta)
     for i in 0 ..< MR:
       for j in 0 ..< NbVecs:
-        C[i*vC.rowStride + j] = mm256_mul_ps(C[i*vC.rowStride + j], beta_vec)
+        mm256_storeu_ps(C(i,j).addr, mm256_mul_ps(beta_vec, C(i,j).addr.mm256_loadu_ps))
 
   if alpha == 1.T:
     for i in 0 ..< MR:
       for j in 0 ..< NbVecs:
-        C[i*vC.rowStride + j] = mm256_add_ps(C[i*vC.rowStride + j], AB[i][j])
+        mm256_storeu_ps(C(i,j).addr, mm256_add_ps(AB[i][j], C(i,j).addr.mm256_loadu_ps))
   else:
     let alpha_vec = mm256_set1_ps(alpha)
     # TODO - non FMA
     for i in 0 ..< MR:
       for j in 0 ..< NbVecs:
-        C[i*vC.rowStride + j] = mm256_fmadd_ps(C[i*vC.rowStride + j], AB[i][j], alpha_vec)
+        mm256_storeu_ps(C(i,j).addr, mm256_fmadd_ps(alpha_vec, AB[i][j], C(i,j).addr.mm256_loadu_ps))
 
 macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, MR, NR: static int, kc: int): untyped =
 
@@ -141,12 +142,6 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
     NbElems = 8
     NbVecs = NR div NbElems
 
-  static:
-    assert vecsize == 32
-    assert simd in {x86_AVX, x86_AVX2, x86_AVX512}
-    assert NR div 8 == 0 # Unrolling checks
-    assert MR div 2 == 0
-
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
@@ -156,8 +151,7 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   when is_c_unit_stride:
     gebb_ukernel_epilogue_f32_avx(
       alpha, AB,
-      beta, vC
-    )
+      beta, vC)
   else:
     gebb_ukernel_epilogue(
       alpha, to_ptr(AB, MR, NR, float32),
