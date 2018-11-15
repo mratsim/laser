@@ -229,7 +229,7 @@ proc newTiles*(
 
   # TODO: heuristics to compute the size
   result.mc = min(120, M)
-  result.kc = min(240, K)
+  result.kc = min(360, K)
 
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
   let bufA_size = T.sizeof * result.kc*(result.mc+mr) # Size + Padding when packing

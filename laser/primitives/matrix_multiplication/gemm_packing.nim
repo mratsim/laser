@@ -38,7 +38,7 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
 
   # 1. Pack m matrices of size kc*mr, m = mc/mr
   {.emit:"""
-      #pragma omp parallel for
+      // #pragma omp parallel for - no speed improvement
       for (int i = 0; i < `unroll_stop`; i+=`MR`)
         for (int k = 0; k < `kc`; k++)
           for (int ii = 0; ii < `MR`; ii++)
@@ -77,7 +77,7 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
 
   # 1. Pack n matrices of size kc*nr, n = nc/nr
   {.emit:"""
-      #pragma omp parallel for
+      // #pragma omp parallel for - no speed improvement
       for (int j = 0; j < `unroll_stop`; j+=`NR`)
         for (int k = 0; k < `kc`; k++)
           // #pragma omp simd // TODO - NR is always of vector size - special case unit stride for SIMD
