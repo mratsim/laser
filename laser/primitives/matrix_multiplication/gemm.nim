@@ -76,7 +76,8 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
     # ###################################
     # 5. for ir = 0,...,m−1 in steps of mr
     for ir in countup(0, mc-1, MR):
-      let mr = min(mc - ir, MR)                      # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
+      let mr = min(mc - ir, MR)
+      let c_aux = mcncC.stride(ir, jr)               # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
 
       # TODO save addr of next panel of A for prefetch
       # and if last iter, save addr of next panel of B
@@ -86,14 +87,14 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
         gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
                 kc,                                  #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
           alpha, tiles.a + ir*kc, tiles.b + jr*kc,   #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
-          beta, mcncC.stride(ir, jr)                 #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+          beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
         )                                            #    βC[ic:ic+mc, jc:jc+nc]
       else:
         # Matrix edges
         gebb_ukernel_edge[T, ukernel](               # GEBB microkernel + epilogue
           mr, nr, kc,                                #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
           alpha, tiles.a + ir*kc, tiles.b + jr*kc,   #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
-          beta, mcncC.stride(ir, jr)                 #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+          beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
         )                                            #    βC[ic:ic+mc, jc:jc+nc]
 
 # ###########################################################################################

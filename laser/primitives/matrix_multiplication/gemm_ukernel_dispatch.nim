@@ -6,7 +6,8 @@
 import
   ./gemm_tiling, ./gemm_utils,
   ./gemm_ukernel_generic,
-  ./gemm_ukernel_avx
+  ./gemm_ukernel_avx,
+  ../../compiler_optim_hints
 
 export gebb_ukernel_edge
 
@@ -22,6 +23,8 @@ proc gebb_ukernel*[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T]
     ){.inline.} =
   const simd = ukernel.extract_cpu_simd()
+
+  prefetch(vC.buffer, Write, ModerateTemporalLocality)
 
   when T is float32 and simd in {x86_AVX, x86_AVX2, x86_AVX512}:
     gebb_ukernel_f32_avx[ukernel](

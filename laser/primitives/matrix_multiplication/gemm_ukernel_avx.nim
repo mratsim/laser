@@ -54,7 +54,7 @@ macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, M
   var prefetchBody = newStmtList()
   for jj in 0 ..< NbVecs:
     prefetchBody.add quote do:
-      prefetch(`B`[(`k`+1)*NR+`jj`*`NBElems`].addr) # Read, High temp locality (L1+L2 eviction cache rule)
+      prefetch(`B`[(`k`+1)*NR+`jj`*`NBElems`].addr, Read, LowTemporalLocality)
 
   ## Load
   var loadBody = newStmtList()

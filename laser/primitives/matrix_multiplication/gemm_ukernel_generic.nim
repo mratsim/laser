@@ -109,8 +109,8 @@ template ukernel_impl(){.dirty.} =
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-  # TODO prefetch
   for k in 0 ..< kc:
+    prefetch(B[(k+1)*NR].addr, Read, LowTemporalLocality)
     for i in 0 ..< MR:
       for j in `||`(0, NR-1, "simd"):
         AB[i][j] += A[k*MR+i] * B[k*NR+j]
