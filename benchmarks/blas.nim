@@ -1,9 +1,11 @@
 when defined(osx):
-  const blas = "libblas.dylib"
+  const blas = "libopenblas.dylib"
   {.passC: "-I'/usr/local/opt/openblas/include' -L'/usr/local/opt/openblas/lib'".}
 else:
   {.fatal: "OpenBLAS not configured for this platform".}
   # When adding new platform, you also need to update nim.cfg
+# Don't forget to have Openblas in your path
+# for example "export LD_LIBRARY_PATH=/usr/local/opt/openblas/lib"
 
 type
   TransposeType* {.size: sizeof(cint).} = enum
