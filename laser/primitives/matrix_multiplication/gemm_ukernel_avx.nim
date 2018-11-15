@@ -150,7 +150,7 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-  let AB{.align_variable,noinit.} = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
+  let AB{.align_variable.} = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
 
   const is_c_unit_stride = ukernel.extract_c_unit_stride
   when is_c_unit_stride:

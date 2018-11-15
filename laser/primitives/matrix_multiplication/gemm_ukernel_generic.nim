@@ -28,37 +28,52 @@ withCompilerOptimHints()
 # TODO: Fused operations like relu/sigmoid/tanh
 #       should be done here as well
 
-template at(vC: MatrixView, i, j: int): untyped {.dirty.}=
-  when is_c_unit_stride:
-    # Expose to the compiler that C is contiguous along j
-    vC.buffer[i * vC.rowStride + j]
-  else:
-    vC.buffer[i * vC.rowStride + j * vC.colStride]
+template at(vC: MatrixView, i, j: int): untyped =
+  vC.buffer[i * vC.rowStride + j]
 
 proc gebb_ukernel_epilogue*[MR, NR: static int, T](
       alpha: T, AB: ptr array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T], is_c_unit_stride: static bool
-    ) {.inline.}=
+    ) =
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
 
-  if beta == 0.T:
-    for i in 0 ..< MR:
-      for j in `||`(0, NR-1, "simd"):
-        vC.at(i, j) = 0.T
-  elif beta != 1.T:                  # C *= β
-    for i in 0 ..< MR:
-      for j in `||`(0, NR-1, "simd"):
-        vC.at(i, j) *= beta
+  when is_c_unit_stride:
+    if beta == 0.T:
+      for i in 0 ..< MR:
+        for j in `||`(0, NR-1, "simd"):
+          vC.at(i, j) = 0.T
+    elif beta != 1.T:                  # C *= β
+      for i in 0 ..< MR:
+        for j in `||`(0, NR-1, "simd"):
+          vC.at(i, j) *= beta
 
-  if alpha == 1.T:                   # C += AB
-    for i in 0 ..< MR:
-      for j in `||`(0, NR-1, "simd"):
-        vC.at(i, j) += pAB[i][j]
-  else:                              # C += αAB
-    for i in 0 ..< MR:
-      for j in `||`(0, NR-1, "simd"):
-        vC.at(i, j) += alpha * pAB[i][j]
+    if alpha == 1.T:                   # C += AB
+      for i in 0 ..< MR:
+        for j in `||`(0, NR-1, "simd"):
+          vC.at(i, j) += pAB[i][j]
+    else:                              # C += αAB
+      for i in 0 ..< MR:
+        for j in `||`(0, NR-1, "simd"):
+          vC.at(i, j) += alpha * pAB[i][j]
+  else:
+    if beta == 0.T:
+      for i in 0 ..< MR:
+        for j in 0 ..< NR:
+          vC[i, j] = 0.T
+    elif beta != 1.T:                  # C *= β
+      for i in 0 ..< MR:
+        for j in 0 ..< NR:
+          vC[i, j] *= beta
+
+    if alpha == 1.T:                   # C += AB
+      for i in 0 ..< MR:
+        for j in 0 ..< NR:
+          vC[i, j] += pAB[i][j]
+    else:                              # C += αAB
+      for i in 0 ..< MR:
+        for j in 0 ..< NR:
+          vC[i, j] += alpha * pAB[i][j]
 
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well
@@ -67,9 +82,9 @@ func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
       alpha: T, AB: ptr array[MR, array[NR, T]],
       beta: T,  vC: MatrixView[T],
       mr, nr: int # Tail to process
-    ) {.inline.}=
+    ) =
 
-  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB.unsafeAddr)
+  let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
 
   if beta == 0.T:
     if alpha == 1.T:                   # C = AB
