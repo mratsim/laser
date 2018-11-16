@@ -131,7 +131,7 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc, c_unit_stride: bool): MicroKe
 
   result.mr = X86_regs[cpu]                 # 2~6 registers for the rows of Ã
   result.nb_vecs_nr = 2                     # x2 for 2 SIMD vectors of B
-  result.nr = result.nb_vecs_nr * result.nb_scalar_elements
+  result.nr = result.nb_vecs_nr * result.nb_scalars
 
 #############################################
 # Workaround "undeclared identifier mr or nr"
@@ -145,8 +145,8 @@ macro extract_nr*(ukernel: static MicroKernel): untyped =
 macro extract_cpu_simd*(ukernel: static MicroKernel): untyped =
   let simd = ukernel.cpu_simd
   result = quote do: CPUFeatureX86(`simd`)
-macro extract_nb_scalar_elements*(ukernel: static MicroKernel): untyped =
-  result = newLit ukernel.nb_scalar_elements
+macro extract_nb_scalars*(ukernel: static MicroKernel): untyped =
+  result = newLit ukernel.nb_scalars
 macro extract_nb_vecs_nr*(ukernel: static MicroKernel): untyped =
   result = newLit ukernel.nb_vecs_nr
 macro extract_c_unit_stride*(ukernel: static MicroKernel): untyped =
@@ -224,8 +224,8 @@ proc newTiles*(
   #     In practice mc is chosen so that A occupies about half the smaller of (1) and (2)
 
   # TODO: heuristics to compute the size
-  result.mc = min(120, M)
-  result.kc = min(360, K)
+  result.mc = min(192, M)
+  result.kc = min(512, K)
 
   # Parallel config
   # Ic loop parallel means that each thread will share a panel B and pack a different A
