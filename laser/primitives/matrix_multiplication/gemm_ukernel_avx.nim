@@ -137,7 +137,6 @@ proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
   const
     MR = ukernel.extract_mr()
     NR = ukernel.extract_nr()
-    vec_size = ukernel.extract_vecsize
     simd = ukernel.extract_cpu_simd
     NbElems = 8
     NbVecs = NR div NbElems

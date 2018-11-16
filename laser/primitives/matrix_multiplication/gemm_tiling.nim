@@ -61,8 +61,9 @@ import
 type
   MicroKernel* = object
     mr*, nr*: int
-    vec_size*: int
     cpu_simd*: CPUFeatureX86
+    nb_scalars*: int # Ideally MicroKernel should be generic over T
+    nb_vecs_nr*: int
     c_unit_stride*: bool # We can use SIMD for the epilogue of C has a unit_stride
 
     # TODO: ARM support
@@ -75,8 +76,10 @@ type
     x86_SSE,
     x86_SSE2,
     x86_AVX,
-    x86_AVX2,
-    x86_AVX512
+    x86_AVX2
+    # x86_AVX512 # TODO
+    #   Note that Skylake SP, Xeon Bronze Silver and Gold 5XXX
+    #   only have a single AVX512 port and AVX2 can be faster.
 
   X86_FeatureMap = array[CPUFeatureX86, int]
 
@@ -85,8 +88,8 @@ const X86_vecsize_float: X86_FeatureMap = [
   x86_SSE:     128 div 8,
   x86_SSE2:    128 div 8,
   x86_AVX:     256 div 8,
-  x86_AVX2:    256 div 8,
-  x86_AVX512:  512 div 8
+  x86_AVX2:    256 div 8
+  # x86_AVX512:  512 div 8
 ]
 
 const X86_vecsize_int: X86_FeatureMap = [
@@ -94,8 +97,8 @@ const X86_vecsize_int: X86_FeatureMap = [
   x86_SSE:             1,
   x86_SSE2:    128 div 8, # SSE2 generalises 128-bit reg to int
   x86_AVX:     128 div 8,
-  x86_AVX2:    256 div 8, # AVX2 generalises 256-bit reg to int
-  x86_AVX512:  512 div 8
+  x86_AVX2:    256 div 8 # AVX2 generalises 256-bit reg to int
+  # x86_AVX512:  512 div 8
 ]
 
 # mr * nr < number of registers - 4
@@ -105,17 +108,19 @@ const X86_regs: X86_FeatureMap = [
   x86_SSE:     2, # 8 XMM regs in 32-bit, 16 in 64-bit (we assume 32-bit mode)
   x86_SSE2:    6,
   x86_AVX:     6, # 16 YMM registers
-  x86_AVX2:    6,
-  x86_AVX512:  6  # 32 ZMM registers
+  x86_AVX2:    6
+  # x86_AVX512:  6  # 32 ZMM registers
 ]
 
 func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc, c_unit_stride: bool): MicroKernel =
+  result.cpu_simd = cpu
   result.c_unit_stride = c_unit_stride
   when T is SomeFloat:
-    result.vecsize =  X86_vecsize_float[cpu]
+    result.nb_scalars = max(1, X86_vecsize_float[cpu] div T.sizeof)
+  elif T is SomeInteger: # Integers
+    result.nb_scalars = max(1, X86_vecsize_int[cpu] div T.sizeof)
   else:
-    result.vecsize =  X86_vecsize_int[cpu]
-  # TODO: Complex support
+    {.error: "Unsupported type: " & T.type.name.}
 
   # The inner microkernel loop does:
   #   AB[m][n] = A[m] * B[n]
@@ -124,28 +129,9 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc, c_unit_stride: bool): MicroKe
   # This avoids dealing with transpose
   # in the inner loop and untranspose in the epilogue
 
-  result.mr = X86_regs[cpu] # Base nb of registers
-  result.nr = max(1, result.vecsize div sizeof(T))
-
-  # 64-bit - use 8/12 out of the 16 XMM/YMM registers
-  result.nr *= 2            # base regs * 2 - TODO: 32-bit run out of regs.
-  result.cpu_simd = cpu
-
-  # TODO: For AVX-512, we assume that CPU have 2 AVX512 units
-  #       This is true on Skylake-X and Xeon-W and Xeon-SP Gold 6XXX
-  #       bot not on Xeon-SP Bronze, Silver and Gold 5XXX
-
-  #### Comparison with others
-  # Example: for AVX2 Haswell CPU
-  # This returns 6x16 ukernel for float and 4x8 for double.
-  #
-  # BLIS paper [3] recommends 4x12 and tested 8x4 for float,
-  # the difference being between the broadcast and shuffle
-  # operations. In implementation they use 6x16 ukernel.
-  #
-  # OpenBLAS uses 12x4 for float and 4x8 for double
-  # MKLDNN also uses 16x6 for float and 8x6 for double (?)
-  #   see unroll_factor: https://github.com/intel/mkl-dnn/blob/21fb5f2af1dd14e132af4f1b79160977ee487818/src/cpu/gemm/gemm_utils.hpp#L30-L48
+  result.mr = X86_regs[cpu]                 # 2~6 registers for the rows of Ã
+  result.nb_vecs_nr = 2                     # x2 for 2 SIMD vectors of B
+  result.nr = result.nb_vecs_nr * result.nb_scalar_elements
 
 #############################################
 # Workaround "undeclared identifier mr or nr"
@@ -156,11 +142,13 @@ macro extract_mr*(ukernel: static MicroKernel): untyped =
   result = newLit ukernel.mr
 macro extract_nr*(ukernel: static MicroKernel): untyped =
   result = newLit ukernel.nr
-macro extract_vecsize*(ukernel: static MicroKernel): untyped =
-  result = newLit ukernel.vecsize
 macro extract_cpu_simd*(ukernel: static MicroKernel): untyped =
   let simd = ukernel.cpu_simd
   result = quote do: CPUFeatureX86(`simd`)
+macro extract_nb_scalar_elements*(ukernel: static MicroKernel): untyped =
+  result = newLit ukernel.nb_scalar_elements
+macro extract_nb_vecs_nr*(ukernel: static MicroKernel): untyped =
+  result = newLit ukernel.nb_vecs_nr
 macro extract_c_unit_stride*(ukernel: static MicroKernel): untyped =
   result = newLit ukernel.c_unit_stride
 
