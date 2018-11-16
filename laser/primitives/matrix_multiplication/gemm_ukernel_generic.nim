@@ -14,7 +14,29 @@ withCompilerOptimHints()
 
 # ############################################################
 #
-#          Epilogue: update the result C matrix
+#          Generic GEBB microkernel implementation
+#
+# ############################################################
+
+template ukernel_generic_impl*(){.dirty.} =
+  const
+    MR = ukernel.extract_mr()
+    NR = ukernel.extract_nr()
+    simd = ukernel.extract_cpu_simd
+
+  var AB{.align_variable.}: array[MR, array[NR, T]]
+  var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
+  var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
+
+  for k in 0 ..< kc:
+    prefetch(B[(k+1)*NR].addr, Read, LowTemporalLocality)
+    for i in 0 ..< MR:
+      for j in `||`(0, NR-1, "simd"):
+        AB[i][j] += A[k*MR+i] * B[k*NR+j]
+
+# ############################################################
+#
+#          Fallback Generic version
 #
 # ############################################################
 #
@@ -28,55 +50,49 @@ withCompilerOptimHints()
 # TODO: Fused operations like relu/sigmoid/tanh
 #       should be done here as well
 
-template at(vC: MatrixView, i, j: int): untyped =
-  vC.buffer[i * vC.rowStride + j]
-
-proc gebb_ukernel_epilogue*[MR, NR: static int, T](
+proc gebb_ukernel_epilogue_fallback*[MR, NR: static int, T](
       alpha: T, AB: ptr array[MR, array[NR, T]],
-      beta: T,  vC: MatrixView[T], is_c_unit_stride: static bool
+      beta: T,  vC: MatrixView[T]
     ){.inline.} =
 
   let pAB{.restrict.} = assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeAddr)
 
-  when is_c_unit_stride:
-    if beta == 0.T:
-      for i in 0 ..< MR:
-        for j in `||`(0, NR-1, "simd"):
-          vC.at(i, j) = 0.T
-    elif beta != 1.T:                  # C *= β
-      for i in 0 ..< MR:
-        for j in `||`(0, NR-1, "simd"):
-          vC.at(i, j) *= beta
+  if beta == 0.T:
+    for i in 0 ..< MR:
+      for j in 0 ..< NR:
+        vC[i, j] = 0.T
+  elif beta != 1.T:                  # C *= β
+    for i in 0 ..< MR:
+      for j in 0 ..< NR:
+        vC[i, j] *= beta
 
-    if alpha == 1.T:                   # C += AB
-      for i in 0 ..< MR:
-        for j in `||`(0, NR-1, "simd"):
-          vC.at(i, j) += pAB[i][j]
-    else:                              # C += αAB
-      for i in 0 ..< MR:
-        for j in `||`(0, NR-1, "simd"):
-          vC.at(i, j) += alpha * pAB[i][j]
-  else:
-    if beta == 0.T:
-      for i in 0 ..< MR:
-        for j in 0 ..< NR:
-          vC[i, j] = 0.T
-    elif beta != 1.T:                  # C *= β
-      for i in 0 ..< MR:
-        for j in 0 ..< NR:
-          vC[i, j] *= beta
-
-    if alpha == 1.T:                   # C += AB
-      for i in 0 ..< MR:
-        for j in 0 ..< NR:
-          vC[i, j] += pAB[i][j]
-    else:                              # C += αAB
-      for i in 0 ..< MR:
-        for j in 0 ..< NR:
-          vC[i, j] += alpha * pAB[i][j]
+  if alpha == 1.T:                   # C += AB
+    for i in 0 ..< MR:
+      for j in 0 ..< NR:
+        vC[i, j] += pAB[i][j]
+  else:                              # C += αAB
+    for i in 0 ..< MR:
+      for j in 0 ..< NR:
+        vC[i, j] += alpha * pAB[i][j]
 
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well
+
+proc gebb_ukernel_fallback*[T; ukernel: static MicroKernel](
+      kc: int,
+      alpha: T, packedA, packedB: ptr UncheckedArray[T],
+      beta: T, vC: MatrixView[T]
+    ) =
+  ukernel_generic_impl()
+
+  const is_c_unit_stride = ukernel.extract_c_unit_stride
+  gebb_ukernel_epilogue_fallback(alpha, to_ptr(AB, MR, NR, T), beta, vC)
+
+# ############################################################
+#
+#                      Matrix edges
+#
+# ############################################################
 
 func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
       alpha: T, AB: ptr array[MR, array[NR, T]],
@@ -112,51 +128,10 @@ func gebb_ukernel_edge_epilogue*[MR, NR: static int, T](
   # TODO: Fused operations like relu/sigmoid/tanh
   #       should be done here as well
 
-# ############################################################
-#
-#          Internal GEBB microkernel implementation
-#
-# ############################################################
-
-template ukernel_impl(){.dirty.} =
-  const
-    MR = ukernel.extract_mr()
-    NR = ukernel.extract_nr()
-    simd = ukernel.extract_cpu_simd
-
-  var AB{.align_variable.}: array[MR, array[NR, T]]
-  var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
-  var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
-
-  for k in 0 ..< kc:
-    prefetch(B[(k+1)*NR].addr, Read, LowTemporalLocality)
-    for i in 0 ..< MR:
-      for j in `||`(0, NR-1, "simd"):
-        AB[i][j] += A[k*MR+i] * B[k*NR+j]
-
-# ############################################################
-#
-#               Exported functions
-#
-# ############################################################
-
-template to_ptr*(AB: typed, MR, NR: static int, T: typedesc): untyped =
-  assume_aligned cast[ptr array[MR, array[NR, T]]](AB[0][0].unsafeaddr)
-
-proc gebb_ukernel_generic*[T; ukernel: static MicroKernel](
-      kc: int,
-      alpha: T, packedA, packedB: ptr UncheckedArray[T],
-      beta: T, vC: MatrixView[T]
-    ) =
-  ukernel_impl()
-
-  const is_c_unit_stride = ukernel.extract_c_unit_stride
-  gebb_ukernel_epilogue(alpha, to_ptr(AB, MR, NR, T), beta, vC, is_c_unit_stride)
-
-proc gebb_ukernel_edge*[T; ukernel: static MicroKernel](
+proc gebb_ukernel_edge_fallback*[T; ukernel: static MicroKernel](
       mr, nr, kc: int,
       alpha: T, packedA, packedB: ptr UncheckedArray[T],
       beta: T, vC: MatrixView[T]
     ) =
-  ukernel_impl()
+  ukernel_generic_impl()
   gebb_ukernel_edge_epilogue(alpha, to_ptr(AB, MR, NR, T), beta, vC, mr, nr)

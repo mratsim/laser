@@ -4,28 +4,22 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
+  macros,
+  ../../compiler_optim_hints,
   ./gemm_tiling, ./gemm_utils,
   ./gemm_ukernel_generic,
   ./gemm_ukernel_avx,
-  ../../compiler_optim_hints,
-  macros
-
-export gebb_ukernel_edge
-
-# ############################################################
-#
-#         Dispatch according to runtime CPU detection
-#
-# ############################################################
+  ./gemm_ukernel_avx2
 
 {.experimental: "dynamicBindSym".}
-macro dispatch(
-    ukernel: static MicroKernel,
-    kc: int,
-    alpha: typed, packedA, packedB: ptr UncheckedArray[typed],
-    beta: typed, vC: MatrixView[typed]
-  ): untyped =
 
+# ############################################################
+#
+#            Dispatch with runtime cpu detection
+#
+# ############################################################
+
+template dispatch_common {.dirty.} =
   let simd = ukernel.cpu_simd
   let MR = ukernel.mr
   let nb_scalars = ukernel.nb_scalars
@@ -41,12 +35,22 @@ macro dispatch(
       prefetch(`vC`[i, 0].addr, Write, HighTemporalLocality)
 
   # 2. Dispatch according to type and SIMD support
-  let symT = getTypeInst(alpha)             # Retrieve float32/int64 ...
+  let symT = getTypeInst(alpha)
+
+
+macro dispatch_general(
+    ukernel: static MicroKernel,
+    kc: int,
+    alpha: typed, packedA, packedB: ptr UncheckedArray[typed],
+    beta: typed, vC: MatrixView[typed]
+  ): untyped =
+
+  dispatch_common()
 
   # 2.1. No SIMD case
   if simd == x86_Generic:
     result.add quote do:
-      gebb_ukernel_generic[`symT`, ukernel]( # Hack: ukernel is generic from the calling proc
+      gebb_ukernel_fallback[`symT`, ukernel]( # Hack: ukernel is generic from the calling proc
               `kc`,
         `alpha`, `packedA`, `packedB`,
         `beta`, `vC`
@@ -69,4 +73,48 @@ proc gebb_ukernel*[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T]
     ){.inline.} =
 
-  ukernel.dispatch(kc, alpha, packedA, packedB, beta, vC)
+  ukernel.dispatch_general(kc, alpha, packedA, packedB, beta, vC)
+
+
+# ############################################################
+#
+#                      Exported proc
+#
+# ############################################################
+
+macro dispatch_edge(
+    ukernel: static MicroKernel,
+    mr, nr, kc: int,
+    alpha: typed, packedA, packedB: ptr UncheckedArray[typed],
+    beta: typed, vC: MatrixView[typed]
+  ): untyped =
+
+  dispatch_common()
+
+  # 2.1. No SIMD case
+  if simd == x86_Generic:
+    result.add quote do:
+      gebb_ukernel_edge_fallback[`symT`, ukernel]( # Hack: ukernel is generic from the calling proc
+        `mr`, `nr`, `kc`,
+        `alpha`, `packedA`, `packedB`,
+        `beta`, `vC`
+      )
+    return
+
+  # 2.2. SIMD case
+  let simdTag = $simd
+  let ukernel_name = bindSym("gebb_ukernel_edge_" & $symT & "_" & simdTag)
+  result.add quote do:
+    `ukernel_name`[ukernel]( # Hack: ukernel is generic from the calling proc
+      `mr`, `nr`, `kc`,
+      `alpha`, `packedA`, `packedB`,
+      `beta`, `vC`
+    )
+
+proc gebb_ukernel_edge*[T; ukernel: static MicroKernel](
+      mr, nr, kc: int,
+      alpha: T, packedA, packedB: ptr UncheckedArray[T],
+      beta: T, vC: MatrixView[T]
+    ){.inline.} =
+
+  ukernel.dispatch_edge(mr, nr, kc, alpha, packedA, packedB, beta, vC)

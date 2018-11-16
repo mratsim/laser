@@ -177,7 +177,7 @@ when isMainModule:
     # when not defined(openmp):
     #   benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
     # benchArraymancerFallback(a, b, NbSamples)
-    benchOpenBLAS(a, b, NbSamples)
+    # benchOpenBLAS(a, b, NbSamples)
     benchLaserGEMM(a, b, NbSamples)
 
 # Seems like my original Arraymancer BLAS has false sharing issue
