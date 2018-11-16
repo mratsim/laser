@@ -199,12 +199,12 @@ proc gemm_strided*[T: SomeNumber](
     when defined(i386) or defined(amd64):
       when T is SomeFloat:
         if cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
-        elif cpuinfo_has_x86_avx():    dispatch(x86_AVX)
-        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
-        elif cpuinfo_has_x86_sse():    dispatch(x86_SSE)
-      else: # Integers are taking advantage of wider registers later (in SSE2 and AVX2)
-        if cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
-        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+      #   elif cpuinfo_has_x86_avx():    dispatch(x86_AVX)
+      #   elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+      #   elif cpuinfo_has_x86_sse():    dispatch(x86_SSE)
+      # else: # Integers are taking advantage of wider registers later (in SSE2 and AVX2)
+      #   if cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
+      #   elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
     dispatch(x86_Generic)
 
 # ############################################################

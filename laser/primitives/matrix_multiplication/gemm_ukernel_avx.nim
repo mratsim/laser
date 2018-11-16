@@ -6,155 +6,160 @@
 # Specialized microkernels for matrix multiplication
 
 import
-  ../../cpuinfo, ../../compiler_optim_hints,
-  ../../simd,
-  macros,
-  ./gemm_tiling, ./gemm_utils,
-  ./gemm_ukernel_generic
+  ./gemm_ukernel_template, ./gemm_tiling,
+  ../../simd
+#   ../../cpuinfo, ../../compiler_optim_hints,
+#   ../../simd,
+#   macros,
+#   ./gemm_tiling, ./gemm_utils,
+#   ./gemm_ukernel_generic
+import macros
+expandMacros:
+  ukernel_generator(float32, x86_AVX2)
 
-# ############################################################
-#
-#               AVX, AVX + FMA (AVX2) Microkernels
-#
-# ############################################################
+# # ############################################################
+# #
+# #               AVX, AVX + FMA (AVX2) Microkernels
+# #
+# # ############################################################
 
-proc gebb_ukernel_epilogue_f32_avx[MR, NbVecs: static int, T](
-      alpha: T, AB: array[MR, array[NbVecs, m256]],
-      beta: T, vC: MatrixView[float32]
-    ) {.inline.} =
+# proc gebb_ukernel_epilogue_f32_avx[MR, NbVecs: static int, T](
+#       alpha: T, AB: array[MR, array[NbVecs, m256]],
+#       beta: T, vC: MatrixView[float32]
+#     ) {.inline.} =
 
-  const VecSize = 8
-  template C(i,j: int): untyped {.dirty.} = vC.buffer[i*vC.rowStride + j*VecSize]
+#   const VecSize = 8
+#   template C(i,j: int): untyped {.dirty.} = vC.buffer[i*vC.rowStride + j*VecSize]
 
-  if beta == 0.T:
-    for i in 0 ..< MR:
-      for j in 0 ..< NbVecs:
-        mm256_storeu_ps(C(i,j).addr, mm256_setzero_ps())
-  elif beta != 1.T:
-    let beta_vec = mm256_set1_ps(beta)
-    for i in 0 ..< MR:
-      for j in 0 ..< NbVecs:
-        mm256_storeu_ps(C(i,j).addr, mm256_mul_ps(beta_vec, C(i,j).addr.mm256_loadu_ps))
+#   if beta == 0.T:
+#     for i in 0 ..< MR:
+#       for j in 0 ..< NbVecs:
+#         mm256_storeu_ps(C(i,j).addr, mm256_setzero_ps())
+#   elif beta != 1.T:
+#     let beta_vec = mm256_set1_ps(beta)
+#     for i in 0 ..< MR:
+#       for j in 0 ..< NbVecs:
+#         mm256_storeu_ps(C(i,j).addr, mm256_mul_ps(beta_vec, C(i,j).addr.mm256_loadu_ps))
 
-  if alpha == 1.T:
-    for i in 0 ..< MR:
-      for j in 0 ..< NbVecs:
-        mm256_storeu_ps(C(i,j).addr, mm256_add_ps(AB[i][j], C(i,j).addr.mm256_loadu_ps))
-  else:
-    let alpha_vec = mm256_set1_ps(alpha)
-    # TODO - non FMA
-    for i in 0 ..< MR:
-      for j in 0 ..< NbVecs:
-        mm256_storeu_ps(C(i,j).addr, mm256_fmadd_ps(alpha_vec, AB[i][j], C(i,j).addr.mm256_loadu_ps))
+#   if alpha == 1.T:
+#     for i in 0 ..< MR:
+#       for j in 0 ..< NbVecs:
+#         mm256_storeu_ps(C(i,j).addr, mm256_add_ps(AB[i][j], C(i,j).addr.mm256_loadu_ps))
+#   else:
+#     let alpha_vec = mm256_set1_ps(alpha)
+#     # TODO - non FMA
+#     for i in 0 ..< MR:
+#       for j in 0 ..< NbVecs:
+#         mm256_storeu_ps(C(i,j).addr, mm256_fmadd_ps(alpha_vec, AB[i][j], C(i,j).addr.mm256_loadu_ps))
 
-macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, MR, NR: static int, kc: int): untyped =
+# macro ukernel_impl(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, MR, NR: static int, kc: int): untyped =
 
-  result = newStmtList()
-  let k = genSym(nskForVar)
+#   result = newStmtList()
+#   let k = genSym(nskForVar)
 
-  ## Registers
-  var rA: seq[NimNode]           # array[MR div 2, m256] - TODO, support NbVecs != 2
-  var rB: seq[NimNode]           # array[NR div vecsize, m256]
-  for i in 0 ..< NbVecs:
-    rA.add genSym(nskVar, "A" & $i)
-    rB.add genSym(nskVar, "B" & $i)
-  var rAB = nnkBracket.newTree() # array[MR, array[NbVecs, m256]]
-  for i in 0 ..< MR:
-    var rABi = nnkBracket.newTree()
-    for j in 0 ..< NbVecs:
-      rABi.add genSym(nskVar, "AB" & $i & "__" & $j)
-    rAB.add rABi
+#   ## Registers
+#   var rA: seq[NimNode]           # array[MR div 2, m256] - TODO, support NbVecs != 2
+#   var rB: seq[NimNode]           # array[NR div vecsize, m256]
+#   for i in 0 ..< NbVecs:
+#     rA.add genSym(nskVar, "A" & $i)
+#     rB.add genSym(nskVar, "B" & $i)
+#   var rAB = nnkBracket.newTree() # array[MR, array[NbVecs, m256]]
+#   for i in 0 ..< MR:
+#     var rABi = nnkBracket.newTree()
+#     for j in 0 ..< NbVecs:
+#       rABi.add genSym(nskVar, "AB" & $i & "__" & $j)
+#     rAB.add rABi
 
-  ## Declare
-  var declBody = newStmtList()
-  for a in rA:
-    declBody.add quote do:
-      var `a`{.noinit.}: m256
-  for b in rB:
-    declBody.add quote do:
-      var `b`{.noinit.}: m256
-  for i in 0 ..< MR:
-    for j in 0 ..< NbVecs:
-      let ab = rAB[i][j]
-      declBody.add quote do:
-        var `ab` = mm256_setzero_ps()
+#   ## Declare
+#   var declBody = newStmtList()
+#   for a in rA:
+#     declBody.add quote do:
+#       var `a`{.noinit.}: m256
+#   for b in rB:
+#     declBody.add quote do:
+#       var `b`{.noinit.}: m256
+#   for i in 0 ..< MR:
+#     for j in 0 ..< NbVecs:
+#       let ab = rAB[i][j]
+#       declBody.add quote do:
+#         var `ab` = mm256_setzero_ps()
 
-  ## Prefetch
-  var prefetchBody = newStmtList()
-  for jj in 0 ..< NbVecs:
-    prefetchBody.add quote do:
-      prefetch(`B`[(`k`+1)*NR+`jj`*`NBElems`].addr, Read, LowTemporalLocality)
+#   ## Prefetch
+#   var prefetchBody = newStmtList()
+#   for jj in 0 ..< NbVecs:
+#     prefetchBody.add quote do:
+#       prefetch(`B`[(`k`+1)*NR+`jj`*`NBElems`].addr, Read, LowTemporalLocality)
 
-  ## Load
-  var loadBody = newStmtList()
-  for jj in 0 ..< NbVecs:
-    let b = rB[jj]
-    loadBody.add quote do:
-      `b` = mm256_load_ps(`B`[`k`*NR+`jj`*`NBElems`].addr)
+#   ## Load
+#   var loadBody = newStmtList()
+#   for jj in 0 ..< NbVecs:
+#     let b = rB[jj]
+#     loadBody.add quote do:
+#       `b` = mm256_load_ps(`B`[`k`*NR+`jj`*`NBElems`].addr)
 
-  ## Interleaved broadcast and FMA
-  var bcast_fma = newStmtList()
-  block:
-    let a0 = rA[0]
-    bcast_fma.add quote do:
-      `a0` = mm256_set1_ps(`A`[`k`*MR])
+#   ## Interleaved broadcast and FMA
+#   var bcast_fma = newStmtList()
+#   block:
+#     let a0 = rA[0]
+#     bcast_fma.add quote do:
+#       `a0` = mm256_set1_ps(`A`[`k`*MR])
 
-  for i in countup(0, MR-1, 2): #  to MR inclusive
-    for ii in 0 ..< NbVecs:
-      if i != MR:
-        # broadcast next iteration
-        let a_next = rA[(ii+1) mod NbVecs]
-        bcast_fma.add quote do:
-          `a_next` = mm256_set1_ps(`A`[`k`*MR+(`i`+1)+`ii`*`NBElems`])
+#   for i in countup(0, MR-1, 2): #  to MR inclusive
+#     for ii in 0 ..< NbVecs:
+#       if i != MR:
+#         # broadcast next iteration
+#         let a_next = rA[(ii+1) mod NbVecs]
+#         bcast_fma.add quote do:
+#           `a_next` = mm256_set1_ps(`A`[`k`*MR+(`i`+1)+`ii`*`NBElems`])
 
-      # Do FMA on the current one
-      let a = rA[ii]
-      for jj in 0 ..< NbVecs:
-        let b = rB[jj]
-        let AB = rAB[min(MR-1, i + ii)][jj]
-        if simd == x86_AVX:
-          bcast_fma.add quote do:
-            `AB` = mm256_add_ps(mm256_mul_ps(`a`, `b`), `AB`)
-        else:
-          bcast_fma.add quote do:
-            `AB` = mm256_fmadd_ps(`a`, `b`, `AB`)
+#       # Do FMA on the current one
+#       let a = rA[ii]
+#       for jj in 0 ..< NbVecs:
+#         let b = rB[jj]
+#         let AB = rAB[min(MR-1, i + ii)][jj]
+#         if simd == x86_AVX:
+#           bcast_fma.add quote do:
+#             `AB` = mm256_add_ps(mm256_mul_ps(`a`, `b`), `AB`)
+#         else:
+#           bcast_fma.add quote do:
+#             `AB` = mm256_fmadd_ps(`a`, `b`, `AB`)
 
-  ## Assemble:
-  result = quote do:
-    `declBody`
-    for `k` in 0 ..< `kc`:
-      `loadBody`
-      `prefetchBody`
-      `bcast_fma`
-    ## Write registers to a MR/NR array
-    `rAB`
+#   ## Assemble:
+#   result = quote do:
+#     `declBody`
+#     for `k` in 0 ..< `kc`:
+#       `loadBody`
+#       `prefetchBody`
+#       `bcast_fma`
+#     ## Write registers to a MR/NR array
+#     `rAB`
 
-proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
-      kc: int,
-      alpha: float32, packedA, packedB: ptr UncheckedArray[float32],
-      beta: float32, vC: MatrixView[float32]
-    ) =
-  const
-    MR = ukernel.extract_mr()
-    NR = ukernel.extract_nr()
-    simd = ukernel.extract_cpu_simd
-    NbElems = 8
-    NbVecs = NR div NbElems
+# proc gebb_ukernel_f32_avx*[ukernel: static MicroKernel](
+#       kc: int,
+#       alpha: float32, packedA, packedB: ptr UncheckedArray[float32],
+#       beta: float32, vC: MatrixView[float32]
+#     ) =
+#   const
+#     MR = ukernel.extract_mr()
+#     NR = ukernel.extract_nr()
+#     simd = ukernel.extract_cpu_simd
+#     NbElems = 8
+#     NbVecs = NR div NbElems
 
-  var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
-  var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
+#   var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
+#   var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-  let AB{.align_variable.} = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
+#   let AB{.align_variable.} = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
 
-  const is_c_unit_stride = ukernel.extract_c_unit_stride
-  when is_c_unit_stride:
-    gebb_ukernel_epilogue_f32_avx(
-      alpha, AB,
-      beta, vC)
-  else:
-    gebb_ukernel_epilogue(
-      alpha, to_ptr(AB, MR, NR, float32),
-      beta, vC, is_c_unit_stride)
+#   const is_c_unit_stride = ukernel.extract_c_unit_stride
+#   when is_c_unit_stride:
+#     gebb_ukernel_epilogue_f32_avx(
+#       alpha, AB,
+#       beta, vC)
+#   else:
+#     gebb_ukernel_epilogue(
+#       alpha, to_ptr(AB, MR, NR, float32),
+#       beta, vC, is_c_unit_stride)
 
 # #####################################################
   # Reference loop -  AB: array[MR, array[NR, float32]]
