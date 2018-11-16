@@ -20,7 +20,13 @@ import
 # flags like "-mavx -mfma" are isolated.
 # Add the corresponding compilation flags to "nim.cfg"
 
-macro ukernel_impl*(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, MR, NR: static int, kc: int): untyped =
+macro ukernel_impl*(
+    simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, MR, NR: static int, kc: int,
+    simd_setZero: untyped,
+    simd_broadcast_value: untyped,
+    simd_load_aligned: untyped,
+    simd_fma: untyped
+    ): untyped =
 
   result = newStmtList()
   let k = genSym(nskForVar)
@@ -50,7 +56,7 @@ macro ukernel_impl*(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, 
     for j in 0 ..< NbVecs:
       let ab = rAB[i][j]
       declBody.add quote do:
-        var `ab` = mm256_setzero_ps()
+        var `ab` = `simd_setZero`()
 
   ## Prefetch
   var prefetchBody = newStmtList()
@@ -63,14 +69,14 @@ macro ukernel_impl*(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, 
   for jj in 0 ..< NbVecs:
     let b = rB[jj]
     loadBody.add quote do:
-      `b` = mm256_load_ps(`B`[`k`*`NR`+`jj`*`NBElems`].addr)
+      `b` = `simd_load_aligned`(`B`[`k`*`NR`+`jj`*`NBElems`].addr)
 
   ## Interleaved broadcast and FMA
   var bcast_fma = newStmtList()
   block:
     let a0 = rA[0]
     bcast_fma.add quote do:
-      `a0` = mm256_set1_ps(`A`[`k`*`MR`])
+      `a0` = `simd_broadcast_value`(`A`[`k`*`MR`])
 
   for i in countup(0, MR-1, 2): #  to MR inclusive
     for ii in 0 ..< NbVecs:
@@ -78,19 +84,15 @@ macro ukernel_impl*(simd: static CPUFeatureX86, A, B: untyped, NbVecs, NBElems, 
         # broadcast next iteration
         let a_next = rA[(ii+1) mod NbVecs]
         bcast_fma.add quote do:
-          `a_next` = mm256_set1_ps(`A`[`k`*`MR`+(`i`+1)+`ii`*`NBElems`])
+          `a_next` = `simd_broadcast_value`(`A`[`k`*`MR`+(`i`+1)+`ii`*`NBElems`])
 
       # Do FMA on the current one
       let a = rA[ii]
       for jj in 0 ..< NbVecs:
         let b = rB[jj]
         let AB = rAB[min(MR-1, i + ii)][jj]
-        if simd == x86_AVX:
-          bcast_fma.add quote do:
-            `AB` = mm256_add_ps(mm256_mul_ps(`a`, `b`), `AB`)
-        else:
-          bcast_fma.add quote do:
-            `AB` = mm256_fmadd_ps(`a`, `b`, `AB`)
+        bcast_fma.add quote do:
+          `AB` = `simd_fma`(`a`, `b`, `AB`)
 
   ## Assemble:
   result = quote do:
@@ -161,7 +163,13 @@ macro ukernel_generator*(
       var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
       var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
 
-      let AB{.align_variable.} = simd.ukernel_impl(A, B, NbVecs, NBElems, MR, NR, kc)
+      let AB{.align_variable.} = simd.ukernel_impl(
+          A, B, NbVecs, NBElems, MR, NR, kc,
+          simd_setZero = mm256_setzero_ps,
+          simd_broadcast_value = mm256_set1_ps,
+          simd_load_aligned = mm256_load_ps,
+          simd_fma = mm256_fmadd_ps
+        )
 
       const is_c_unit_stride = ukernel.extract_c_unit_stride
       when is_c_unit_stride:
