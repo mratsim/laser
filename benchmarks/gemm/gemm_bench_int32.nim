@@ -167,7 +167,7 @@ when isMainModule:
 
 # Serial (which is faster than OMP probably because of false sharing)
 
-# Warmup: 1.1932 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1935 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 1920, N: 1920)
 # B matrix shape: (M: 1920, N: 1920)
@@ -179,34 +179,70 @@ when isMainModule:
 # Theoretical peak multi:        Unknown
 
 # Simple Tiling
-# Collected 10 samples in 26.355 seconds
-# Average time: 2635.233 ms
-# Stddev  time: 18.358 ms
-# Min     time: 2600.231 ms
-# Max     time: 2665.695 ms
-# Perf:         5.372 GINTOP/s
+# Collected 10 samples in 24.949 seconds
+# Average time: 2494.638 ms
+# Stddev  time: 36.238 ms
+# Min     time: 2459.590 ms
+# Max     time: 2570.874 ms
+# Perf:         5.674 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 4699774
 
 # Arraymancer fallback BLAS
-# Collected 10 samples in 21.775 seconds
-# Average time: 2177.268 ms
-# Stddev  time: 10.250 ms
-# Min     time: 2166.361 ms
-# Max     time: 2193.774 ms
-# Perf:         6.502 GINTOP/s
+# Collected 10 samples in 21.870 seconds
+# Average time: 2186.740 ms
+# Stddev  time: 26.963 ms
+# Min     time: 2161.838 ms
+# Max     time: 2246.702 ms
+# Perf:         6.473 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 4699774
 
 # Laser production implementation
-# Collected 10 samples in 26.827 seconds
-# Average time: 2682.440 ms
-# Stddev  time: 11.262 ms
-# Min     time: 2672.534 ms
-# Max     time: 2709.101 ms
-# Perf:         5.277 GINTOP/s
+# Collected 10 samples in 9.853 seconds
+# Average time: 985.001 ms
+# Stddev  time: 4.657 ms
+# Min     time: 979.731 ms
+# Max     time: 997.174 ms
+# Perf:         14.371 GINTOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4699774
+
+# ########################################################
+# OpenMP
+
+# Warmup: 1.1920 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A matrix shape: (M: 1920, N: 1920)
+# B matrix shape: (M: 1920, N: 1920)
+# Output shape: (M: 1920, N: 1920)
+# Required number of operations: 14155.776 millions
+# Required bytes:                   29.491 MB
+# Arithmetic intensity:            480.000 FLOP/byte
+# Theoretical peak single-core:  Unknown
+# Theoretical peak multi:        Unknown
+
+# Arraymancer fallback BLAS
+# Collected 10 samples in 26.885 seconds
+# Average time: 2688.255 ms
+# Stddev  time: 23.790 ms
+# Min     time: 2665.262 ms
+# Max     time: 2733.505 ms
+# Perf:         5.266 GINTOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4699774
+
+# Laser production implementation
+# Collected 10 samples in 5.077 seconds
+# Average time: 507.399 ms
+# Stddev  time: 7.426 ms
+# Min     time: 499.704 ms
+# Max     time: 523.043 ms
+# Perf:         27.899 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 4699774

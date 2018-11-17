@@ -359,6 +359,7 @@ addQuitProc(cpuinfo_deinitialize)
 func cpuinfo_has_x86_sse*(): bool {.cpuinfo.}
 func cpuinfo_has_x86_sse2*(): bool {.cpuinfo.}
 func cpuinfo_has_x86_sse3*(): bool {.cpuinfo.}
+func cpuinfo_has_x86_sse4_1*(): bool {.cpuinfo.}
 func cpuinfo_has_x86_avx*(): bool {.cpuinfo.}
 func cpuinfo_has_x86_avx2*(): bool {.cpuinfo.}
 func cpuinfo_has_x86_avx512f*(): bool {.cpuinfo.}

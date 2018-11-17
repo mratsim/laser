@@ -93,9 +93,9 @@ when defined(i386) or defined(amd64):
 
   func mm_setzero_si128*(): m128i {.importc: "_mm_setzero_si128", x86.}
   func mm_set1_epi8*(a: int8): m128i {.importc: "_mm_set1_epi8", x86.}
-  func mm_set1_epi16*(a: int8): m128i {.importc: "_mm_set1_epi16", x86.}
-  func mm_set1_epi32*(a: int8): m128i {.importc: "_mm_set1_epi32", x86.}
-  func mm_set1_epi64x*(a: int8): m128i {.importc: "_mm_set1_epi64x", x86.}
+  func mm_set1_epi16*(a: int16): m128i {.importc: "_mm_set1_epi16", x86.}
+  func mm_set1_epi32*(a: int32): m128i {.importc: "_mm_set1_epi32", x86.}
+  func mm_set1_epi64x*(a: int64): m128i {.importc: "_mm_set1_epi64x", x86.}
   func mm_load_si128*(mem_addr: ptr SomeInteger): m128i {.importc: "_mm_load_si128", x86.}
   func mm_loadu_si128*(mem_addr: ptr SomeInteger): m128i {.importc: "_mm_loadu_si128", x86.}
   func mm_storeu_si128*(mem_addr: ptr SomeInteger, a: m128i) {.importc: "_mm_storeu_si128", x86.}
