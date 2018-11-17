@@ -24,7 +24,7 @@ template printStats(name: string, output: openarray) {.dirty.} =
   echo &"Stddev  time: {stats.standardDeviationS * 1000 :>4.3f} ms"
   echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
   echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
-  echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GFLOP/s"
+  echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GINTOP/s"
   echo "\nDisplay output[0] to make sure it's not optimized away"
   echo output[0] # Prevents compiler from optimizing stuff away
 
@@ -50,43 +50,28 @@ import
   ../../laser/primitives/matrix_multiplication/gemm
 
 const
-  M     = 16*6*20
-  K     = 16*6*20
-  N     = 16*6*20
+  M     = 8*6*20
+  K     = 8*6*20
+  N     = 8*6*20
   NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
   CpuGhz = 2.7      # Assuming no turbo
   NumCpuCores = 2
-  CpuFlopCycle = 32 # AVX2: 2xFMA/cycle = 2x8x2 - 2 x 8 floats x (1 add + 1 mul)
+  # CpuIntopCycle = # Unknown
 
 const
   ashape: MatrixShape = (M, K)
   bshape: MatrixShape = (K, N)
 
 let req_ops = gemm_required_ops(ashape, bshape)
-let req_bytes = sizeof(float32) * gemm_required_data(ashape, bshape)
+let req_bytes = sizeof(int64) * gemm_required_data(ashape, bshape)
 
 let out_shape: MatrixShape = gemm_out_shape(ashape, bshape)
 let out_size = out_shape.M * out_shape.N
 
 # #############################################
 
-proc benchOpenBLAS(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
-  bench("OpenBLAS benchmark"):
-    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
-  do:
-    # Main work
-    gemm(
-      rowMajor, noTranspose, noTranspose,
-      M, N, K,
-      1, a[0].unsafeaddr, K,
-      b[0].unsafeAddr, N,
-      0, output[0].addr, N
-    )
-
-proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchArraymancerFallback(a, b: seq[int64], nb_samples: int) =
+  var output = newSeq[int64](out_size)
   bench("Arraymancer fallback BLAS"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
     zeroMem(output[0].addr, out_size) # We zero memory between computation
@@ -94,13 +79,13 @@ proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int) =
     # Main work
     gemm_nn_fallback(
       M, N, K,
-      1'f32,      a, 0, K, 1,       # offset, stride row, stride col
+      1'i64,      a, 0, K, 1,       # offset, stride row, stride col
                   b, 0, N, 1,
-      0'f32, output, 0, N, 1
+      0'i64, output, 0, N, 1
     )
 
-proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) {.noinline.}=
-  var output = newSeq[float32](out_size)
+proc benchSimpleTiling(a, b: seq[int64], nb_samples: int) {.noinline.}=
+  var output = newSeq[int64](out_size)
 
   let pa = a[0].unsafeAddr
   let pb = b[0].unsafeAddr
@@ -114,9 +99,9 @@ proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) {.noinline.}=
     {.emit: """
       #define min(a,b) (((a)<(b))?(a):(b))
 
-      float (* restrict A)[`K`] = (void*)`pa`;
-      float (* restrict B)[`N`] = (void*)`pb`;
-      float (* restrict C)[`N`] = (void*)`po`;
+      int64_t (* restrict A)[`K`] = (void*)`pa`;
+      int64_t (* restrict B)[`N`] = (void*)`pb`;
+      int64_t (* restrict C)[`N`] = (void*)`po`;
 
       // TODO: where to parallelize?
       for (int j = 0; j < `N`; j+=`blck`)
@@ -128,8 +113,8 @@ proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) {.noinline.}=
 
     """.}
 
-proc benchLaserGEMM(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchLaserGEMM(a, b: seq[int64], nb_samples: int) =
+  var output = newSeq[int64](out_size)
 
   let a_ptr{.restrict.} = a[0].unsafeAddr
   let b_ptr{.restrict.} = b[0].unsafeAddr
@@ -141,9 +126,9 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int) =
     # Main work
     gemm_strided(
       M, N, K,
-      1'f32,  a_ptr, K, 1,       # stride row, stride col
+      1'i64,  a_ptr, K, 1,       # stride row, stride col
               b_ptr, N, 1,
-      0'f32,  c_ptr, N, 1
+      0'i64,  c_ptr, N, 1
     )
 # ###########################################
 
@@ -167,94 +152,98 @@ when isMainModule:
   echo &"Required number of operations: {req_ops.float / float(10^6):>9.3f} millions"
   echo &"Required bytes:                {req_bytes.float / float(10^6):>9.3f} MB"
   echo &"Arithmetic intensity:          {req_ops.float / req_bytes.float:>9.3f} FLOP/byte"
-  echo &"Theoretical peak single-core:  {CpuGhz * CpuFlopCycle:>9.3f} GFLOP/s"
-  echo &"Theoretical peak multi:        {CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GFLOP/s"
-  echo "Make sure to not bench Apple Accelerate or the default Linux BLAS."
+  echo &"Theoretical peak single-core:  Unknown" #{CpuGhz * CpuFlopCycle:>9.3f} GINTOP/s"
+  echo &"Theoretical peak multi:        Unknown" #{CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GINTOP/s"
   block:
-    let a = newSeqWith(M*K, float32 rand(1.0))
-    let b = newSeqWith(K*N, float32 rand(1.0))
+    let a = newSeqWith(M*K, int64 rand(100))
+    let b = newSeqWith(K*N, int64 rand(100))
 
-    # when not defined(openmp):
-    #   benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
-    # benchArraymancerFallback(a, b, NbSamples)
-    benchOpenBLAS(a, b, NbSamples)
+    when not defined(openmp):
+      benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
+    benchArraymancerFallback(a, b, NbSamples)
     benchLaserGEMM(a, b, NbSamples)
 
-# Seems like my original Arraymancer BLAS has false sharing issue
-# FYI Apple accelerate is about 117~122GFLOP/s on my machine.
+# ####################################################
 
-###############################
+# Serial (which is faster than OMP probably because of false sharing)
+
+# Warmup: 1.1949 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A matrix shape: (M: 960, N: 960)
+# B matrix shape: (M: 960, N: 960)
+# Output shape: (M: 960, N: 960)
+# Required number of operations:  1769.472 millions
+# Required bytes:                   14.746 MB
+# Arithmetic intensity:            120.000 FLOP/byte
+# Theoretical peak single-core:  Unknown
+# Theoretical peak multi:        Unknown
+
+# Simple Tiling
+# Collected 10 samples in 8.732 seconds
+# Average time: 873.188 ms
+# Stddev  time: 5.988 ms
+# Min     time: 869.110 ms
+# Max     time: 889.526 ms
+# Perf:         2.026 GINTOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 2311017
+
+# Arraymancer fallback BLAS
+# Collected 10 samples in 3.744 seconds
+# Average time: 374.355 ms
+# Stddev  time: 10.337 ms
+# Min     time: 368.359 ms
+# Max     time: 403.368 ms
+# Perf:         4.727 GINTOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 2311017
+
+# Laser production implementation
+# Collected 10 samples in 3.499 seconds
+# Average time: 349.837 ms
+# Stddev  time: 1.510 ms
+# Min     time: 348.273 ms
+# Max     time: 352.688 ms
+# Perf:         5.058 GINTOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 2311017
+
+# ####################################################
+
 # OpenMP
 
-# $  ./build/laser_gemm_omp
-# Warmup: 1.1900 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1915 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
-# A matrix shape: (M: 1920, N: 1920)
-# B matrix shape: (M: 1920, N: 1920)
-# Output shape: (M: 1920, N: 1920)
-# Required number of operations: 14155.776 millions
-# Required bytes:                   29.491 MB
-# Arithmetic intensity:            480.000 FLOP/byte
-# Theoretical peak single-core:     86.400 GFLOP/s
-# Theoretical peak multi:          172.800 GFLOP/s
-# Make sure to not bench Apple Accelerate or the default Linux BLAS.
+# A matrix shape: (M: 960, N: 960)
+# B matrix shape: (M: 960, N: 960)
+# Output shape: (M: 960, N: 960)
+# Required number of operations:  1769.472 millions
+# Required bytes:                   14.746 MB
+# Arithmetic intensity:            120.000 FLOP/byte
+# Theoretical peak single-core:  Unknown
+# Theoretical peak multi:        Unknown
 
-# OpenBLAS benchmark
-# Collected 10 samples in 0.977 seconds
-# Average time: 97.464 ms
-# Stddev  time: 1.479 ms
-# Min     time: 95.994 ms
-# Max     time: 101.073 ms
-# Perf:         145.241 GFLOP/s
+# Arraymancer fallback BLAS
+# Collected 10 samples in 8.527 seconds
+# Average time: 852.603 ms
+# Stddev  time: 5.060 ms
+# Min     time: 846.422 ms
+# Max     time: 861.150 ms
+# Perf:         2.075 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
-# 470.7781372070312
+# 2311017
 
 # Laser production implementation
-# Collected 10 samples in 1.039 seconds
-# Average time: 103.659 ms
-# Stddev  time: 4.858 ms
-# Min     time: 97.393 ms
-# Max     time: 114.670 ms
-# Perf:         136.561 GFLOP/s
+# Collected 10 samples in 4.872 seconds
+# Average time: 487.161 ms
+# Stddev  time: 13.908 ms
+# Min     time: 477.195 ms
+# Max     time: 522.585 ms
+# Perf:         3.632 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
-# 470.778076171875
-
-###############################
-# Serial
-
-# $  OPENBLAS_NUM_THREADS=1 ./build/laser_gemm_serial
-# Warmup: 1.1938 s, result 224 (displayed to avoid compiler optimizing warmup away)
-
-# A matrix shape: (M: 1920, N: 1920)
-# B matrix shape: (M: 1920, N: 1920)
-# Output shape: (M: 1920, N: 1920)
-# Required number of operations: 14155.776 millions
-# Required bytes:                   29.491 MB
-# Arithmetic intensity:            480.000 FLOP/byte
-# Theoretical peak single-core:     86.400 GFLOP/s
-# Theoretical peak multi:          172.800 GFLOP/s
-# Make sure to not bench Apple Accelerate or the default Linux BLAS.
-
-# OpenBLAS benchmark
-# Collected 10 samples in 1.921 seconds
-# Average time: 191.824 ms
-# Stddev  time: 5.071 ms
-# Min     time: 187.060 ms
-# Max     time: 203.692 ms
-# Perf:         73.796 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 470.7781372070312
-
-# Laser production implementation
-# Collected 10 samples in 1.958 seconds
-# Average time: 195.540 ms
-# Stddev  time: 4.404 ms
-# Min     time: 189.699 ms
-# Max     time: 203.276 ms
-# Perf:         72.393 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 470.7781677246094
+# 2311017

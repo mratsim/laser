@@ -5,8 +5,8 @@
 
 import
   ../../cpuinfo, ../../compiler_optim_hints, ../../openmp,
-  ./gemm_tiling, ./gemm_utils,
-  ./gemm_ukernel_dispatch, ./gemm_packing
+  ./gemm_tiling, ./gemm_utils, ./gemm_packing,
+  ./gemm_ukernel_dispatch
 
 withCompilerOptimHints()
 
@@ -123,7 +123,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     let kc = min(K - pc, tiles.kc) # Deal with edges  # A[0:M, pc:pc+kc]
 
     let kcncB = vB.stride(pc, 0)                      # B[pc:pc+kc, jc:jc+nc]
-    pack_B_kc_nc[T, ukernel](tiles.b, kc, nc, kcncB)    # PackB panel [kc, nc] (nc is large or unknown)
+    pack_B_kc_nc[T, ukernel](tiles.b, kc, nc, kcncB)  # PackB panel [kc, nc] (nc is large or unknown)
 
     # First time writing to C, we scale it, otherwise accumulate
     let beta = if pc == 0: beta else: 1.T
@@ -132,13 +132,13 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     # 3. for ic = 0,...,m−1 in steps of mc
     for icb in 0||(tiles.ic_num_mc_tiles - 1):
       let thread_id = omp_get_thread_num()
-      let packA_offset = tiles.a + thread_id * tiles.mc * kc
-      prefetch(packA_offset, Write, LowTemporalLocality)
+      let packA = tiles.a + thread_id * tiles.mc * kc
+      prefetch(packA, Write, LowTemporalLocality)
       let ic = icb * tiles.mc
       let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
       let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
-      pack_A_mc_kc[T, ukernel](packA_offset, mc, kc, mckcA)  # PackA block [mc, kc]
+      pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
 
       gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
           mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
@@ -197,16 +197,14 @@ proc gemm_strided*[T: SomeNumber](
         apply(ukernel)
 
     when defined(i386) or defined(amd64):
-      when T is SomeFloat:
-        if cpuinfo_has_x86_avx512f():  dispatch(x86_AVX512)
-        elif cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
-        elif cpuinfo_has_x86_avx():    dispatch(x86_AVX)
-        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+      when T is float32:
+        if cpuinfo_has_x86_fma3():   dispatch(x86_AVX_FMA)
+        elif cpuinfo_has_x86_avx():  dispatch(x86_AVX)
         elif cpuinfo_has_x86_sse():    dispatch(x86_SSE)
-      else: # Integers are taking advantage of wider registers later (in SSE2 and AVX2)
-        if cpuinfo_has_x86_avx512f():  dispatch(x86_AVX512)
-        elif cpuinfo_has_x86_avx2():   dispatch(x86_AVX2)
-        elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+      elif T is float64:
+        if cpuinfo_has_x86_fma3():   dispatch(x86_AVX_FMA)
+        elif cpuinfo_has_x86_avx():  dispatch(x86_AVX)
+        elif cpuinfo_has_x86_sse2():    dispatch(x86_SSE2)
     dispatch(x86_Generic)
 
 # ############################################################
