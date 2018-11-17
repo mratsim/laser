@@ -73,7 +73,8 @@ template mul_int64_sse2_fallback(a, b: Int64x2): Int64x2 =
   [a[0] * b[0], a[1] * b[1]]
 
 template fma_int64_sse2_fallback(a, b, c: Int64x2): Int64x2 =
-  [a[0] * b[0] + c[0], a[1] * b[1] + c[0]]
+  ## By mistake I had c[0] instead of c[1] and twice the speed
+  [c[0] + a[0]*b[0], c[1] + a[1]*b[1]]
 
 ukernel_generator(
       x86_SSE2,
