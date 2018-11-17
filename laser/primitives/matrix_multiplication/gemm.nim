@@ -205,9 +205,11 @@ proc gemm_strided*[T: SomeNumber](
         if cpuinfo_has_x86_fma3():   dispatch(x86_AVX_FMA)
         elif cpuinfo_has_x86_avx():  dispatch(x86_AVX)
         elif cpuinfo_has_x86_sse2():    dispatch(x86_SSE2)
-      when T is int32 or T is uint32:
+      elif T is int32 or T is uint32:
         if cpuinfo_has_x86_sse41():   dispatch(x86_SSE4_1)
         elif cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
+      elif T is int64:
+        if cpuinfo_has_x86_sse2():   dispatch(x86_SSE2)
     dispatch(x86_Generic)
 
 # ############################################################

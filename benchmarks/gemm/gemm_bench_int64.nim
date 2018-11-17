@@ -167,7 +167,7 @@ when isMainModule:
 
 # Serial (which is faster than OMP probably because of false sharing)
 
-# Warmup: 1.1949 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1952 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 960, N: 960)
 # B matrix shape: (M: 960, N: 960)
@@ -179,34 +179,34 @@ when isMainModule:
 # Theoretical peak multi:        Unknown
 
 # Simple Tiling
-# Collected 10 samples in 8.732 seconds
-# Average time: 873.188 ms
-# Stddev  time: 5.988 ms
-# Min     time: 869.110 ms
-# Max     time: 889.526 ms
-# Perf:         2.026 GINTOP/s
+# Collected 10 samples in 8.612 seconds
+# Average time: 861.142 ms
+# Stddev  time: 4.586 ms
+# Min     time: 855.223 ms
+# Max     time: 871.292 ms
+# Perf:         2.055 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 2311017
 
 # Arraymancer fallback BLAS
-# Collected 10 samples in 3.744 seconds
-# Average time: 374.355 ms
-# Stddev  time: 10.337 ms
-# Min     time: 368.359 ms
-# Max     time: 403.368 ms
-# Perf:         4.727 GINTOP/s
+# Collected 10 samples in 3.669 seconds
+# Average time: 366.837 ms
+# Stddev  time: 2.823 ms
+# Min     time: 363.548 ms
+# Max     time: 371.605 ms
+# Perf:         4.824 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 2311017
 
 # Laser production implementation
-# Collected 10 samples in 3.499 seconds
-# Average time: 349.837 ms
-# Stddev  time: 1.510 ms
-# Min     time: 348.273 ms
-# Max     time: 352.688 ms
-# Perf:         5.058 GINTOP/s
+# Collected 10 samples in 1.827 seconds
+# Average time: 182.653 ms
+# Stddev  time: 2.778 ms
+# Min     time: 180.402 ms
+# Max     time: 189.529 ms
+# Perf:         9.688 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 2311017
@@ -215,7 +215,7 @@ when isMainModule:
 
 # OpenMP
 
-# Warmup: 1.1915 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1931 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 960, N: 960)
 # B matrix shape: (M: 960, N: 960)
@@ -227,23 +227,23 @@ when isMainModule:
 # Theoretical peak multi:        Unknown
 
 # Arraymancer fallback BLAS
-# Collected 10 samples in 8.527 seconds
-# Average time: 852.603 ms
-# Stddev  time: 5.060 ms
-# Min     time: 846.422 ms
-# Max     time: 861.150 ms
-# Perf:         2.075 GINTOP/s
+# Collected 10 samples in 8.521 seconds
+# Average time: 852.007 ms
+# Stddev  time: 11.720 ms
+# Min     time: 843.190 ms
+# Max     time: 883.982 ms
+# Perf:         2.077 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 2311017
 
 # Laser production implementation
-# Collected 10 samples in 4.872 seconds
-# Average time: 487.161 ms
-# Stddev  time: 13.908 ms
-# Min     time: 477.195 ms
-# Max     time: 522.585 ms
-# Perf:         3.632 GINTOP/s
+# Collected 10 samples in 0.896 seconds
+# Average time: 89.543 ms
+# Stddev  time: 5.583 ms
+# Min     time: 85.315 ms
+# Max     time: 104.285 ms
+# Perf:         19.761 GINTOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 2311017

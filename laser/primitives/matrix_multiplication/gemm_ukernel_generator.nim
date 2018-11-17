@@ -108,10 +108,10 @@ macro ukernel_generator*(
       simd_broadcast_value: untyped,
       simd_load_aligned: untyped,
       simd_load_unaligned: untyped,
-      simd_fma: untyped,
       simd_store_unaligned: untyped,
       simd_mul: untyped,
-      simd_add: untyped
+      simd_add: untyped,
+      simd_fma: untyped,
     ): untyped =
 
   let T = newIdentNode($typ)

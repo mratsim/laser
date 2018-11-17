@@ -14,8 +14,8 @@ ukernel_generator(
       simd_broadcast_value = mm_set1_epi32,
       simd_load_aligned = mm_load_si128,
       simd_load_unaligned = mm_loadu_si128,
-      simd_fma = int32x4_muladd_unfused_sse4_1,
       simd_store_unaligned = mm_storeu_si128,
       simd_mul = mm_mullo_epi32,
-      simd_add = mm_add_epi32
+      simd_add = mm_add_epi32,
+      simd_fma = int32x4_muladd_unfused_sse4_1
     )
