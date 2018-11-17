@@ -92,10 +92,10 @@ when defined(i386) or defined(amd64):
   # ############################################################
 
   func mm_setzero_si128*(): m128i {.importc: "_mm_setzero_si128", x86.}
-  func mm_set1_epi8*(a: int8): m128i {.importc: "_mm_set1_epi8", x86.}
-  func mm_set1_epi16*(a: int16): m128i {.importc: "_mm_set1_epi16", x86.}
-  func mm_set1_epi32*(a: int32): m128i {.importc: "_mm_set1_epi32", x86.}
-  func mm_set1_epi64x*(a: int64): m128i {.importc: "_mm_set1_epi64x", x86.}
+  func mm_set1_epi8*(a: int8 or uint8): m128i {.importc: "_mm_set1_epi8", x86.}
+  func mm_set1_epi16*(a: int16 or uint16): m128i {.importc: "_mm_set1_epi16", x86.}
+  func mm_set1_epi32*(a: int32 or uint32): m128i {.importc: "_mm_set1_epi32", x86.}
+  func mm_set1_epi64x*(a: int64 or uint64): m128i {.importc: "_mm_set1_epi64x", x86.}
   func mm_load_si128*(mem_addr: ptr SomeInteger): m128i {.importc: "_mm_load_si128", x86.}
   func mm_loadu_si128*(mem_addr: ptr SomeInteger): m128i {.importc: "_mm_loadu_si128", x86.}
   func mm_storeu_si128*(mem_addr: ptr SomeInteger, a: m128i) {.importc: "_mm_storeu_si128", x86.}
@@ -104,9 +104,34 @@ when defined(i386) or defined(amd64):
   func mm_add_epi32*(a, b: m128i): m128i {.importc: "_mm_add_epi32", x86.}
   func mm_add_epi64*(a, b: m128i): m128i {.importc: "_mm_add_epi64", x86.}
 
+  func mm_or_si128*(a, b: m128i): m128i {.importc: "_mm_or_si128", x86.}
+  func mm_and_si128*(a, b: m128i): m128i {.importc: "_mm_and_si128", x86.}
+  func mm_slli_epi64*(a: m128i, imm8: cint): m128i {.importc: "_mm_slli_epi64", x86.}
+    ## Shift 2xint64 left
+
   func mm_mullo_epi16*(a, b: m128i): m128i {.importc: "_mm_mullo_epi16", x86.}
     ## Multiply element-wise 2 vectors of 8 16-bit ints
     ## into intermediate 8 32-bit ints, and keep the low 16-bit parts
+
+  func mm_shuffle_epi32*(a: m128i, imm8: cint): m128i {.importc: "_mm_shuffle_epi32", x86.}
+    ## Shuffle 32-bit integers in a according to the control in imm8
+    ## Formula is in big endian representation
+    ## a = {a3, a2, a1, a0}
+    ## dst = {d3, d2, d1, d0}
+    ## imm8 = {bits76, bits54, bits32, bits10}
+    ## d0 will refer a[bits10]
+    ## d1            a[bits32]
+
+  func mm_mul_epu32*(a: m128i, b: m128i): m128i {.importc: "_mm_mul_epu32", x86.}
+    ## From a = {a1_hi, a1_lo, a0_hi, a0_lo} with a1 and a0 being 64-bit number
+    ## and  b = {b1_hi, b1_lo, b0_hi, b0_lo}
+    ##
+    ## Result = {a1_lo * b1_lo, a0_lo * b0_lo}.
+    ## This is an extended precision multiplication 32x32 -> 64
+
+  func mm_set_epi32*(e3, e2, e1, e0: cint): m128i {.importc: "_mm_set_epi32", x86.}
+    ## Initialize m128i with {e3, e2, e1, e0} (big endian order)
+    ## Storing it will yield [e0, e1, e2, e3]
 
   # ############################################################
   #
@@ -187,10 +212,10 @@ when defined(i386) or defined(amd64):
   # ############################################################
 
   func mm256_setzero_si256*(): m256i {.importc: "_mm256_setzero_si256", x86.}
-  func mm256_set1_epi8*(a: int8): m256i {.importc: "_mm256_set1_epi8", x86.}
-  func mm256_set1_epi16*(a: int8): m256i {.importc: "_mm256_set1_epi16", x86.}
-  func mm256_set1_epi32*(a: int8): m256i {.importc: "_mm256_set1_epi32", x86.}
-  func mm256_set1_epi64x*(a: int8): m256i {.importc: "_mm256_set1_epi64x", x86.}
+  func mm256_set1_epi8*(a: int8 or uint8): m256i {.importc: "_mm256_set1_epi8", x86.}
+  func mm256_set1_epi16*(a: int16 or uint16): m256i {.importc: "_mm256_set1_epi16", x86.}
+  func mm256_set1_epi32*(a: int32 or uint32): m256i {.importc: "_mm256_set1_epi32", x86.}
+  func mm256_set1_epi64x*(a: int64 or uint64): m256i {.importc: "_mm256_set1_epi64x", x86.}
   func mm256_load_si256*(mem_addr: ptr SomeInteger): m256i {.importc: "_mm256_load_si256", x86.}
   func mm256_loadu_si256*(mem_addr: ptr SomeInteger): m256i {.importc: "_mm256_loadu_si256", x86.}
   func mm256_storeu_si256*(mem_addr: ptr SomeInteger, a: m256i) {.importc: "_mm256_storeu_si256", x86.}
