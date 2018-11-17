@@ -31,7 +31,7 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
             beta: `T`, vC: MatrixView[`T`]
           ) =
         let AB{.align_variable.} = ukernel_simd_impl(
-          ukernel, packedA, packedB, kc,
+          ukernel, `V`, packedA, packedB, kc,
           `simd_setZero`, `simd_load_aligned`, `simd_broadcast_value`, `simd_fma`
         )
         const
@@ -51,7 +51,7 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
             beta: `T`, vC: MatrixView[`T`]
           ) =
         let AB{.align_variable.} = ukernel_simd_impl(
-          ukernel, packedA, packedB, kc,
+          ukernel, `V`, packedA, packedB, kc,
           `simd_setZero`, `simd_load_aligned`, `simd_broadcast_value`, `simd_fma`
         )
         const
@@ -137,7 +137,7 @@ macro ukernel_generator*(
 # ############################################################
 
 macro ukernel_simd_impl*(
-      ukernel: static MicroKernel, A, B: untyped, kc: int,
+      ukernel: static MicroKernel, V: untyped, A, B: untyped, kc: int,
       simd_setZero, simd_load_aligned, simd_broadcast_value, simd_fma: untyped
     ): untyped =
 
@@ -147,14 +147,14 @@ macro ukernel_simd_impl*(
   let
     MR = ukernel.mr
     NR = ukernel.nr
-    NbVecs = ukernel.nb_vecs_nr
+    NbVecs = ukernel.nb_vecs_nr # == NR div NbScalars
     NbScalars = ukernel.nb_scalars
 
   ## Registers
   var
-    rA: seq[NimNode]           # array[MR div 2, m256] - TODO, support NbVecs != 2
-    rB: seq[NimNode]           # array[NR div vecsize, m256]
-    rAB = nnkBracket.newTree() # array[MR, array[NbVecs, m256]]
+    rA: seq[NimNode]           # array[MR div 2, V]
+    rB: seq[NimNode]           # array[NbVecs, V]
+    rAB = nnkBracket.newTree() # array[MR, array[NbVecs, V]]
   for i in 0 ..< NbVecs:
     rA.add genSym(nskVar, "A" & $i)
     rB.add genSym(nskVar, "B" & $i)
@@ -168,10 +168,10 @@ macro ukernel_simd_impl*(
   var declBody = newStmtList()
   for a in rA:
     declBody.add quote do:
-      var `a`{.noinit.}: m256
+      var `a`{.noinit.}: `V`
   for b in rB:
     declBody.add quote do:
-      var `b`{.noinit.}: m256
+      var `b`{.noinit.}: `V`
   for i in 0 ..< MR:
     for j in 0 ..< NbVecs:
       let ab = rAB[i][j]

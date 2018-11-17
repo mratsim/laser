@@ -8,7 +8,7 @@ import
   ../../simd
 
 ukernel_generator(
-      x86_AVX2,
+      x86_AVX_FMA,
       typ = float32,
       vectype = m256,
       nb_scalars = 8,
@@ -20,4 +20,19 @@ ukernel_generator(
       simd_store_unaligned = mm256_storeu_ps,
       simd_mul = mm256_mul_ps,
       simd_add = mm256_add_ps
+    )
+
+ukernel_generator(
+      x86_AVX_FMA,
+      typ = float64,
+      vectype = m256d,
+      nb_scalars = 4,
+      simd_setZero = mm256_setzero_pd,
+      simd_broadcast_value = mm256_set1_pd,
+      simd_load_aligned = mm256_load_pd,
+      simd_load_unaligned = mm256_loadu_pd,
+      simd_fma = mm256_fmadd_pd,
+      simd_store_unaligned = mm256_storeu_pd,
+      simd_mul = mm256_mul_pd,
+      simd_add = mm256_add_pd
     )
