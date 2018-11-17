@@ -114,9 +114,9 @@ proc benchSimpleTiling(a, b: seq[float64], nb_samples: int) {.noinline.}=
     {.emit: """
       #define min(a,b) (((a)<(b))?(a):(b))
 
-      float (* restrict A)[`K`] = (void*)`pa`;
-      float (* restrict B)[`N`] = (void*)`pb`;
-      float (* restrict C)[`N`] = (void*)`po`;
+      double (* restrict A)[`K`] = (void*)`pa`;
+      double (* restrict B)[`N`] = (void*)`pb`;
+      double (* restrict C)[`N`] = (void*)`po`;
 
       // TODO: where to parallelize?
       for (int j = 0; j < `N`; j+=`blck`)
