@@ -28,7 +28,7 @@ when defined(i386) or defined(amd64):
       raw: array[8, float32]
     m256d* {.importc: "__m256d", x86_type.} = object
       raw: array[4, float64]
-    m256i* {.importc: "__m128i", x86_type.} = object
+    m256i* {.importc: "__m256i", x86_type.} = object
       raw: array[32, byte]
 
   # ############################################################
@@ -231,10 +231,10 @@ when defined(i386) or defined(amd64):
   func mm256_add_epi32*(a, b: m256i): m256i {.importc: "_mm256_add_epi32", x86.}
   func mm256_add_epi64*(a, b: m256i): m256i {.importc: "_mm256_add_epi64", x86.}
 
-  func mm256_mullo_epi16*(a, b: m256i): m256i {.importc: "_mm_mullo_epi16", x86.}
+  func mm256_mullo_epi16*(a, b: m256i): m256i {.importc: "_mm256_mullo_epi16", x86.}
     ## Multiply element-wise 2 vectors of 16 16-bit ints
     ## into intermediate 16 32-bit ints, and keep the low 16-bit parts
 
-  func mm256_mullo_epi32*(a, b: m256i): m256i {.importc: "_mm_mullo_epi32", x86.}
+  func mm256_mullo_epi32*(a, b: m256i): m256i {.importc: "_mm256_mullo_epi32", x86.}
     ## Multiply element-wise 2 vectors of 8x 32-bit ints
     ## into intermediate 8x 64-bit ints, and keep the low 32-bit parts

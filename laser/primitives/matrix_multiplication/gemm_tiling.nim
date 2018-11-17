@@ -76,7 +76,8 @@ type
     x86_SSE2,
     x86_SSE4_1,
     x86_AVX,
-    x86_AVX_FMA
+    x86_AVX_FMA,
+    x86_AVX2
     # x86_AVX512 # TODO
     #   Note that Skylake SP, Xeon Bronze Silver and Gold 5XXX
     #   only have a single AVX512 port and AVX2 can be faster.
@@ -89,7 +90,8 @@ const X86_vecsize_float: X86_FeatureMap = [
   x86_SSE2:    128 div 8,
   x86_SSE4_1:   128 div 8,
   x86_AVX:     256 div 8,
-  x86_AVX_FMA: 256 div 8
+  x86_AVX_FMA: 256 div 8,
+  x86_AVX2:    256 div 8
   # x86_AVX512:  512 div 8
 ]
 
@@ -98,8 +100,9 @@ const X86_vecsize_int: X86_FeatureMap = [
   x86_SSE:             1,
   x86_SSE2:    128 div 8,
   x86_SSE4_1:   128 div 8,
-  x86_AVX:     128 div 8,
-  x86_AVX_FMA: 256 div 8
+  x86_AVX:     128 div 8,  # Not even addition with integer AVX
+  x86_AVX_FMA: 128 div 8,
+  x86_AVX2:    256 div 8,
   # x86_AVX512:  512 div 8
 ]
 
@@ -109,9 +112,10 @@ const X86_regs: X86_FeatureMap = [
   x86_Generic: 2,
   x86_SSE:     2, # 8 XMM regs in 32-bit, 16 in 64-bit (we assume 32-bit mode)
   x86_SSE2:    6,
-  x86_SSE4_1:   6,
+  x86_SSE4_1:  6,
   x86_AVX:     6, # 16 YMM registers
-  x86_AVX_FMA: 6
+  x86_AVX_FMA: 6,
+  x86_AVX2:    6
   # x86_AVX512:  6  # 32 ZMM registers
 ]
 
