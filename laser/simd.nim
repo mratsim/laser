@@ -220,6 +220,9 @@ when defined(i386) or defined(amd64):
   func mm256_loadu_si256*(mem_addr: ptr SomeInteger): m256i {.importc: "_mm256_loadu_si256", x86.}
   func mm256_storeu_si256*(mem_addr: ptr SomeInteger, a: m256i) {.importc: "_mm256_storeu_si256", x86.}
 
+  func mm256_set1_epi64x*(a: int64): m256i {.importc: "_mm256_set1_epi64x", x86.}
+    ## Broadcast an int64
+
   # ############################################################
   #
   #                   AVX2 - integers - packed
@@ -231,6 +234,11 @@ when defined(i386) or defined(amd64):
   func mm256_add_epi32*(a, b: m256i): m256i {.importc: "_mm256_add_epi32", x86.}
   func mm256_add_epi64*(a, b: m256i): m256i {.importc: "_mm256_add_epi64", x86.}
 
+  func mm256_and_si256*(a, b: m256i): m256i {.importc: "_mm256_and_si256", x86.}
+    ## Bitwise and
+  func mm256_srli_epi64*(a: m256i, imm8: cint): m256i {.importc: "_mm256_srli_epi64", x86.}
+    ## Logical right shift
+
   func mm256_mullo_epi16*(a, b: m256i): m256i {.importc: "_mm256_mullo_epi16", x86.}
     ## Multiply element-wise 2 vectors of 16 16-bit ints
     ## into intermediate 16 32-bit ints, and keep the low 16-bit parts
@@ -238,3 +246,23 @@ when defined(i386) or defined(amd64):
   func mm256_mullo_epi32*(a, b: m256i): m256i {.importc: "_mm256_mullo_epi32", x86.}
     ## Multiply element-wise 2 vectors of 8x 32-bit ints
     ## into intermediate 8x 64-bit ints, and keep the low 32-bit parts
+
+  func mm256_shuffle_epi32*(a: m256i, imm8: cint): m256i {.importc: "_mm256_shuffle_epi32", x86.}
+    ## Shuffle 32-bit integers in a according to the control in imm8
+    ## Formula is in big endian representation
+    ## a = {hi[a7, a6, a5, a4, lo[a3, a2, a1, a0]}
+    ## dst = {d7, d6, d5, d4, d3, d2, d1, d0}
+    ## imm8 = {bits76, bits54, bits32, bits10}
+    ## d0 will refer a.lo[bits10]
+    ## d1            a.lo[bits32]
+    ## ...
+    ## d4 will refer a.hi[bits10]
+    ## d5            a.hi[bits32]
+
+  func mm256_mul_epu32*(a: m256i, b: m256i): m256i {.importc: "_mm256_mul_epu32", x86.}
+    ## From a = {a3_hi, a3_lo, a2_hi, a2_lo, a1_hi, a1_lo, a0_hi, a0_lo}
+    ## with a3, a2, a1, a0 being 64-bit number
+    ## and  b = {b3_hi, b3_lo, b2_hi, b2_lo, b1_hi, b1_lo, b0_hi, b0_lo}
+    ##
+    ## Result = {a3_lo * b3_lo, a2_lo * b2_lo, a1_lo * b1_lo, a0_lo * b0_lo}.
+    ## This is an extended precision multiplication 32x32 -> 64

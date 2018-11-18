@@ -11,7 +11,7 @@ import ../../simd
 #
 # ############################################################
 
-func sse2_shufControl*(a0, a1, a2, a3: uint8): cint =
+func sse2_shufControl*(a0, a1, a2, a3: static uint8): cint =
   ## Human readable control for SSE2 _mm_shuffle_epi32
   result = cint(a0)
   result = result or cint(a1 shl 2)
