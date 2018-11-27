@@ -47,7 +47,7 @@ func transpose2D_copy*[T](
     #pragma omp parallel for collapse(2)
     for (int j = 0; j < `NC`; j+=`blck`)
       for (int i = 0; i < `NR`; i+=`blck`)
-        for (int jj = j; jj<j+`blck` && jj<`NC`; jj++)
+        for (int jj = j; jj<min(j+`blck`, `NC`); jj++)
           #pragma omp simd
           for (int ii = i; ii<min(i+`blck`,`NR`); ii++)
             pd[jj][ii] = ps[ii][jj];
@@ -73,11 +73,11 @@ func transpose2D_batched*[T](
     `T` (* __restrict pd)[`NC`][`NR`] = (void*)`dst`;
     `T` (* __restrict ps)[`NR`][`NC`] = (void*)`src`;
 
-    #pragma omp parallel for simd collapse(3)
+    #pragma omp parallel for collapse(3)
     for (int n = 0; n < `N`; n++)
       for (int j = 0; j < `NC`; j+=`blck`)
         for (int i = 0; i < `NR`; i+=`blck`)
-          for (int jj = j; jj<j+`blck` && jj<`NC`; jj++)
+          for (int jj = j; jj<min(j+`blck`, `NC`); jj++)
             #pragma omp simd
             for (int ii = i; ii<min(i+`blck`,`NR`); ii++)
               `pd`[n][jj][ii] = `ps`[n][ii][jj];
