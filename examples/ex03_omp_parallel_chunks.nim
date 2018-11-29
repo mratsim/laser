@@ -1,3 +1,11 @@
+# ################################################################
+#
+#          Example of using OpenMP parallel routine
+#  This one returns a chunk offset and length and can be combine
+#     with threadsafe routine that accept a ptr + len pair
+#
+# ################################################################
+
 import ../laser/openmp
 import math, random, sequtils
 

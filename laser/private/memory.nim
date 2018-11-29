@@ -5,10 +5,9 @@
 
 import ../compiler_optim_hints, typetraits
 
-withCompilerOptimHints()
-
 func align_raw_data*(T: typedesc, p: pointer): ptr UncheckedArray[T] =
   static: assert T.supportsCopyMem
+  withCompilerOptimHints()
 
   let address = cast[ByteAddress](p)
   let aligned_ptr{.restrict.} = block: # We cannot directly apply restrict to the default "result"
