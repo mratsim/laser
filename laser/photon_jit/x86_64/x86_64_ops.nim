@@ -55,8 +55,14 @@ op_generator:
     [dst64, label]: [rex(w=1), 0x8D, modrm(Direct, reg = dst64, rm = rbp)]
 
   op CMP:
+    ## Compare 32-bit immediate with 32-bit int at memory location stored in adr register
+    [adr, imm64]: [ rex(w=1), 0x81, modrm(Indirect, opcode_ext = 7, rm = adr[0])] & imm64
+    ## Compare 32-bit immediate with 32-bit int at memory location stored in adr register
+    [adr, imm32]: [           0x81, modrm(Indirect, opcode_ext = 7, rm = adr[0])] & imm32
+    ## Compare 16-bit immediate with 16-bit int at memory location stored in adr register
+    [adr, imm16]: [     0x66, 0x81, modrm(Indirect, opcode_ext = 7, rm = adr[0])] & imm16
     ## Compare 8-bit immediate with byte at memory location stored in adr register
-    [adr, imm8]: [0x80, modrm(Indirect, opcode_ext = 7, rm = adr[0]), imm8]
+    [adr, imm8]:  [           0x80, modrm(Indirect, opcode_ext = 7, rm = adr[0]), imm8]
 
   op JZ:
     ## Jump to label if zero flag is set
