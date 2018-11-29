@@ -213,22 +213,16 @@ func post_process*(a: var Assembler) =
 #         A2. Alternatively each proc will do the following pseudocode
 #             ```
 #             proc mov(a: static Assembler, reg: static Register, imm32: uint32) =
-#               const rex = rex_prefix(w = true, r = false, x = false, b = false)
-#               const opcode = 0xC7
-#               const modrm = modrm(Direct, reg, false)
+#               const opcode = byte(0xB8 + reg.byte)
 
 #               block:                      # Compile-time part
-#                 a.hash = a.hash !& rex
 #                 a.hash = a.hash !& opcode
-#                 a.hash = a.hash !& reg
 #                 a.hash = a.hash !& 0      # Placeholder hashing as immediate is nly known at runtime
 #                 a.immediates.add imm32    # Add the immediate sym/ident to a seq[NimNode]
 #                 a.clobbered_regs.add reg
 
 #               block:                      # Run-time part
-#                 a.code.add rex
 #                 a.code.add opcode
-#                 a.code.add modrm
 #                 a.code.add cast[array[4, byte]](imm32)
 #             ```
 #             And we can finalise the compile-time hash at runtime
