@@ -10,7 +10,7 @@
 const PageSize* = 4096
 
 when not defined(posix):
-  {.fatal: "Only POSIX systems are supported".}
+  {.fatal: "Only POSIX systems are supported at the moment.".}
 
 type MemProt* {.size: cint.sizeof.}= enum
   ProtNone  = 0 # Page cannot be accessed

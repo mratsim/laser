@@ -7,6 +7,12 @@ import
   ../photon_types,
   ./x86_64_op_generator, ./x86_64_base
 
+# ################################################################
+#
+#   Mnemonic and Opcodes table for JIT Assembler proc generation
+#
+# ################################################################
+
 op_generator:
   op MOV: # MOV(dst, src) load/copy src into destination
     ## Copy 64-bit register content to another register
@@ -60,7 +66,6 @@ op_generator:
     ## Increment data at the address by 1. Data type must be specified.
     [adr, type(16, 32, 64)]:
       [rex(w=1), 0xFF, modrm(Indirect, opcode_ext = 0, rm = adr[0])]
-    ## Increment data at the address by 1. Data type must be specified.
     [adr, type(8)]: [0xFE, modrm(Indirect, opcode_ext = 0, rm = adr[0])]
 
   op DEC:
@@ -72,6 +77,5 @@ op_generator:
     ## Increment data at the address by 1. Data type must be specified.
     [adr, type(16, 32, 64)]:
       [rex(w=1), 0xFF, modrm(Indirect, opcode_ext = 1, rm = adr[0])]
-    ## Increment data at the address by 1. Data type must be specified.
     [adr, type(8)]: [0xFE, modrm(Indirect, opcode_ext = 1, rm = adr[0])]
 
