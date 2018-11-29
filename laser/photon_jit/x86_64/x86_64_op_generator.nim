@@ -124,21 +124,23 @@ proc searchRegRM(bracket: NimNode): tuple[reg, rm: NimNode] =
 
 proc regUpperExpr(param: string, reg: NimNode): NimNode =
   ## Proc input - "param = int(dst64 in (type dst64)(0b1000)..(type dst64)(0b1111))"
-  ## to construct: rex(w = 1, b = int(dst64 in r8 .. r15))
+  ## to construct: rex(w = 1, b = static(int(dst64 in r8 .. r15)))
   nnkExprEqExpr.newTree(
     newIdentNode param,
-    newCall(bindSym"int",
-      nnkInfix.newTree(
-        bindSym"in", reg,
+    newCall(bindSym"static",
+      newCall(bindSym"int",
         nnkInfix.newTree(
-          bindSym"..",
-          newCall(
-            newCall(bindSym"type", reg),
-            newLit 0b1000
-          ),
-          newCall(
-            newCall(bindSym"type", reg),
-            newLit 0b1111
+          bindSym"in", reg,
+          nnkInfix.newTree(
+            bindSym"..",
+            newCall(
+              newCall(bindSym"type", reg),
+              newLit 0b1000
+            ),
+            newCall(
+              newCall(bindSym"type", reg),
+              newLit 0b1111
+            )
           )
         )
       )
