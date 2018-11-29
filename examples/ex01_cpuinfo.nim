@@ -1,3 +1,9 @@
+# ################################################################
+#
+#      Example of accessing CPU information at runtime
+#
+# ################################################################
+
 import ../laser/cpuinfo
 
 echo "cpuinfo_get_processors - ", cpuinfo_get_processors()[]

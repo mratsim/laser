@@ -5,8 +5,8 @@
 
 import
   ../cpuinfo, ../compiler_optim_hints,
-  ../openmp,
-  ./private/align_unroller
+  ../private/align_unroller,
+  ../openmp
 
 when defined(i386) or defined(amd_64):
   import ./reduction_sum_min_max_sse3

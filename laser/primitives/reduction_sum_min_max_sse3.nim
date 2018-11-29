@@ -5,7 +5,8 @@
 
 import
   ../simd, ../compiler_optim_hints,
-  ./private/[align_unroller, sse3_utils]
+  ../private/align_unroller,
+  ./private/sse3_utils
 
 template reduction_op(op_name, initial_val, scalar_op, vector_op, merge_op: untyped) =
   func op_name*(data: ptr UncheckedArray[float32], len: Natural): float32 =

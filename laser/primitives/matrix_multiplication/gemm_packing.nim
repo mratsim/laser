@@ -10,7 +10,7 @@
 
 import
   ../../compiler_optim_hints,
-  ../private/align_unroller,
+  ../../private/align_unroller,
   ./gemm_utils, ./gemm_tiling
 
 withCompilerOptimHints()

@@ -1,3 +1,11 @@
+# ################################################################
+#
+#                Example of using the fine-grained
+#                 parallel forEachStaged iterator
+#     for parallel reduction on arbitrary number of tensors
+#
+# ################################################################
+
 import ../laser/strided_iteration/[foreach, foreach_staged]
 import ../laser/tensor/[datatypes, allocator, initialization]
 import ../laser/[compiler_optim_hints, dynamic_stack_arrays]

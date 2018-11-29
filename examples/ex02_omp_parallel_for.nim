@@ -1,3 +1,9 @@
+# ################################################################
+#
+#          Example of using OpenMP parallel routine
+#
+# ################################################################
+
 import ../laser/openmp
 import math, random, sequtils
 
