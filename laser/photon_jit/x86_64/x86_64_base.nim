@@ -260,6 +260,8 @@ macro gen_x86_64*(
   ##     you should not return or break early of it.
 
   # First, parse the body to find registers referenced
+  # TODO, parse the 32, 16 and 8-bit regs as well
+  #       and also AVX registers to generate vzeroupper
   var dirty_regs: DirtyRegs[RegX86_64]
   dirty_regs.searchClobberedRegs body
 
