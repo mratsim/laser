@@ -308,5 +308,5 @@ macro gen_x86_64*(
 # ############################################################
 
 template `+`*(opc: static int, reg: static RegX86): byte =
-  const opcode = opc.byte + reg.byte
+  const opcode = opc.byte + (reg.byte and 0b111)
   opcode
