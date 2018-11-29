@@ -104,6 +104,8 @@ type
     r14l = 0b1_110
     r15l = 0b1_111
 
+  RegX86 = RegX86_64 or RegX86_32 or RegX86_16 or RegX86_8 or RegX86_8_REX
+
 # ############################################################
 #
 #               x86-64 exported common routines
@@ -125,7 +127,7 @@ const rIP* = InstructionPointer()
 # Displacement: 0, 1, 2, 4      byte(s)
 # Immediate:    0, 1, 2, 4 or 8 byte(s)
 
-func rex_prefix*(w, r, x, b: range[0..1] = 0): byte {.compileTime.}=
+func rex*(w, r, x, b: range[0..1] = 0): byte {.compileTime.}=
   ## w: true if a 64-bit operand size is used,
   ##    otherwise 0 for default operand size (usually 32 but some are 64-bit default)
   ## r: ModRM.reg = r.XXX i.e switch between rax 0.000 and r8 1.000
@@ -213,14 +215,14 @@ func pop*(reg: range[rax..rdi]): byte {.compileTime.}=
 func push_ext*(reg: range[r8..r15]): array[2, byte] {.compileTime.}=
   ## Push an extended register on the stack
   result = [
-      rex_prefix(b = 1),
+      rex(b = 1),
       0x50.byte or (reg.byte and 0b111)
     ]
 
 func pop_ext*(reg: range[r8..r15]): array[2, byte] {.compileTime.}=
   ## Pop the stack into an extended register
   result = [
-      rex_prefix(b = 1),
+      rex(b = 1),
       0x58.byte or (reg.byte and 0b111)
     ]
 
@@ -277,14 +279,14 @@ macro gen_x86_64*(
     if clean_registers:
       let clean_regs = newLit clean_registers
       quote do:
-        var `assembler` = Assembler[Reg_X86_64](
+        var `assembler` = Assembler[X86_64](
                 code: `saveRegs`,
                 labels: initTable[Label, LabelInfo](),
                 clean_regs: `clean_regs`,
                 restore_regs: `restoreRegs`
         )
     else: quote do:
-      var `assembler` = Assembler[Reg_X86_64](
+      var `assembler` = Assembler[X86_64](
               labels: initTable[Label, LabelInfo](),
               clean_regs: `clean_registers`
       )
@@ -298,3 +300,13 @@ macro gen_x86_64*(
       newCall(bindSym"newJitFunction", assembler)
     )
   )
+
+# ############################################################
+#
+#                     x86-64 utilities
+#
+# ############################################################
+
+template `+`*(opc: static int, reg: static RegX86): byte =
+  const opcode = opc.byte + reg.byte
+  opcode

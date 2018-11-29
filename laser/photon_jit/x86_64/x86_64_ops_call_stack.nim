@@ -16,21 +16,21 @@ import
 # Push and Pop for registers are defined in "jit_x86_64_base"
 # as they are needed for function cleanup.
 
-func push*(a: var Assembler[Reg_X86_64], reg: static Reg_X86_64) {.inline.}=
+func push*(a: var Assembler[X86_64], reg: static RegX86_64) {.inline.}=
   ## Push a register on the stack
   when reg in rax .. rdi:
     a.code.add push(reg)
   else:
     a.code.add push_ext(reg)
 
-func pop*(a: var Assembler[Reg_X86_64], reg: static Reg_X86_64) {.inline.}=
+func pop*(a: var Assembler[X86_64], reg: static RegX86_64) {.inline.}=
   ## Pop the stack into a register
   when reg in rax .. rdi:
     a.code.add push(reg)
   else:
     a.code.add push_ext(reg)
 
-func syscall*(a: var Assembler[Reg_X86_64], clean_registers: static bool = false) {.inline.}=
+func syscall*(a: var Assembler[X86_64], clean_registers: static bool = false) {.inline.}=
   ## Syscall opcode
   ## `rax` will determine which syscall is called.
   ##   - Write syscall (0x01 on Linux, 0x02000004 on OSX):
@@ -49,7 +49,7 @@ func syscall*(a: var Assembler[Reg_X86_64], clean_registers: static bool = false
   else:
     a.code.add [byte 0x0f, 0x05]
 
-func ret*(a: var Assembler[Reg_X86_64]) {.inline.}=
+func ret*(a: var Assembler[X86_64]) {.inline.}=
   ## Return from function opcode
   ## If the assembler autocleans the clobbered registers
   ## this will restore them to their previous state

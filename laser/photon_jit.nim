@@ -7,7 +7,9 @@ import photon_jit/photon_types
 export JitFunction, Assembler, call, hash, Label, initLabel, label
 
 import photon_jit/x86_64/x86_64_base
-export X86_64, RegX86_64, RegX86_32, RegX86_16 # TODO: RegX86_8, RegX86_8_REX
+export
+  X86_64, RegX86_64, RegX86_32, RegX86_16, # TODO: RegX86_8, RegX86_8_REX
+  gen_x86_64
 
 import photon_jit/x86_64/[x86_64_ops, x86_64_ops_call_stack]
 export x86_64_ops, x86_64_ops_call_stack

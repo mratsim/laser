@@ -27,7 +27,7 @@ import macros, strutils
 #       a.add [0x89, modrm(Direct, reg = src, rm = dst)]
 #     else:
 #       a.add [
-#          rex_prefix(
+#          rex(
 #            r = int(src32 in r8d .. r15d), # r extends "reg"
 #            b = int(dst32 in r8d .. r15d)  # b extends "rm"
 #          ),
@@ -396,4 +396,4 @@ macro op_generator*(instructions: untyped): untyped =
         imm = nil
 
   # Check code generated
-  echo result.toStrLit()
+  # echo result.toStrLit()
