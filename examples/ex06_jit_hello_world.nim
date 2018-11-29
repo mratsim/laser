@@ -10,9 +10,6 @@ proc main() =
   let HelloWorld = "Hello World!"
 
   let fn = gen_x86_64(assembler = a, clean_registers = true):
-    # Initialize a label placeholder for the HelloWorld string data
-    let L1 = initLabel()
-
     # "write" syscall
     # rax = write syscall (0x01 on Linux, 0x02000004 on OSX)
     # rdi = stdout (stdout file descriptor = 0x01)
@@ -26,6 +23,9 @@ proc main() =
     else:
       {.error: "Unsupported OS".}
 
+    # For literals you need to enforce the type
+    # Prefer 32-bit to 64-bit (smaller code)
+    # and 16 and 8-bit immediate (partial register stalls)
     a.mov rdi, uint32 0x01
     a.mov rsi, HelloWorld[0].unsafeAddr
     a.mov rdx, uint32 HelloWorld.len
