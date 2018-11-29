@@ -35,7 +35,7 @@ import macros, strutils
 #       ]
 
 proc assembler(a: NimNode): NimNode =
-  ## Type section - "a: Assembler[X86_64]"
+  ## Type section - "a: var Assembler[X86_64]"
   newIdentDefs(
     a, nnkVarTy.newTree(
       nnkBracketExpr.newTree(
@@ -318,8 +318,13 @@ macro op_generator*(instructions: untyped): untyped =
         # the int procs
         var genPointerVersion = false
 
+        # After the 32 and 64-bit immediate have been generated
+        # we can generate a static int for literal that will dispatch
+        # compile-time immediate to the best proc
+        var genLiteralDispatch = false
+
         # 1. Iterate on the raw param
-        for arg in params:
+        for i, arg in params:
           if arg.kind == nnkCall:
             # type(16, 32, 64) case
             procParams.add types(arg)
@@ -340,7 +345,10 @@ macro op_generator*(instructions: untyped): untyped =
               imm = arg
               let suf = mnemo[3..^1]
               procParams.add arg.imm("uint" & suf, "int" & suf)
-              if suf == "64": genPointerVersion = true
+              if suf == "64":
+                genPointerVersion = true
+              if suf == "32" and params[i-1].eqIdent"dst64":
+                genLiteralDispatch = true
             elif pre == "adr":
               adr = arg
               procParams.add arg.adr()
@@ -387,8 +395,19 @@ macro op_generator*(instructions: untyped): untyped =
           # Add the proc with pointer immediates
           result.add newInlineProc(procName, procParamsPointer, procBody)
 
+        if genLiteralDispatch:
+          # We generate a dispatch template that will check if the int literal
+          # needs 64-bit opcode or 32-bit is enough
+          result.add quote do:
+            template `procName`*(a: var Assembler[X86_64], dst64: static RegX86_64, literal: static int) =
+              when low(int32) < literal and literal < high(int32):
+                a.`procName`(dst64, int32 literal)
+              else:
+                a.`procName`(dst64, int64 literal)
+
         # Reset state
         genPointerVersion = false
+        genLiteralDispatch = false
         useLabels = false
         dst = nil
         src = nil

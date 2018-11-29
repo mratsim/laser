@@ -13,6 +13,14 @@ import
 #
 # ################################################################
 
+# Notes:
+#   - The imm64 version will generate a proc for uint64 and int64
+#     and another one for pointers immediate
+#   - The dst64, imm32 version will generate a proc for uint32 and int32
+#     and a proc for int literals (known at compile-time)
+#     that will call proc(reg, imm32) if the int is small enough.
+#     ---> (dst64, imm64) should be defined before (dst64, imm32)
+
 op_generator:
   op MOV: # MOV(dst, src) load/copy src into destination
     ## Copy 64-bit register content to another register
