@@ -72,6 +72,7 @@ type
     r14w = 0b1_110
     r15w = 0b1_111
 
+  # TODO: Add REX cases and export 8-bit registers
   RegX86_8* = enum
     ## The following registers are available
     ## in instructions without a REX prefix
@@ -86,8 +87,8 @@ type
 
   RegX86_8_REX* = enum
     ## The following registers are available
-    ## in instructions without a REX prefix
-    # al = 0b0_000
+    ## in instructions with a REX prefix
+    # al = 0b0_000 # Already defined without REX
     # cl = 0b0_001
     # dl = 0b0_010
     # bl = 0b0_011
@@ -206,24 +207,24 @@ func modrm*(
 
 func push*(reg: range[rax..rdi]): byte {.compileTime.}=
   ## Push a register on the stack
-  result = 0x50.byte or reg.byte
+  result = 0x50.byte + reg.byte
 
 func pop*(reg: range[rax..rdi]): byte {.compileTime.}=
   ## Pop the stack into a register
-  result = 0x58.byte or reg.byte
+  result = 0x58.byte + reg.byte
 
 func push_ext*(reg: range[r8..r15]): array[2, byte] {.compileTime.}=
   ## Push an extended register on the stack
   result = [
       rex(b = 1),
-      0x50.byte or (reg.byte and 0b111)
+      0x50.byte + (reg.byte and 0b111)
     ]
 
 func pop_ext*(reg: range[r8..r15]): array[2, byte] {.compileTime.}=
   ## Pop the stack into an extended register
   result = [
       rex(b = 1),
-      0x58.byte or (reg.byte and 0b111)
+      0x58.byte + (reg.byte and 0b111)
     ]
 
 func saveRestoreRegs(dr: var DirtyRegs[RegX86_64]) {.compileTime.}=
