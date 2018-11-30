@@ -301,7 +301,7 @@ macro op_generator*(instructions: untyped): untyped =
         overload.expectKind nnkCall
         overload[0].expectKind nnkBracket    # for example [dst32, src32]
         overload[1].expectKind nnkStmtList
-        let bodySpecs = overload[1][0]
+        var bodySpecs = overload[1][0]
 
         # Aliases
         let params = overload[0]
@@ -357,6 +357,9 @@ macro op_generator*(instructions: untyped): untyped =
             elif pre == "lab":
               useLabels = true
               procParams.add arg.label()
+              # 32-bit Placeholder for rel32 (jump target) or disp32 (RIP-relative addressing)
+              bodySpecs.expectKind nnkBracket
+              bodySpecs.add newLit 0x00, newLit 0x00, newLit 0x00, newLit 0x00
             else:
               error "Wrong mnemonic \"" & mnemo & "\"." &
                     " Only dst, src, imm (+size suffix)," &
@@ -377,10 +380,9 @@ macro op_generator*(instructions: untyped): untyped =
         else:
           error "Unexpected opcode body", bodySpecs
 
-        if useLabels: # 32-bit Placeholder for rel32 (jump target) or disp32 (RIP-relative addressing)
+        if useLabels:
           let label = newIdentNode"label"
           procBody.add quote do:
-            `assemblerSym`.code.add [byte 0x00, 0x00, 0x00, 0x00]
             `assemblerSym`.add_target `label`
 
         # 3. Put everything together
