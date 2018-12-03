@@ -9,7 +9,7 @@ import
   ../../laser/strided_iteration/foreach,
   ../../laser/tensor/[allocator, datatypes, initialization],
   ../../laser/[compiler_optim_hints, dynamic_stack_arrays],
-  ../../laser/primitives/reduction_sum_min_max_sse3
+  ../../laser/primitives/reductions
 
 withCompilerOptimHints()
 

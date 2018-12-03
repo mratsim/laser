@@ -3,7 +3,7 @@
 # Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
 # This file may not be copied, modified, or distributed except according to those terms.
 
-proc relative_error*[T](y_true, y: T): T {.inline.} =
+proc relative_error*[T: SomeFloat](y, y_true: T): T {.inline.} =
   ## Relative error, |y_true - y|/max(|y_true|, |y|)
   ## Normally the relative error is defined as |y_true - y| / |y_true|,
   ## but here max is used to make it symmetric and to prevent dividing by zero,
@@ -13,6 +13,22 @@ proc relative_error*[T](y_true, y: T): T {.inline.} =
     return 0.T
   result = abs(y_true - y) / denom
 
-proc absolute_error*[T](y_true, y: T): T {.inline.} =
+proc absolute_error*[T: SomeFloat](y, y_true: T): T {.inline.} =
   ## Absolute error for a single value, |y_true - y|
   result = abs(y_true - y)
+
+proc mean_relative_error*[T: SomeFloat](y, y_true: seq[T]): T {.inline.} =
+  doAssert y.len == y_true.len
+
+  result = 0.T
+  for i in 0 ..< y.len:
+    result += relative_error(y, y_true)
+  result / y.len
+
+proc mean_absolute_error*[T: SomeFloat](y, y_true: seq[T]): T {.inline.} =
+  doAssert y.len == y_true.len
+
+  result = 0.T
+  for i in 0 ..< y.len:
+    result += absolute_error(y, y_true)
+  result / y.len

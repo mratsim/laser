@@ -6,7 +6,7 @@ import
   ../../laser/tensor/[allocator, datatypes, initialization],
   ../../laser/[compiler_optim_hints, dynamic_stack_arrays],
   ../../laser/simd,
-  ../../laser/primitives/reduction_sum_min_max
+  ../../laser/primitives/reductions
 
 withCompilerOptimHints()
 
@@ -70,7 +70,7 @@ template printStats(name: string, accum: float32) {.dirty.} =
   echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
   echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
   # FLOPS: for sum, we have one add per element
-  echo &"Theoretical perf: {a.size.float / (float(10^6) * stats.mean):>4.3f} MFLOP/s"
+  echo &"Perf:         {a.size.float / (float(10^9) * stats.mean):>4.3f} GFLOP/s"
   echo "\nDisplay sum of samples sums to make sure it's not optimized away"
   echo accum # Prevents compiler from optimizing stuff away
 

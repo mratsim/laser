@@ -9,7 +9,7 @@ import
   ../openmp
 
 when defined(i386) or defined(amd_64):
-  import ./reduction_sum_min_max_sse3
+  import ./simd_math/reductions_sse3
 
 func sum_fallback(data: ptr UncheckedArray[float32], len: Natural): float32 =
   ## Fallback kernel for sum reduction
@@ -33,7 +33,7 @@ func sum_fallback(data: ptr UncheckedArray[float32], len: Natural): float32 =
   if unroll_stop != len:
     result += data[unroll_stop] # unroll_stop = len -1 last element
 
-proc sum_kernel*(data: ptr UncheckedArray[float32], len: Natural): float32 {.sideeffect.}=
+proc sum_kernel*(data: ptr (float32 or UncheckedArray[float32]), len: Natural): float32 {.sideeffect.}=
   ## Does a sum reduction on a contiguous range of float32
   ## Warning:
   ##   This kernel considers floating-point addition associative

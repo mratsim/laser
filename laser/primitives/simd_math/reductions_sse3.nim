@@ -4,20 +4,20 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  ../simd, ../compiler_optim_hints,
-  ../private/align_unroller,
-  ./private/sse3_utils
+  ../../simd, ../../compiler_optim_hints,
+  ../../private/align_unroller,
+  ../private/sse3_utils
 
 template reduction_op(op_name, initial_val, scalar_op, vector_op, merge_op: untyped) =
-  func op_name*(data: ptr UncheckedArray[float32], len: Natural): float32 =
+  func op_name*(data: ptr (float32 or UncheckedArray[float32]), len: Natural): float32 =
     ## Sum a contiguous range of float32 using SSE3 instructions
     withCompilerOptimHints()
-    let data{.restrict.} = data
+    let data{.restrict.} = cast[ptr UncheckedArray[float32]](data)
     var vec_result = initial_val
 
     # Loop peeling, while not aligned to 16-byte boundary advance
     var idx = 0
-    while (cast[ByteAddress](data) and 15) != 0:
+    while (cast[ByteAddress](data[idx].addr) and 15) != 0:
       let data0 = data[idx].addr.mm_load_ss()
       vec_result = scalar_op(vec_result, data0)
       inc idx
