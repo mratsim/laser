@@ -5,7 +5,7 @@
 
 import
   unittest, random, sequtils, strformat,
-  ./error_functions, lift,
+  ../laser/private/[error_functions, lift],
   ../laser/primitives/simd_math/reductions_sse3
 
 # To be tested with and without OpenMP
