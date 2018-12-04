@@ -42,44 +42,44 @@ __m128 fast_exp_sse (__m128 x)
     return r;
 }
 
-int main (void)
-{
-    union {
-        float f[4];
-        unsigned int i[4];
-    } arg, res;
-    double relerr, maxrelerr = 0.0;
-    int i, j;
-    __m128 x, y;
+// int main (void)
+// {
+//     union {
+//         float f[4];
+//         unsigned int i[4];
+//     } arg, res;
+//     double relerr, maxrelerr = 0.0;
+//     int i, j;
+//     __m128 x, y;
 
-    float start[2] = {-0.0f, 0.0f};
-    float finish[2] = {-87.33654f, 88.72283f};
+//     float start[2] = {-0.0f, 0.0f};
+//     float finish[2] = {-87.33654f, 88.72283f};
 
-    for (i = 0; i < 2; i++) {
+//     for (i = 0; i < 2; i++) {
 
-        arg.f[0] = start[i];
-        arg.i[1] = arg.i[0] + 1;
-        arg.i[2] = arg.i[0] + 2;
-        arg.i[3] = arg.i[0] + 3;
-        do {
-            memcpy (&x, &arg, sizeof(x));
-            y = fast_exp_sse (x);
-            memcpy (&res, &y, sizeof(y));
-            for (j = 0; j < 4; j++) {
-                double ref = exp ((double)arg.f[j]);
-                relerr = fabs ((res.f[j] - ref) / ref);
-                if (relerr > maxrelerr) {
-                    printf ("arg=% 15.8e  res=%15.8e  ref=%15.8e  err=%15.8e\n",
-                            arg.f[j], res.f[j], ref, relerr);
-                    maxrelerr = relerr;
-                }
-            }
-            arg.i[0] += 4;
-            arg.i[1] += 4;
-            arg.i[2] += 4;
-            arg.i[3] += 4;
-        } while (fabsf (arg.f[3]) < fabsf (finish[i]));
-    }
-    printf ("maximum relative errror = %15.8e\n", maxrelerr);
-    return EXIT_SUCCESS;
-}
+//         arg.f[0] = start[i];
+//         arg.i[1] = arg.i[0] + 1;
+//         arg.i[2] = arg.i[0] + 2;
+//         arg.i[3] = arg.i[0] + 3;
+//         do {
+//             memcpy (&x, &arg, sizeof(x));
+//             y = fast_exp_sse (x);
+//             memcpy (&res, &y, sizeof(y));
+//             for (j = 0; j < 4; j++) {
+//                 double ref = exp ((double)arg.f[j]);
+//                 relerr = fabs ((res.f[j] - ref) / ref);
+//                 if (relerr > maxrelerr) {
+//                     printf ("arg=% 15.8e  res=%15.8e  ref=%15.8e  err=%15.8e\n",
+//                             arg.f[j], res.f[j], ref, relerr);
+//                     maxrelerr = relerr;
+//                 }
+//             }
+//             arg.i[0] += 4;
+//             arg.i[1] += 4;
+//             arg.i[2] += 4;
+//             arg.i[3] += 4;
+//         } while (fabsf (arg.f[3]) < fabsf (finish[i]));
+//     }
+//     printf ("maximum relative errror = %15.8e\n", maxrelerr);
+//     return EXIT_SUCCESS;
+// }

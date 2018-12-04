@@ -164,17 +164,18 @@ proc benchSSE_fmath(a: Tensor[float32], nb_samples: int) =
     # Main work
     sse_fmath_exp_ps(output.storage.raw_data, a.storage.raw_data, a.size)
 
-# from ./bench_exp_avx2_aux import avx2_fmath_exp_ps256
+{.compile: "lib_sse_exp.c".}
+proc fast_exp_sse(x: m128): m128 {.importc.}
+vectorize(fast_exp_sse, fast_exp_sse, mm_load_ps, mm_store_ps, 4)
 
-# proc benchAVX2_fmath(a: Tensor[float32], nb_samples: int) =
-#   var output = newTensor[float32](a.shape)
-#   bench("AVX2 fmath"):
-#     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-#     output.setZero() # We zero memory between computation
-#   do:
-#     # Main work
-#     avx2_fmath_exp_ps256(output.storage.raw_data, a.storage.raw_data, a.size)
-
+proc benchSSE_fast_exp_sse(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("SSE fast_exp_sse (low order polynomial)"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    fast_exp_sse(output.storage.raw_data, a.storage.raw_data, a.size)
 
 # ###########################################
 
@@ -201,12 +202,16 @@ when isMainModule:
     benchBaseline(a, NbSamples)
     benchSSEMathfun(a, NbSamples)
     benchSSE_fmath(a, NbSamples)
-    # benchAVX2_fmath(a, NbSamples)
+    benchSSE_fast_exp_sse(a, NbSamples)
+
+# Unfortunately I can only pass -mavx2 globally with the cpp backend
+# configuring it in nim.cfg doesn't work so we need a separate AVX bench
+# as fmath has static if __AVX2__ even in the SSE code.
 
 ## Bench on i5-5257U Broadwell - serial implementation
 ## fast-math + march=native
 
-# Warmup: 1.2530 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.2104 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A - tensor shape: [5000000]
 # Required number of operations:     5.000 millions
@@ -217,34 +222,45 @@ when isMainModule:
 # a[0]: -0.9999997019767761
 
 # Baseline <math.h>
-# Collected 100 samples in 2.635 seconds
-# Average time: 25.102 ms
-# Stddev  time: 1.311 ms
-# Min     time: 24.567 ms
-# Max     time: 34.079 ms
-# Perf:         0.199 GEXPOP/s
+# Collected 100 samples in 2.625 seconds
+# Average time: 24.991 ms
+# Stddev  time: 0.675 ms
+# Min     time: 24.576 ms
+# Max     time: 29.511 ms
+# Perf:         0.200 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
 
 # SSE mathfun
-# Collected 100 samples in 1.146 seconds
-# Average time: 10.232 ms
-# Stddev  time: 0.333 ms
-# Min     time: 10.053 ms
-# Max     time: 11.390 ms
-# Perf:         0.489 GEXPOP/s
+# Collected 100 samples in 1.131 seconds
+# Average time: 10.069 ms
+# Stddev  time: 0.253 ms
+# Min     time: 9.948 ms
+# Max     time: 11.963 ms
+# Perf:         0.497 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
 
 # SSE fmath
-# Collected 100 samples in 0.714 seconds
-# Average time: 5.913 ms
-# Stddev  time: 0.308 ms
-# Min     time: 5.732 ms
-# Max     time: 7.726 ms
-# Perf:         0.846 GEXPOP/s
+# Collected 100 samples in 0.726 seconds
+# Average time: 6.027 ms
+# Stddev  time: 0.433 ms
+# Min     time: 5.700 ms
+# Max     time: 8.140 ms
+# Perf:         0.830 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
+
+# SSE fast_exp_sse (low order polynomial)
+# Collected 100 samples in 0.599 seconds
+# Average time: 4.759 ms
+# Stddev  time: 0.173 ms
+# Min     time: 4.618 ms
+# Max     time: 5.791 ms
+# Perf:         1.051 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3682391047477722
