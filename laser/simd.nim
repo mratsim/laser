@@ -41,6 +41,7 @@ when defined(i386) or defined(amd64):
   func mm_set1_ps*(a: float32): m128 {.importc: "_mm_set1_ps", x86.}
   func mm_load_ps*(aligned_mem_addr: ptr float32): m128 {.importc: "_mm_load_ps", x86.}
   func mm_loadu_ps*(data: ptr float32): m128 {.importc: "_mm_loadu_ps", x86.}
+  func mm_store_ps*(mem_addr: ptr float32, a: m128) {.importc: "_mm_store_ps", x86.}
   func mm_storeu_ps*(mem_addr: ptr float32, a: m128) {.importc: "_mm_storeu_ps", x86.}
   func mm_add_ps*(a, b: m128): m128 {.importc: "_mm_add_ps", x86.}
   func mm_mul_ps*(a, b: m128): m128 {.importc: "_mm_mul_ps", x86.}
