@@ -72,7 +72,7 @@ template printStats(name: string, output: typed) {.dirty.} =
   echo &"Stddev  time: {stats.standardDeviationS * 1000 :>4.3f} ms"
   echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
   echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
-  echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} EXPOP/s"
+  echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GEXPOP/s"
   echo "\nDisplay output[0] to make sure it's not optimized away"
   echo output[0] # Prevents compiler from optimizing stuff away
 
@@ -189,7 +189,7 @@ when isMainModule:
 # Stddev  time: 18.026 ms
 # Min     time: 26.053 ms
 # Max     time: 80.793 ms
-# Perf:         0.102 EXPOP/s
+# Perf:         0.102 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
@@ -200,7 +200,7 @@ when isMainModule:
 # Stddev  time: 0.436 ms
 # Min     time: 7.876 ms
 # Max     time: 10.388 ms
-# Perf:         0.588 EXPOP/s
+# Perf:         0.588 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
