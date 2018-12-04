@@ -47,12 +47,12 @@ when withBuiltins:
   proc builtin_prefetch(data: pointer, rw: PrefetchRW, locality: PrefetchLocality) {.importc: "__builtin_prefetch", noDecl.}
 
 when defined(cpp):
-  proc static_cast[T](input: T): T
+  proc static_cast[T: ptr](input: pointer): T
     {.importcpp: "static_cast<'0>(@)".}
 
 template assume_aligned*[T](data: ptr T, alignment: static int = LASER_MEM_ALIGN): ptr T =
   when defined(cpp) and withBuiltins: # builtin_assume_aligned returns void pointers, this does not compile in C++, they must all be typed
-    static_cast builtin_assume_aligned(data, alignment)
+    static_cast[ptr T](builtin_assume_aligned(data, alignment))
   elif withBuiltins:
     cast[ptr T](builtin_assume_aligned(data, alignment))
   else:

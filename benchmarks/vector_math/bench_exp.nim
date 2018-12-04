@@ -125,16 +125,23 @@ proc benchBaseline(a: Tensor[float32], nb_samples: int) =
     for i in 0 ..< a.size:
       output.storage.raw_data[i] = exp(a.storage.raw_data[i])
 
+template vectorize(
+      wrapped_func,
+      funcname,
+      simd_load,
+      simd_store: untyped,
+      unroll_factor: int) =
+  proc funcname(dst, src: ptr UncheckedArray[float32], len: Natural) =
+    let unroll_stop = len.round_down_power_of_2(unroll_factor)
+
+    for i in countup(0, unroll_stop - 1, unroll_factor):
+      dst[i].addr.simd_store src[i].addr.simd_load.wrapped_func
+    for i in unroll_stop ..< len:
+      dst[i] = src[i]
+
 {.passC: "-DUSE_SSE2".}
 proc sse_mathfun_exp_ps(x: m128): m128 {.importc: "exp_ps", header: cSourcesPath & "lib_sse_mathfun.h".}
-
-proc sse_mathfun_exp_ps(dst, src: ptr UncheckedArray[float32], len: Natural) =
-  let unroll_stop = len.round_down_power_of_2(4)
-
-  for i in countup(0, unroll_stop - 1, 4):
-    dst[i].addr.mm_store_ps src[i].addr.mm_load_ps.sse_mathfun_exp_ps
-  for i in unroll_stop ..< len:
-    dst[i] = src[i]
+vectorize(sse_mathfun_exp_ps, sse_mathfun_exp_ps, mm_load_ps, mm_store_ps, 4)
 
 proc benchSSEMathfun(a: Tensor[float32], nb_samples: int) =
   var output = newTensor[float32](a.shape)
@@ -144,6 +151,30 @@ proc benchSSEMathfun(a: Tensor[float32], nb_samples: int) =
   do:
     # Main work
     sse_mathfun_exp_ps(output.storage.raw_data, a.storage.raw_data, a.size)
+
+proc sse_fmath_exp_ps(x: m128): m128 {.importcpp: "fmath::exp_ps(@)", header: cSourcesPath & "lib_fmath.hpp".}
+vectorize(sse_fmath_exp_ps, sse_fmath_exp_ps, mm_load_ps, mm_store_ps, 4)
+
+proc benchSSE_fmath(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("SSE fmath"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    sse_fmath_exp_ps(output.storage.raw_data, a.storage.raw_data, a.size)
+
+# from ./bench_exp_avx2_aux import avx2_fmath_exp_ps256
+
+# proc benchAVX2_fmath(a: Tensor[float32], nb_samples: int) =
+#   var output = newTensor[float32](a.shape)
+#   bench("AVX2 fmath"):
+#     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+#     output.setZero() # We zero memory between computation
+#   do:
+#     # Main work
+#     avx2_fmath_exp_ps256(output.storage.raw_data, a.storage.raw_data, a.size)
+
 
 # ###########################################
 
@@ -169,11 +200,13 @@ when isMainModule:
     echo "a[0]: " & $a[0]
     benchBaseline(a, NbSamples)
     benchSSEMathfun(a, NbSamples)
+    benchSSE_fmath(a, NbSamples)
+    # benchAVX2_fmath(a, NbSamples)
 
 ## Bench on i5-5257U Broadwell - serial implementation
 ## fast-math + march=native
 
-# Warmup: 1.4890 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.2530 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A - tensor shape: [5000000]
 # Required number of operations:     5.000 millions
@@ -184,23 +217,34 @@ when isMainModule:
 # a[0]: -0.9999997019767761
 
 # Baseline <math.h>
-# Collected 100 samples in 5.067 seconds
-# Average time: 48.866 ms
-# Stddev  time: 18.026 ms
-# Min     time: 26.053 ms
-# Max     time: 80.793 ms
-# Perf:         0.102 GEXPOP/s
+# Collected 100 samples in 2.635 seconds
+# Average time: 25.102 ms
+# Stddev  time: 1.311 ms
+# Min     time: 24.567 ms
+# Max     time: 34.079 ms
+# Perf:         0.199 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
 
 # SSE mathfun
-# Collected 100 samples in 0.998 seconds
-# Average time: 8.500 ms
-# Stddev  time: 0.436 ms
-# Min     time: 7.876 ms
-# Max     time: 10.388 ms
-# Perf:         0.588 GEXPOP/s
+# Collected 100 samples in 1.146 seconds
+# Average time: 10.232 ms
+# Stddev  time: 0.333 ms
+# Min     time: 10.053 ms
+# Max     time: 11.390 ms
+# Perf:         0.489 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647
+
+# SSE fmath
+# Collected 100 samples in 0.714 seconds
+# Average time: 5.913 ms
+# Stddev  time: 0.308 ms
+# Min     time: 5.732 ms
+# Max     time: 7.726 ms
+# Perf:         0.846 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647

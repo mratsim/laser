@@ -173,6 +173,7 @@ when defined(i386) or defined(amd64):
   func mm256_set1_ps*(a: float32): m256 {.importc: "_mm256_set1_ps", x86.}
   func mm256_load_ps*(aligned_mem_addr: ptr float32): m256 {.importc: "_mm256_load_ps", x86.}
   func mm256_loadu_ps*(mem_addr: ptr float32): m256 {.importc: "_mm256_loadu_ps", x86.}
+  func mm256_store_ps*(mem_addr: ptr float32, a: m256) {.importc: "_mm256_store_ps", x86.}
   func mm256_storeu_ps*(mem_addr: ptr float32, a: m256) {.importc: "_mm256_storeu_ps", x86.}
   func mm256_add_ps*(a, b: m256): m256 {.importc: "_mm256_add_ps", x86.}
   func mm256_mul_ps*(a, b: m256): m256 {.importc: "_mm256_mul_ps", x86.}
