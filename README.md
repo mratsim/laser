@@ -17,7 +17,6 @@ The library is in heavy development. For now the CPU backend is being optimised.
     - [JIT Assembler](#jit-assembler)
     - [Loop-fusion and strided iterators for matrix and tensors](#loop-fusion-and-strided-iterators-for-matrix-and-tensors)
     - [Raw tensor type](#raw-tensor-type)
-- [WIP](#wip)
     - [Optimised floating point parallel reduction for sum, min and max](#optimised-floating-point-parallel-reduction-for-sum-min-and-max)
     - [Optimised logarithmic, exponential, tanh, sigmoid, softmax ...](#optimised-logarithmic-exponential-tanh-sigmoid-softmax-)
     - [Optimised transpose, batched transpose and NCHW <=> NHWC format conversion](#optimised-transpose-batched-transpose-and-nchw--nhwc-format-conversion)
@@ -140,8 +139,7 @@ Benchmarks:
 ### Raw tensor type
 
 ```Nim
-# WIP
-import laser/tensor/[datatypes, allocator, initialization]
+import laser/tensor/[datatypes, allocator, initialization] # WIP
 ```
 
 Laser includes a low-level tensor type with only the low-level allocation and initialization needed:
