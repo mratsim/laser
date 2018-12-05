@@ -7,6 +7,32 @@ The library is in heavy development. For now the CPU backend is being optimised.
 
 ## Library content
 
+<!-- TOC -->
+
+- [Laser - Primitives for high performance computing](#laser---primitives-for-high-performance-computing)
+  - [Library content](#library-content)
+    - [SIMD intrinsics for x86 and x86-64](#simd-intrinsics-for-x86-and-x86-64)
+    - [OpenMP templates](#openmp-templates)
+    - [`cpuinfo` for runtime CPU feature detection for x86, x86-64 and ARM](#cpuinfo-for-runtime-cpu-feature-detection-for-x86-x86-64-and-arm)
+    - [JIT Assembler](#jit-assembler)
+    - [Loop-fusion and strided iterators for matrix and tensors](#loop-fusion-and-strided-iterators-for-matrix-and-tensors)
+    - [Raw tensor type](#raw-tensor-type)
+- [WIP](#wip)
+    - [Optimised floating point parallel reduction for sum, min and max](#optimised-floating-point-parallel-reduction-for-sum-min-and-max)
+    - [Optimised logarithmic, exponential, tanh, sigmoid, softmax ...](#optimised-logarithmic-exponential-tanh-sigmoid-softmax-)
+    - [Optimised transpose, batched transpose and NCHW <=> NHWC format conversion](#optimised-transpose-batched-transpose-and-nchw--nhwc-format-conversion)
+    - [Optimised strided Matrix-Multiplication for integers and floats](#optimised-strided-matrix-multiplication-for-integers-and-floats)
+      - [In the future](#in-the-future)
+        - [Operation fusion](#operation-fusion)
+        - [Pre-packing](#pre-packing)
+        - [Batched matrix multiplication](#batched-matrix-multiplication)
+        - [Small matrix multiplication](#small-matrix-multiplication)
+    - [Optimised convolutions](#optimised-convolutions)
+  - [Usage & Installation](#usage--installation)
+  - [License](#license)
+
+<!-- /TOC -->
+
 ### SIMD intrinsics for x86 and x86-64
 ```Nim
 import laser/simd
