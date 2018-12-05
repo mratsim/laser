@@ -190,6 +190,21 @@ proc benchAVX2_FMA_minimax(a: Tensor[float32], nb_samples: int) =
     # Main work
     avx2_fma_minimax_exp(output.storage.raw_data, a.storage.raw_data, a.size)
 
+proc avx2_mathfun_exp256_ps(x: m256): m256 {.
+    importc: "exp256_ps",
+    header: cSourcesPath & "lib_avx_mathfun.h"
+    .}
+vectorize(avx2_mathfun_exp256_ps, avx2_mathfun_exp256_ps, mm256_load_ps, mm256_store_ps, 8)
+
+proc benchAVX2_mathfun(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("AVX2 mathfun"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    avx2_mathfun_exp256_ps(output.storage.raw_data, a.storage.raw_data, a.size)
+
 
 # ###########################################
 
@@ -202,7 +217,8 @@ when defined(march_native):
 # Unfortunately with C++ backend we can't pass
 # -mavx2 per file, only for the global project
 # so we can't compare fmath SSE vs fmath AVX in a signle file
-{.passC:"-mavx2 -mfma".}
+# {.passC:"-mavx2 -mfma".}
+{.passC:"-mavx2".} # FMA is very easy to add but avx_mathfun doesn't use it :/
 
 when isMainModule:
   randomize(42) # For reproducibility
@@ -222,3 +238,83 @@ when isMainModule:
     benchSSE_fast_exp_sse(a, NbSamples)
     benchAVX2_fmath(a, NbSamples)
     benchAVX2_FMA_minimax(a, NbSamples)
+    benchAVX2_mathfun(a, NbSamples)
+
+## Bench on i5-5257U Broadwell - serial implementation
+## Without FMA
+
+# Warmup: 1.2910 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A - tensor shape: [5000000]
+# Required number of operations:     5.000 millions
+# Required bytes:                   20.000 MB
+# Arithmetic intensity:              0.250 FLOP/byte
+# Theoretical peak single-core:     86.400 GFLOP/s
+# Theoretical peak multi:          172.800 GFLOP/s
+# a[0]: -0.9999997019767761
+
+# Baseline <math.h>
+# Collected 100 samples in 3.256 seconds
+# Average time: 31.279 ms
+# Stddev  time: 8.266 ms
+# Min     time: 26.100 ms
+# Max     time: 51.445 ms
+# Perf:         0.160 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647
+
+# SSE mathfun
+# Collected 100 samples in 1.143 seconds
+# Average time: 10.174 ms
+# Stddev  time: 0.373 ms
+# Min     time: 9.973 ms
+# Max     time: 12.245 ms
+# Perf:         0.491 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647
+
+# SSE fast_exp_sse (low order polynomial)
+# Collected 100 samples in 0.599 seconds
+# Average time: 4.761 ms
+# Stddev  time: 0.243 ms
+# Min     time: 4.629 ms
+# Max     time: 6.447 ms
+# Perf:         1.050 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3682391047477722
+
+# AVX2 fmath
+# Collected 100 samples in 0.511 seconds
+# Average time: 3.837 ms
+# Stddev  time: 0.532 ms
+# Min     time: 3.558 ms
+# Max     time: 7.243 ms
+# Perf:         1.303 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647
+
+# AVX2 FMA Minimax
+# Collected 100 samples in 0.557 seconds
+# Average time: 4.339 ms
+# Stddev  time: 0.336 ms
+# Min     time: 4.169 ms
+# Max     time: 6.688 ms
+# Perf:         1.152 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678786158561707
+
+# AVX2 mathfun
+# Collected 100 samples in 0.704 seconds
+# Average time: 5.780 ms
+# Stddev  time: 0.693 ms
+# Min     time: 5.118 ms
+# Max     time: 7.001 ms
+# Perf:         0.865 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647

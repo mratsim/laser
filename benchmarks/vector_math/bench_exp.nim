@@ -209,7 +209,6 @@ when isMainModule:
 # as fmath has static if __AVX2__ even in the SSE code.
 
 ## Bench on i5-5257U Broadwell - serial implementation
-## fast-math + march=native
 
 # Warmup: 1.2104 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
