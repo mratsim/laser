@@ -74,7 +74,7 @@ import laser/photon_jit
 
 Laser offers its own JIT assembler with features being added on a as needed basis.
 It is very lightweight and easy to extend. Currently it only supports x86-64 with [the following
-opcodes.](./laser/photon_jit/x86_64/x86_64_ops.nim).
+opcodes](./laser/photon_jit/x86_64/x86_64_ops.nim).
 
 Examples:
   - [ex06_jit_hello_world.nim](./examples/ex06_jit_hello_world.nim)
@@ -166,7 +166,7 @@ This forces serial evaluation of reductions unless `-ffast-math` flag is passed 
 The primitives work around that by keeping several accumulators in parallel to avoid waiting for a previous serial evaluation. This allows those kernels to maximise memory-bandwith of your computer.
 
 Benchmarks:
-  - [reduction_packed_sse](./benchmarks/fp/reduction/latency/reduction_packed_sse.nim)
+  - [reduction_packed_sse](./benchmarks/fp_reduction_latency/reduction_packed_sse.nim)
 
 ### Optimised logarithmic, exponential, tanh, sigmoid, softmax ...
 
@@ -212,7 +212,7 @@ Laser implements its own multithreaded BLAS with the following details:
   - It support strided matrices, for example resulting from slicing every 2 rows
     or every 2 columns: `myTensor[0::2, :]`.
     This is very useful when doing cross-validation as you don't need an extra copy before matrix-multiplication.
-  - It supports integers: `int32` and `int64` using SSE2 or AVX2 instructions
+  - Contrary to 99% of the BLAS out there, it supports integers: `int32` and `int64` using SSE2 or AVX2 instructions
   - Extending support to new SIMD including ARM Neon and AVX512 is very easy, including software fallback is easy as well. For example this is how to [add AVX2 int32](./laser/primitives/matrix_multiplication/gemm_ukernel_avx2.nim) support with fused multiply-add fallback:
     ```Nim
     template int32x8_muladd_unfused_avx2(a, b, c: m256i): m256i =
@@ -268,7 +268,7 @@ Optimised small matrix-multiplication is planned.
 In heavy development.
 
 Benchmarks:
-  - [conv2D_bench](./benchmarks/convolution/conv2D_bench.nim)
+  - [conv2D_bench](./benchmarks/convolution/conv2d_bench.nim)
 
 ## Usage & Installation
 
