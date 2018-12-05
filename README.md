@@ -3,7 +3,7 @@
 Carefully-tuned primitives for running tensor and image-processing code
 on CPU, GPUs and accelerators.
 
-The library is in heavy development so some parts described, for now the CPU backend is being optimised.
+The library is in heavy development. For now the CPU backend is being optimised.
 
 ## Library content
 
