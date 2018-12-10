@@ -3,7 +3,7 @@
 // https://stackoverflow.com/questions/48863719/fastest-implementation-of-exponential-function-using-avx
 // Cody Waite Scheme: W. J. Cody & W. Waite, "Software Manual for the Elementary Functions", Prentice Hall 1980.
 
-#define USE_FMA 0
+#define USE_FMA 1
 
 /* compute exp(x) for x in [-87.33654f, 88.72283]
    maximum relative error: 3.1575e-6 (USE_FMA = 0); 3.1533e-6 (USE_FMA = 1)
