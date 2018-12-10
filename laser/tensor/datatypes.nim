@@ -92,7 +92,7 @@ macro raw_data_unaligned*(body: untyped): untyped =
   ## assumed aligned by default (LASER_MEM_ALIGN is 64 by default).
   ## Use this when interfacing with external buffers of unknown alignment.
   ##
-  ## ⚠ Warning:
+  ## ⚠️ Warning:
   ##     At the moment Nim's builtin term-rewriting macros are not scoped.
   ##     All processing within the file this is called will be considered
   ##     unaligned. https://github.com/nim-lang/Nim/issues/7214#issuecomment-431567894.

@@ -77,7 +77,7 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
   ##
   ## This is useful to update subslices of an existing tensor.
   ##
-  ## ⚠ Warning:
+  ## ⚠️ Warning:
   ##    The data exposed by the destination tensor will be overwritten.
   ##    If destination tensor is a view, all views of that data will be changed.
   ##    They however conserve their shape and strides.
@@ -128,7 +128,7 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
   ## The tensor metadata is not touched.
   ## Input tensor must be contiguous.
   ##
-  ## ⚠ Warning:
+  ## ⚠️ Warning:
   ##    The data of the input tensor will be overwritten.
   ##    If destination tensor is a view, all views of that data will be changed.
   ##    They however conserve their shape and strides.
