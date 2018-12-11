@@ -235,6 +235,51 @@ proc benchCDF_multisampling[N, T](a: Tensor[N, T], nb_bench_runs: int) =
     # Main work
     output = sample(a, NbSamplesWithoutReplacement)
 
+import ./fenwicktree
+
+proc benchFtree_prefetch[N, T](a: Tensor[N, T], nb_bench_runs: int) =
+  var output = newSeq[int](a.len)
+  bench("Sampling via F+tree with prefetch"):
+    discard
+  do:
+    # Main work
+    for i in 0 ..< a.len:
+      let sampler = newSampler[T](a[i])
+      output[i] = sampler.sample(prefetch = true)
+
+proc benchFtree_multisampling_prefetch[N, T](a: Tensor[N, T], nb_bench_runs: int) =
+  var output = newSeq[array[NbSamplesWithoutReplacement, int]](a.len)
+  bench(&"{NbSamplesWithoutReplacement} samplings without replacement"):
+    discard
+  do:
+    # Main work
+    for i in 0 ..< a.len:
+      var sampler = newSampler(a[i])
+      for j in 0 ..< NbSamplesWithoutReplacement:
+        output[i][j] = sampler.sampleAndRemove(prefetch = true)
+
+
+proc benchFtree[N, T](a: Tensor[N, T], nb_bench_runs: int) =
+  var output = newSeq[int](a.len)
+  bench("Sampling via F+tree without prefetch"):
+    discard
+  do:
+    # Main work
+    for i in 0 ..< a.len:
+      let sampler = newSampler(a[i])
+      output[i] = sampler.sample(prefetch = false)
+
+proc benchFtree_multisampling[N, T](a: Tensor[N, T], nb_bench_runs: int) =
+  var output = newSeq[array[NbSamplesWithoutReplacement, int]](a.len)
+  bench(&"{NbSamplesWithoutReplacement} samplings without replacement without prefetch"):
+    discard
+  do:
+    # Main work
+    for i in 0 ..< a.len:
+      var sampler = newSampler(a[i])
+      for j in 0 ..< NbSamplesWithoutReplacement:
+        output[i][j] = sampler.sampleAndRemove(prefetch = false)
+
 # ############################################################
 #
 #                       Run everything
@@ -256,27 +301,75 @@ when isMainModule:
     let a = randomTensor(BatchSize, VocabSize, float32)
     benchCDF_sampling(a, 1000)
     benchCDF_multisampling(a, 1000)
+    benchFtree_prefetch(a, 1000)
+    benchFtree_multisampling_prefetch(a, 1000)
+    benchFtree(a, 1000)
+    benchFtree_multisampling(a, 1000)
 
-# Warmup: 1.2385 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.1930 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # Classic sampling via inverse CDF
-# Collected 1000 test samples in 9.144 seconds
-# Average time: 9.144 ms
-# Stddev  time: 1.121 ms
-# Min     time: 8.235 ms
-# Max     time: 30.320 ms
-# Perf:         13.998 millions samplings/s (VocabSize = 50000)
+# Collected 1000 test samples in 9.044 seconds
+# Average time: 9.044 ms
+# Stddev  time: 1.162 ms
+# Min     time: 8.198 ms
+# Max     time: 35.947 ms
+# Perf:         14.154 millions samplings/s (VocabSize = 50000)
 
 # Display output[0] to make sure it's not optimized away
 # 2
 
 # 10 samplings without replacement
-# Collected 1000 test samples in 167.088 seconds
-# Average time: 167.088 ms
-# Stddev  time: 48.939 ms
-# Min     time: 147.521 ms
-# Max     time: 1024.882 ms
-# Perf:         0.766 millions samplings/s (VocabSize = 50000)
+# Collected 1000 test samples in 156.663 seconds
+# Average time: 156.663 ms
+# Stddev  time: 26.336 ms
+# Min     time: 147.814 ms
+# Max     time: 672.546 ms
+# Perf:         0.817 millions samplings/s (VocabSize = 50000)
 
 # Display output[0] to make sure it's not optimized away
 # [12913, 8020, 41233, 19747, 46496, 18194, 40084, 34881, 42615, 9536]
+
+# Sampling via F+tree with prefetch
+# Collected 1000 test samples in 13.507 seconds
+# Average time: 13.507 ms
+# Stddev  time: 0.616 ms
+# Min     time: 12.810 ms
+# Max     time: 21.890 ms
+# Perf:         9.476 millions samplings/s (VocabSize = 50000)
+
+# Display output[0] to make sure it's not optimized away
+# 29338
+
+# 10 samplings without replacement
+# Collected 1000 test samples in 13.658 seconds
+# Average time: 13.658 ms
+# Stddev  time: 0.576 ms
+# Min     time: 12.945 ms
+# Max     time: 22.702 ms
+# Perf:         9.372 millions samplings/s (VocabSize = 50000)
+
+# Display output[0] to make sure it's not optimized away
+# [30153, 46437, 38451, 11943, 20761, 23742, 2702, 27470, 1530, 13165]
+
+# Sampling via F+tree without prefetch
+# Collected 1000 test samples in 13.549 seconds
+# Average time: 13.548 ms
+# Stddev  time: 0.742 ms
+# Min     time: 12.792 ms
+# Max     time: 25.680 ms
+# Perf:         9.448 millions samplings/s (VocabSize = 50000)
+
+# Display output[0] to make sure it's not optimized away
+# 39064
+
+# 10 samplings without replacement without prefetch
+# Collected 1000 test samples in 13.680 seconds
+# Average time: 13.680 ms
+# Stddev  time: 0.583 ms
+# Min     time: 13.003 ms
+# Max     time: 22.149 ms
+# Perf:         9.357 millions samplings/s (VocabSize = 50000)
+
+# Display output[0] to make sure it's not optimized away
+# [47509, 3677, 45871, 43620, 47576, 46527, 9768, 19118, 25929, 40719]

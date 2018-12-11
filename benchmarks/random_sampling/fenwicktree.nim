@@ -64,7 +64,7 @@ func nextPowerOf2*(x: int): int =
   ## or the next biggest power of 2
   1 shl (fastLog2(x-1) + 1)
 
-func newSampler[T](weights: openarray[T]): Sampler[T] =
+func newSampler*[T](weights: openarray[T]): Sampler[T] =
   ## Initialise a sampler from weights.
   ##
   ## Weights can be a probability distribution (if they sum to 1)
@@ -117,15 +117,14 @@ func newSampler[T](weights: openarray[T]): Sampler[T] =
   for i in countdown(leaves_offset-1, 0):
     result[i] = result[2*i+1] + result[2*i+2]
 
-template sampleImpl[T](result: var int, s: Sampler[T], u: T) =
-
-  {.pragma: restrict, codegenDecl: "$# __restrict $#".}
-  let sp{.restrict.} = cast[ptr UncheckedArray[T]](s[0].unsafeAddr)
-
+func leaves_offset(s: Sampler): int {.inline.} =
   # leaves_offset are at n-1, but we don't have n anymore
   # However size = 2n-1 = 2(n-1+1) - 1 = 2(n-1)+2 - 1 = 2(n-1) + 1
   # So a logical right shift will divide by 2 and truncate to n-1.
-  let leaves_offset = s.len shr 1
+  result = s.len shr 1
+
+template sampleImpl[T](result: var int, s: Sampler[T] or ptr UncheckedArray[T], leaves_offset: int, u: T) =
+  ## Sp: pointer to a sampler data
   var i = 0
 
   # A F+tree guarantees the following:
@@ -133,8 +132,9 @@ template sampleImpl[T](result: var int, s: Sampler[T], u: T) =
   #   and left branch otherwise
   while i < leaves_offset:
     let left = 2*i+1
-    builtin_prefetch sp[2*left+1].unsafeAddr, Read, NoTemporalLocality
-    let pLeft = sp[left]
+    when s is ptr:
+      builtin_prefetch s[2*left+1].unsafeAddr, Read, NoTemporalLocality
+    let pLeft = s[left]
     if u >= pleft:
       # We choose the right child and substract the left CDF
       # to maintain u ∈ [0, rCDF]
@@ -144,29 +144,77 @@ template sampleImpl[T](result: var int, s: Sampler[T], u: T) =
       i = left
   result = i - leaves_offset
 
-
-proc sample(s: Sampler): int =
+proc sample*[T](s: Sampler[T], prefetch: static bool = true): int =
   var u = rand(s[0])
-  sampleImpl(result, s, u)
+  let leaves_offset = s.leaves_offset()
+  when prefetch:
+    {.pragma: restrict, codegenDecl: "$# __restrict $#".}
+    let sp{.restrict.} = cast[ptr UncheckedArray[T]](s[0].unsafeAddr)
+    sampleImpl(result, sp, leaves_offset, u)
+  else:
+    sampleImpl(result, s, leaves_offset, u)
 
-proc sample(s: Sampler, rng: Rand): int =
+proc sample*[T](s: Sampler[T], rng: Rand, prefetch: static bool = true): int =
   var u = rng.rand(s[0])
-  sampleImpl(result, s, u)
+  let leaves_offset = s.leaves_offset()
+  when prefetch:
+    {.pragma: restrict, codegenDecl: "$# __restrict $#".}
+    let sp{.restrict.} = cast[ptr UncheckedArray[T]](s[0].unsafeAddr)
+    sampleImpl(result, sp, leaves_offset, u)
+  else:
+    sampleImpl(result, s, leaves_offset, u)
+
+template updateImpl[T](s: Sampler[T] or ptr UncheckedArray[T], idx: var int, weight: T) =
+  s[idx] = weight
+  while idx > 0:
+    idx = (idx - 1) shr 1 # jump to parent
+    when s is ptr:
+      builtin_prefetch s[(idx - 1) shr 1].unsafeAddr, Write, NoTemporalLocality
+    s[idx] = s[2*idx + 1] + s[2*idx + 2]
+
+proc update*[T](s: var Sampler[T], elem: int, weight: T, prefetch: static bool = true) =
+  let leaves_offset = s.leaves_offset()
+  var idx = leaves_offset + elem
+
+  when prefetch:
+    {.pragma: restrict, codegenDecl: "$# __restrict $#".}
+    let sp{.restrict.} = cast[ptr UncheckedArray[T]](s[0].unsafeAddr)
+    updateImpl(sp, idx, weight)
+  else:
+    updateImpl(s, idx, weight)
+
+proc sampleAndRemove*[T](s: var Sampler[T], prefetch: static bool = true): int =
+  let leaves_offset = s.leaves_offset()
+  var u = rand(s[0])
+
+  when prefetch:
+    {.pragma: restrict, codegenDecl: "$# __restrict $#".}
+    let sp{.restrict.} = cast[ptr UncheckedArray[T]](s[0].unsafeAddr)
+    sampleImpl(result, sp, leaves_offset, u)
+    var idx = leaves_offset + result
+    updateImpl(sp, idx, 0)
+  else:
+    sampleImpl(result, s, leaves_offset, u)
+    var idx = leaves_offset + result
+    updateImpl(s, idx, 0)
 
 when isMainModule:
   block:
+    echo "\n######"
     let p = [0.3, 1.5, 0.4, 0.3]
 
     let sampler = newSampler(p)
     echo sampler
     echo sampler.sample
   block:
+    echo "\n######"
     let p = [0.3, 1.5, 0.4, 0.3, 0.3]
 
     let sampler = newSampler(p)
     echo sampler
     echo sampler.sample
   block:
+    echo "\n######"
     let p = [0.3, 1.5, 0.4, 0.3, 0.3, 1.5, 0.4, 0.3]
 
     let sampler = newSampler(p)
@@ -175,6 +223,7 @@ when isMainModule:
 
   import tables
   block:
+    echo "\n######"
     let p = [0.1, 0.4, 0.3, 0.2]
     let sampler = newSampler(p)
 
@@ -184,3 +233,26 @@ when isMainModule:
       c.inc(sampler.sample)
 
     echo c
+
+  block:
+    echo "\n######"
+    let p = [0.3, 1.5, 0.4, 0.3, 0.3, 1.5, 0.4, 0.3]
+
+    var sampler = newSampler(p)
+    echo sampler
+    for _ in 0 ..< 9:
+      let sample = sampler.sample
+      echo sample
+      sampler.update(sample, 0.0)
+      echo sampler
+
+  block:
+    echo "\n######"
+    let p = [0.3, 1.5, 0.4, 0.3, 0.3, 1.5, 0.4, 0.3]
+
+    var sampler = newSampler(p)
+    echo sampler
+    for _ in 0 ..< 9:
+      let sample = sampler.sampleAndRemove()
+      echo sample
+      echo sampler
