@@ -94,7 +94,7 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 
 const
   N     = 100*50000 # For example for use in softmax for a batch of 100 with dictionary size of 50000 words
-  NbSamples = 100
+  NbSamples = 300
   CpuGhz = 2.7
   NumCpuCores = 2
   CpuFlopCycle = 32 # AVX2: 2xFMA/cycle = 2x8x2 - 2 x 8 floats x (1 add + 1 mul)
@@ -205,6 +205,33 @@ proc benchAVX2_mathfun(a: Tensor[float32], nb_samples: int) =
     # Main work
     avx2_mathfun_exp256_ps(output.storage.raw_data, a.storage.raw_data, a.size)
 
+import ../../laser/primitives/simd_math/exp_log_avx2
+vectorize(exp_float32x8_avx2, exp_float32x8_avx2, mm256_load_ps, mm256_store_ps, 8)
+
+proc benchProdImpl(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("AVX2 Prod implementation"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    exp_float32x8_avx2(output.storage.raw_data, a.storage.raw_data, a.size)
+
+proc fma_schraudolph_exp(x: m256): m256 {.
+    importc: "_mm256_expfaster_ps",
+    header: cSourcesPath & "lib_schraudolph_approx.h"
+    .}
+vectorize(fma_schraudolph_exp, fma_schraudolph_exp, mm256_load_ps, mm256_store_ps, 8)
+
+proc benchSchraudolph_approx(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("AVX+FMA Schraudolph-approx"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    fma_schraudolph_exp(output.storage.raw_data, a.storage.raw_data, a.size)
+
 
 # ###########################################
 
@@ -217,8 +244,8 @@ when defined(march_native):
 # Unfortunately with C++ backend we can't pass
 # -mavx2 per file, only for the global project
 # so we can't compare fmath SSE vs fmath AVX in a signle file
-# {.passC:"-mavx2 -mfma".}
-{.passC:"-mavx2".} # FMA is very easy to add but avx_mathfun doesn't use it :/
+{.passC:"-mavx2 -mfma".} # Note that due to latencies, FMA might be slower if no instruction-level parallelism is used
+# {.passC:"-mavx2".}
 
 when isMainModule:
   randomize(42) # For reproducibility
@@ -231,7 +258,7 @@ when isMainModule:
   echo &"Theoretical peak single-core:  {CpuGhz * CpuFlopCycle:>9.3f} GFLOP/s"
   echo &"Theoretical peak multi:        {CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GFLOP/s"
   block:
-    let a = randomTensor([N], -1.0'f32 .. 1.0'f32)
+    let a = randomTensor([N], -10'f32 .. 10.0'f32)
     echo "a[0]: " & $a[0]
     benchBaseline(a, NbSamples)
     benchSSEMathfun(a, NbSamples)
@@ -239,6 +266,8 @@ when isMainModule:
     benchAVX2_fmath(a, NbSamples)
     benchAVX2_FMA_minimax(a, NbSamples)
     benchAVX2_mathfun(a, NbSamples)
+    benchProdImpl(a, NbSamples)
+    benchSchraudolph_approx(a, NbSamples)
 
 ## Bench on i5-5257U Broadwell - serial implementation
 ## Without FMA
