@@ -18,7 +18,7 @@ The library is in heavy development. For now the CPU backend is being optimised.
     - [Loop-fusion and strided iterators for matrix and tensors](#loop-fusion-and-strided-iterators-for-matrix-and-tensors)
     - [Raw tensor type](#raw-tensor-type)
     - [Optimised floating point parallel reduction for sum, min and max](#optimised-floating-point-parallel-reduction-for-sum-min-and-max)
-    - [Optimised logarithmic, exponential, tanh, sigmoid, softmax ...](#optimised-logarithmic-exponential-tanh-sigmoid-softmax-)
+    - [Optimised logarithmic, exponential, tanh, sigmoid, softmax ...](#optimised-logarithmic-exponential-tanh-sigmoid-softmax)
     - [Optimised transpose, batched transpose and NCHW <=> NHWC format conversion](#optimised-transpose-batched-transpose-and-nchw--nhwc-format-conversion)
     - [Optimised strided Matrix-Multiplication for integers and floats](#optimised-strided-matrix-multiplication-for-integers-and-floats)
       - [In the future](#in-the-future)
@@ -27,6 +27,7 @@ The library is in heavy development. For now the CPU backend is being optimised.
         - [Batched matrix multiplication](#batched-matrix-multiplication)
         - [Small matrix multiplication](#small-matrix-multiplication)
     - [Optimised convolutions](#optimised-convolutions)
+    - [State-of-the art random distributions and weighted random sampling](#state-of-the-art-random-distributions-and-weighted-random-sampling)
   - [Usage & Installation](#usage--installation)
   - [License](#license)
 
@@ -269,6 +270,13 @@ In heavy development.
 
 Benchmarks:
   - [conv2D_bench](./benchmarks/convolution/conv2d_bench.nim)
+
+### State-of-the art random distributions and weighted random sampling
+
+In heavy development
+
+Benchmarks of multinomial sampling for Natural Language Processing and Reinforcement Learning:
+  -[bench_multinomial_samplers](./benchmarks/random_sampling/bench_multinomial_sampler)
 
 ## Usage & Installation
 
