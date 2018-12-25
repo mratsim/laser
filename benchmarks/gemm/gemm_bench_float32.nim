@@ -282,8 +282,8 @@ when isMainModule:
 ###############################
 # Serial - Nim code compiled without -d:openmp
 
-# $  OPENBLAS_NUM_THREADS=1 ./build/bench_gemm
-# Warmup: 1.1938 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# $ OPENBLAS_NUM_THREADS=1 ./build/bench_gemm
+# Warmup: 1.1973 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 1920, N: 1920)
 # B matrix shape: (M: 1920, N: 1920)
@@ -296,23 +296,34 @@ when isMainModule:
 # Make sure to not bench Apple Accelerate or the default Linux BLAS.
 
 # OpenBLAS benchmark
-# Collected 10 samples in 1.921 seconds
-# Average time: 191.824 ms
-# Stddev  time: 5.071 ms
-# Min     time: 187.060 ms
-# Max     time: 203.692 ms
-# Perf:         73.796 GFLOP/s
+# Collected 10 samples in 1.893 seconds
+# Average time: 189.041 ms
+# Stddev  time: 2.558 ms
+# Min     time: 186.120 ms
+# Max     time: 193.507 ms
+# Perf:         74.882 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 470.7781372070312
 
 # Laser production implementation
-# Collected 10 samples in 1.958 seconds
-# Average time: 195.540 ms
-# Stddev  time: 4.404 ms
-# Min     time: 189.699 ms
-# Max     time: 203.276 ms
-# Perf:         72.393 GFLOP/s
+# Collected 10 samples in 1.942 seconds
+# Average time: 193.975 ms
+# Stddev  time: 4.279 ms
+# Min     time: 190.571 ms
+# Max     time: 205.327 ms
+# Perf:         72.978 GFLOP/s
 
 # Display output[0] to make sure it's not optimized away
-# 470.7781677246094
+# 470.778076171875
+
+# PyTorch Glow: libjit matmul implementation
+# Collected 10 samples in 2.216 seconds
+# Average time: 221.567 ms
+# Stddev  time: 2.270 ms
+# Min     time: 218.499 ms
+# Max     time: 225.679 ms
+# Perf:         63.889 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 470.778076171875
