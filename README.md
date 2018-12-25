@@ -175,7 +175,7 @@ In heavy development.
 
 Unfortunately the default logarithm and exponential functions included in C and C++ standard \<math.h\> library are extremely slow.
 
-Benchmarks shows that a 10x peed improvement is possible while keeping excellent accuracy.
+Benchmarks shows that a 10x speed improvement is possible while keeping excellent accuracy.
 
 Benchmarks:
   - [bench_exp](./benchmarks/vector_math/bench_exp.nim)

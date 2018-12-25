@@ -205,18 +205,6 @@ proc benchAVX2_mathfun(a: Tensor[float32], nb_samples: int) =
     # Main work
     avx2_mathfun_exp256_ps(output.storage.raw_data, a.storage.raw_data, a.size)
 
-import ../../laser/primitives/simd_math/exp_log_avx2
-vectorize(exp_float32x8_avx2, exp_float32x8_avx2, mm256_load_ps, mm256_store_ps, 8)
-
-proc benchProdImpl(a: Tensor[float32], nb_samples: int) =
-  var output = newTensor[float32](a.shape)
-  bench("AVX2 Prod implementation"):
-    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    output.setZero() # We zero memory between computation
-  do:
-    # Main work
-    exp_float32x8_avx2(output.storage.raw_data, a.storage.raw_data, a.size)
-
 proc fma_schraudolph_exp(x: m256): m256 {.
     importc: "_mm256_expfaster_ps",
     header: cSourcesPath & "lib_schraudolph_approx.h"
@@ -231,6 +219,21 @@ proc benchSchraudolph_approx(a: Tensor[float32], nb_samples: int) =
   do:
     # Main work
     fma_schraudolph_exp(output.storage.raw_data, a.storage.raw_data, a.size)
+
+proc simd_math_prims_exp(x: float32): float32 {.
+    importc: "expapprox",
+    header: cSourcesPath & "lib_simd_math_prims.h"
+    .}
+
+proc benchSimdMathPrims(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("Bench SIMD Math Prims"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    for i in 0 ..< a.size:
+      output.storage.raw_data[i] = simd_math_prims_exp(a.storage.raw_data[i])
 
 
 # ###########################################
@@ -266,8 +269,8 @@ when isMainModule:
     benchAVX2_fmath(a, NbSamples)
     benchAVX2_FMA_minimax(a, NbSamples)
     benchAVX2_mathfun(a, NbSamples)
-    benchProdImpl(a, NbSamples)
     benchSchraudolph_approx(a, NbSamples)
+    benchSimdMathPrims(a, NbSamples)
 
 ## Bench on i5-5257U Broadwell - serial implementation
 ## Without FMA

@@ -48,3 +48,13 @@ The default implementation in `<math.h>` are very slow. The usual way to impleme
 - http://gruntthepeon.free.fr/ssemath/
 - http://software-lisc.fbk.eu/avx_mathfun/
 - https://github.com/herumi/fmath
+- https://github.com/jhjourdan/SIMD-math-prims
+  and http://gallium.inria.fr/blog/fast-vectorizable-math-approx/
+- [A new open-source SIMD vector libm fully implemented
+with high-level scalar C](https://hal.archives-ouvertes.fr/hal-01511131/document), 2016, Lauter
+  https://gitlab.com/cquirin/vector-libm
+- https://github.com/shibatch/sleef
+- https://github.com/gnuradio/volk
+- https://github.com/VcDevel/Vc
+- https://github.com/p12tic/libsimdpp
+- https://github.com/projectNe10/Ne10
