@@ -69,6 +69,14 @@ let out_shape: MatrixShape = gemm_out_shape(ashape, bshape)
 let out_size = out_shape.M * out_shape.N
 
 # #############################################
+# C and C++ FFI
+
+import ospaths, strutils
+from os import DirSep
+
+const cSourcesPath = currentSourcePath.rsplit(DirSep, 1)[0] & '/'
+
+# #############################################
 
 proc benchOpenBLAS(a, b: seq[float32], nb_samples: int) =
   var output = newSeq[float32](out_size)
@@ -145,6 +153,47 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int) =
               b_ptr, N, 1,
       0'f32,  c_ptr, N, 1
     )
+
+{.passC: "-I" & cSourcesPath & "pytorch_glow/".}
+
+import pytorch_glow/libjit_matmul
+  # Hack due to conflicts between "-std=c++11" requires by Glow
+  # and incompatible with C files in cpuinfo.
+  # We can't use the proper:
+    # {.compile: "pytorch_glow/libjit_matmul.cpp".}
+    # {.passC: "-std=c++11 -mavx -mfma".}
+    # ^^^ This is configured in nim.cfg instead
+
+proc libjit_matmul_f(
+          c, a, b: ptr float32,
+          cDims, aDims, bDims: ptr array[2, int]
+      ) {.importc.}
+  # Note: Matrix C will be zero-mem'ed by libjit
+
+proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int) =
+  var output = newSeq[float32](out_size)
+
+  let a_ptr{.restrict.} = a[0].unsafeAddr
+  let b_ptr{.restrict.} = b[0].unsafeAddr
+  let c_ptr{.restrict.} = output[0].addr
+
+  let cDims = [M, N]
+  let aDims = [M, K]
+  let bDims = [K, N]
+
+  let cDims_ptr{.restrict.} = cDims.unsafeAddr
+  let aDims_ptr{.restrict.} = aDims.unsafeAddr
+  let bDims_ptr{.restrict.} = bDims.unsafeAddr
+
+  bench("PyTorch Glow: libjit matmul implementation"):
+    discard # zeroMem done by libjit
+  do:
+    # Main work
+    libjit_matmul_f(
+      c_ptr, a_ptr, b_ptr,
+      cDims_ptr, aDims_ptr, bDims_ptr
+    )
+
 # ###########################################
 
 when defined(fast_math):
@@ -179,14 +228,23 @@ when isMainModule:
     # benchArraymancerFallback(a, b, NbSamples)
     benchOpenBLAS(a, b, NbSamples)
     benchLaserGEMM(a, b, NbSamples)
+    benchPyTorchGlow(a, b, NbSamples)
 
 # Seems like my original Arraymancer BLAS has false sharing issue
 # FYI Apple accelerate is about 117~122GFLOP/s on my machine.
 
 ###############################
+# Compilation command
+# $ nim cpp -r -d:release -d:openmp -o:build/bench_gemm benchmarks/gemm/gemm_bench_float32.nim
+
+# Don't forget to add OpenBLAS in your path:
+# For example on Mac with OpenBLAS from Homebrew
+# `export LD_LIBRARY_PATH=/usr/local/opt/openblas/lib`
+
+###############################
 # OpenMP
 
-# $  ./build/laser_gemm_omp
+# $  ./build/bench_gemm
 # Warmup: 1.1900 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 1920, N: 1920)
@@ -222,9 +280,9 @@ when isMainModule:
 # 470.778076171875
 
 ###############################
-# Serial
+# Serial - Nim code compiled without -d:openmp
 
-# $  OPENBLAS_NUM_THREADS=1 ./build/laser_gemm_serial
+# $  OPENBLAS_NUM_THREADS=1 ./build/bench_gemm
 # Warmup: 1.1938 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 1920, N: 1920)
