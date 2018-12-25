@@ -167,7 +167,7 @@ import pytorch_glow/libjit_matmul
 proc libjit_matmul_f(
           c, a, b: ptr float32,
           cDims, aDims, bDims: ptr array[2, int]
-      ) {.importc.}
+      ) {.importc, cdecl.}
   # Note: Matrix C will be zero-mem'ed by libjit
 
 proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int) =
