@@ -282,6 +282,10 @@ proc cpuinfo_get_current_core*(): ptr CPUInfo_core {.cpuinfo_proc.}
 # Otherwise "curSrcFolder" is ignored
 {.passC: "-I" & cpuinfoPath & "src -I" & curSrcFolder & DirSep & "third_party".}
 
+when defined(linux):
+  {.passC: "-D_GNU_SOURCE".}
+  {.passL: "-lpthread".}
+
 template compile(path: static string): untyped =
   # Path: the path from cpuinfo/src folder
   const compiled_object = block:

@@ -13,7 +13,8 @@ import
   ./gemm_ukernel_sse4_1,
   ./gemm_ukernel_avx,
   ./gemm_ukernel_avx_fma,
-  ./gemm_ukernel_avx2
+  ./gemm_ukernel_avx2,
+  ./gemm_ukernel_avx512
 
 {.experimental: "dynamicBindSym".}
 

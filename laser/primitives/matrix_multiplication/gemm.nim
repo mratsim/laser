@@ -198,7 +198,8 @@ proc gemm_strided*[T: SomeNumber](
 
     when defined(i386) or defined(amd64):
       when T is float32:
-        if cpuinfo_has_x86_fma3():   dispatch(x86_AVX_FMA)
+        if cpuinfo_has_x86_avx512f():   dispatch(x86_AVX512)
+        elif cpuinfo_has_x86_fma3():   dispatch(x86_AVX_FMA)
         elif cpuinfo_has_x86_avx():  dispatch(x86_AVX)
         elif cpuinfo_has_x86_sse():    dispatch(x86_SSE)
       elif T is float64:

@@ -1,6 +1,8 @@
 when defined(osx):
   const blas = "libopenblas.dylib"
   {.passC: "-I'/usr/local/opt/openblas/include' -L'/usr/local/opt/openblas/lib'".}
+elif defined(linux):
+  const blas = "libcblas.so"
 else:
   {.fatal: "OpenBLAS not configured for this platform".}
   # When adding new platform, you also need to update nim.cfg
