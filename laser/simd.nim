@@ -30,6 +30,12 @@ when defined(i386) or defined(amd64):
       raw: array[4, float64]
     m256i* {.importc: "__m256i", x86_type.} = object
       raw: array[32, byte]
+    m512* {.importc: "__m512", x86_type.} = object
+      raw: array[16, float32]
+    m512d* {.importc: "__m512d", x86_type.} = object
+      raw: array[8, float64]
+    m512i* {.importc: "__m512i", x86_type.} = object
+      raw: array[64, byte]
 
   # ############################################################
   #
@@ -177,7 +183,14 @@ when defined(i386) or defined(amd64):
   func mm256_storeu_ps*(mem_addr: ptr float32, a: m256) {.importc: "_mm256_storeu_ps", x86.}
   func mm256_add_ps*(a, b: m256): m256 {.importc: "_mm256_add_ps", x86.}
   func mm256_mul_ps*(a, b: m256): m256 {.importc: "_mm256_mul_ps", x86.}
+  func mm256_sub_ps*(a, b: m256): m256 {.importc: "_mm256_sub_ps", x86.}
 
+  func mm256_and_ps*(a, b: m256): m256 {.importc: "_mm256_and_ps", x86.}
+    ## Bitwise and
+  func mm256_or_ps*(a, b: m256): m256 {.importc: "_mm256_or_ps", x86.}
+
+  func mm256_min_ps*(a, b: m256): m256 {.importc: "_mm256_min_ps", x86.}
+  func mm256_max_ps*(a, b: m256): m256 {.importc: "_mm256_max_ps", x86.}
   func mm256_castps256_ps128*(a: m256): m128 {.importc: "_mm256_castps256_ps128", x86.}
     ## Returns the lower part of a m256 in a m128
   func mm256_extractf128_ps*(v: m256, m: cint{lit}): m128 {.importc: "_mm256_extractf128_ps", x86.}
@@ -197,7 +210,7 @@ when defined(i386) or defined(amd64):
   func mm256_storeu_pd*(mem_addr: ptr float64, a: m256d) {.importc: "_mm256_storeu_pd", x86.}
   func mm256_add_pd*(a, b: m256d): m256d {.importc: "_mm256_add_pd", x86.}
   func mm256_mul_pd*(a, b: m256d): m256d {.importc: "_mm256_mul_pd", x86.}
-
+  
   # ############################################################
   #
   #                 AVX + FMA - float32/64 - packed
@@ -222,8 +235,16 @@ when defined(i386) or defined(amd64):
   func mm256_loadu_si256*(mem_addr: ptr SomeInteger): m256i {.importc: "_mm256_loadu_si256", x86.}
   func mm256_storeu_si256*(mem_addr: ptr SomeInteger, a: m256i) {.importc: "_mm256_storeu_si256", x86.}
 
-  func mm256_set1_epi64x*(a: int64): m256i {.importc: "_mm256_set1_epi64x", x86.}
-    ## Broadcast an int64
+  func mm256_castps_si256*(a: m256): m256i {.importc: "_mm256_castps_si256", x86.}
+    ## Cast a float32x8 vectors into a 256-bit int vector with the same bit pattern
+
+  func mm256_castsi256_ps*(a: m256i): m256 {.importc: "_mm256_castsi256_ps", x86.}
+    ## Cast a 256-bit int vector into a float32x8 vector with the same bit pattern
+
+  func mm256_cvtps_epi32*(a: m256): m256i {.importc: "_mm256_cvtps_epi32", x86.}
+    ## Convert a float32x8 to int32x8
+  func mm256_cvtepi32_ps*(a: m256i): m256 {.importc: "_mm256_cvtepi32_ps", x86.}
+    ## Convert a int32x8 to float32x8
 
   # ############################################################
   #
@@ -269,34 +290,6 @@ when defined(i386) or defined(amd64):
     ## Result = {a3_lo * b3_lo, a2_lo * b2_lo, a1_lo * b1_lo, a0_lo * b0_lo}.
     ## This is an extended precision multiplication 32x32 -> 64
 
-  # TODO
-
-  # AVX
-
-  func mm256_castps_si256*(a: m256): m256i {.importc: "_mm256_castps_si256", x86.}
-    ## Cast a float32x8 vectors into a 256-bit int vector with the same bit pattern
-
-  func mm256_castsi256_ps*(a: m256i): m256 {.importc: "_mm256_castsi256_ps", x86.}
-    ## Cast a 256-bit int vector into a float32x8 vector with the same bit pattern
-
-  func mm256_and_ps*(a, b: m256): m256 {.importc: "_mm256_and_ps", x86.}
-    ## Bitwise and
-  func mm256_or_ps*(a, b: m256): m256 {.importc: "_mm256_or_ps", x86.}
-
-
-  func mm256_min_ps*(a, b: m256): m256 {.importc: "_mm256_min_ps", x86.}
-  func mm256_max_ps*(a, b: m256): m256 {.importc: "_mm256_max_ps", x86.}
-
-  func mm256_sub_ps*(a, b: m256): m256 {.importc: "_mm256_sub_ps", x86.}
-
-
-  func mm256_cvtps_epi32*(a: m256): m256i {.importc: "_mm256_cvtps_epi32", x86.}
-    ## Convert a float32x8 to int32x8
-  func mm256_cvtepi32_ps*(a: m256i): m256 {.importc: "_mm256_cvtepi32_ps", x86.}
-    ## Convert a int32x8 to float32x8
-
-  # AVX2
-
   func mm256_movemask_epi8*(a: m256i): int32 {.importc: "_mm256_movemask_epi8", x86.}
     ## Returns the sign bits from the operand
 
@@ -307,3 +300,65 @@ when defined(i386) or defined(amd64):
   func mm256_slli_epi32*(a: m256i, count: int32): m256i {.importc: "_mm256_slli_epi32", x86.}
 
   func mm256_i32gather_epi32*(m: ptr (uint32 or int32), i: m256i, s: int32): m256i {.importc: "_mm256_i32gather_epi32", x86.}
+
+  # ############################################################
+  #
+  #                    AVX512 - float32 - packed
+  #
+  # ############################################################
+
+  func mm512_setzero_ps*(): m512 {.importc: "_mm512_setzero_ps", x86.}
+  func mm512_set1_ps*(a: float32): m512 {.importc: "_mm512_set1_ps", x86.}
+  func mm512_load_ps*(aligned_mem_addr: ptr float32): m512 {.importc: "_mm512_load_ps", x86.}
+  func mm512_loadu_ps*(mem_addr: ptr float32): m512 {.importc: "_mm512_loadu_ps", x86.}
+  func mm512_store_ps*(mem_addr: ptr float32, a: m512) {.importc: "_mm512_store_ps", x86.}
+  func mm512_storeu_ps*(mem_addr: ptr float32, a: m512) {.importc: "_mm512_storeu_ps", x86.}
+  func mm512_add_ps*(a, b: m512): m512 {.importc: "_mm512_add_ps", x86.}
+  func mm512_mul_ps*(a, b: m512): m512 {.importc: "_mm512_mul_ps", x86.}
+  func mm512_fmadd_ps*(a, b, c: m512): m512 {.importc: "_mm512_fmadd_ps", x86.}
+
+  # ############################################################
+  #
+  #                    AVX512 - float64 - packed
+  #
+  # ############################################################
+
+  func mm512_setzero_pd*(): m512d {.importc: "_mm512_setzero_pd", x86.}
+  func mm512_set1_pd*(a: float64): m512d {.importc: "_mm512_set1_pd", x86.}
+  func mm512_load_pd*(aligned_mem_addr: ptr float64): m512d {.importc: "_mm512_load_pd", x86.}
+  func mm512_loadu_pd*(mem_addr: ptr float64): m512d {.importc: "_mm512_loadu_pd", x86.}
+  func mm512_store_pd*(mem_addr: ptr float64, a: m512d) {.importc: "_mm512_store_pd", x86.}
+  func mm512_storeu_pd*(mem_addr: ptr float64, a: m512d) {.importc: "_mm512_storeu_pd", x86.}
+  func mm512_add_pd*(a, b: m512d): m512d {.importc: "_mm512_add_pd", x86.}
+  func mm512_mul_pd*(a, b: m512d): m512d {.importc: "_mm512_mul_pd", x86.}
+  func mm512_fmadd_pd*(a, b, c: m512d): m512d {.importc: "_mm512_fmadd_pd", x86.}
+
+  # # ############################################################
+  # #
+  # #                   AVX - integers - packed
+  # #
+  # # ############################################################
+
+  func mm512_setzero_si512*(): m512i {.importc: "_mm512_setzero_si512", x86.}
+  func mm512_set1_epi8*(a: int8 or uint8): m512i {.importc: "_mm512_set1_epi8", x86.}
+  func mm512_set1_epi16*(a: int16 or uint16): m512i {.importc: "_mm512_set1_epi16", x86.}
+  func mm512_set1_epi32*(a: int32 or uint32): m512i {.importc: "_mm512_set1_epi32", x86.}
+  func mm512_set1_epi64*(a: int64 or uint64): m512i {.importc: "_mm512_set1_epi64", x86.}
+  func mm512_load_si512*(mem_addr: ptr SomeInteger): m512i {.importc: "_mm512_load_si512", x86.}
+  func mm512_loadu_si512*(mem_addr: ptr SomeInteger): m512i {.importc: "_mm512_loadu_si512", x86.}
+  func mm512_storeu_si512*(mem_addr: ptr SomeInteger, a: m512i) {.importc: "_mm512_storeu_si512", x86.}
+
+  func mm512_add_epi8*(a, b: m512i): m512i {.importc: "_mm512_add_epi8", x86.}
+  func mm512_add_epi16*(a, b: m512i): m512i {.importc: "_mm512_add_epi16", x86.}
+  func mm512_add_epi32*(a, b: m512i): m512i {.importc: "_mm512_add_epi32", x86.}
+  func mm512_add_epi64*(a, b: m512i): m512i {.importc: "_mm512_add_epi64", x86.}
+
+  func mm512_mullo_epi32*(a, b: m512i): m512i {.importc: "_mm512_mullo_epi32", x86.}
+    ## Multiply element-wise 2 vectors of 16 32-bit ints
+    ## into intermediate 16 32-bit ints, and keep the low 32-bit parts
+
+  func mm512_mullo_epi64*(a, b: m512i): m512i {.importc: "_mm512_mullo_epi64", x86.}
+    ## Multiply element-wise 2 vectors of 8x 64-bit ints
+    ## into intermediate 8x 64-bit ints, and keep the low 64-bit parts
+
+  

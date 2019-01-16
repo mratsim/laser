@@ -50,13 +50,13 @@ import
   ../../laser/primitives/matrix_multiplication/gemm
 
 const
-  M     = 16*6*20
-  K     = 16*6*20
-  N     = 16*6*20
+  M     = 32*6*20
+  K     = 32*6*20
+  N     = 32*6*20
   NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
-  CpuGhz = 2.7      # Assuming no turbo
-  NumCpuCores = 2
-  CpuFlopCycle = 32 # AVX2: 2xFMA/cycle = 2x8x2 - 2 x 8 floats x (1 add + 1 mul)
+  CpuGhz = 3.6      # i9-9980XE OC All turbo 4.1GHz (AVX2 4.0GHz, AVX512 3.6GHz)
+  NumCpuCores = 18
+  CpuFlopCycle = 64 # AVX2: 2xFMA/cycle = 2x8x2 - 2 x 8 floats x (1 add + 1 mul)
 
 const
   ashape: MatrixShape = (M, K)
@@ -244,6 +244,56 @@ when isMainModule:
 ###############################
 # OpenMP
 
+# i9_9980XE Skylake-X 18 cores overclocked 4.1 GHz all-turbo, 4.0 GHz AVX turbo, 3.6 GHz AVX512 turbo
+# PyTorch Glow compiled with AVX2 as AVX512 is slower
+# Warmup: 0.9018 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A matrix shape: (M: 3840, N: 3840)
+# B matrix shape: (M: 3840, N: 3840)
+# Output shape: (M: 3840, N: 3840)
+# Required number of operations: 113246.208 millions
+# Required bytes:                  117.965 MB
+# Arithmetic intensity:            960.000 FLOP/byte
+# Theoretical peak single-core:    230.400 GFLOP/s
+# Theoretical peak multi:         4147.200 GFLOP/s
+# Make sure to not bench Apple Accelerate or the default Linux BLAS.
+
+# OpenBLAS benchmark
+# Collected 10 samples in 0.504 seconds
+# Average time: 49.841 ms
+# Stddev  time: 4.290 ms
+# Min     time: 48.066 ms
+# Max     time: 61.994 ms
+# Perf:         2272.149 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 950.1965942382812
+
+# Laser production implementation
+# Collected 10 samples in 0.653 seconds
+# Average time: 64.678 ms
+# Stddev  time: 2.742 ms
+# Min     time: 63.140 ms
+# Max     time: 71.649 ms
+# Perf:         1750.928 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 950.1968383789062
+
+# PyTorch Glow: libjit matmul implementation
+# Collected 10 samples in 16.555 seconds
+# Average time: 1655.510 ms
+# Stddev  time: 0.204 ms
+# Min     time: 1655.276 ms
+# Max     time: 1655.983 ms
+# Perf:         68.406 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 950.1965942382812
+
+###############################
+# i5-5227U 2.7 GHz Broadwell dual core AVX2
+
 # $  ./build/bench_gemm
 # Warmup: 1.1900 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
@@ -281,6 +331,58 @@ when isMainModule:
 
 ###############################
 # Serial - Nim code compiled without -d:openmp
+# i9_9980XE Skylake-X 18 cores overclocked 4.1 GHz all-turbo, 4.0 GHz AVX turbo, 3.6 GHz AVX512 turbo
+# PyTorch Glow compiled with AVX2 as AVX512 is slower
+# For some reason OPENBLAS_NUM_THREADS=1 is ignore on Linux ...
+
+# # $ OPENBLAS_NUM_THREADS=1 ./build/bench_gemm
+# Warmup: 0.9034 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A matrix shape: (M: 3840, N: 3840)
+# B matrix shape: (M: 3840, N: 3840)
+# Output shape: (M: 3840, N: 3840)
+# Required number of operations: 113246.208 millions
+# Required bytes:                  117.965 MB
+# Arithmetic intensity:            960.000 FLOP/byte
+# Theoretical peak single-core:    230.400 GFLOP/s
+# Theoretical peak multi:         4147.200 GFLOP/s
+# Make sure to not bench Apple Accelerate or the default Linux BLAS.
+
+# OpenBLAS benchmark
+# Collected 10 samples in 0.499 seconds
+# Average time: 49.279 ms
+# Stddev  time: 3.924 ms
+# Min     time: 47.855 ms
+# Max     time: 60.436 ms
+# Perf:         2298.061 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 950.1965942382812
+
+# Laser production implementation
+# Collected 10 samples in 6.828 seconds
+# Average time: 682.218 ms
+# Stddev  time: 9.549 ms
+# Min     time: 667.896 ms
+# Max     time: 693.479 ms
+# Perf:         165.997 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 950.1968383789062
+
+# PyTorch Glow: libjit matmul implementation
+# Collected 10 samples in 17.060 seconds
+# Average time: 1705.967 ms
+# Stddev  time: 0.332 ms
+# Min     time: 1705.659 ms
+# Max     time: 1706.847 ms
+# Perf:         66.382 GFLOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 950.1965942382812
+
+###############################
+# i5-5227U 2.7 GHz Broadwell dual core AVX2
 
 # $ OPENBLAS_NUM_THREADS=1 ./build/bench_gemm
 # Warmup: 1.1973 s, result 224 (displayed to avoid compiler optimizing warmup away)
