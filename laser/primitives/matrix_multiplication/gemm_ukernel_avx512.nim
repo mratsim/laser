@@ -20,4 +20,19 @@ ukernel_generator(
     simd_mul = mm512_mul_ps,
     simd_add = mm512_add_ps,
     simd_fma = mm512_fmadd_ps
-    )
+  )
+
+ukernel_generator(
+    x86_AVX512,
+    typ = float64,
+    vectype = m512d,
+    nb_scalars = 8,
+    simd_setZero = mm512_setzero_pd,
+    simd_broadcast_value = mm512_set1_pd,
+    simd_load_aligned = mm512_load_pd,
+    simd_load_unaligned = mm512_loadu_pd,
+    simd_store_unaligned = mm512_storeu_pd,
+    simd_mul = mm512_mul_pd,
+    simd_add = mm512_add_pd,
+    simd_fma = mm512_fmadd_pd
+  )

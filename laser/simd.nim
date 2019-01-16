@@ -32,6 +32,8 @@ when defined(i386) or defined(amd64):
       raw: array[32, byte]
     m512* {.importc: "__m512", x86_type.} = object
       raw: array[16, float32]
+    m512d* {.importc: "__m512d", x86_type.} = object
+      raw: array[8, float64]
 
   # ############################################################
   #
@@ -315,3 +317,19 @@ when defined(i386) or defined(amd64):
   func mm512_add_ps*(a, b: m512): m512 {.importc: "_mm512_add_ps", x86.}
   func mm512_mul_ps*(a, b: m512): m512 {.importc: "_mm512_mul_ps", x86.}
   func mm512_fmadd_ps*(a, b, c: m512): m512 {.importc: "_mm512_fmadd_ps", x86.}
+
+  # ############################################################
+  #
+  #                    AVX512 - float64 - packed
+  #
+  # ############################################################
+
+  func mm512_setzero_pd*(): m512d {.importc: "_mm512_setzero_pd", x86.}
+  func mm512_set1_pd*(a: float64): m512d {.importc: "_mm512_set1_pd", x86.}
+  func mm512_load_pd*(aligned_mem_addr: ptr float64): m512d {.importc: "_mm512_load_pd", x86.}
+  func mm512_loadu_pd*(mem_addr: ptr float64): m512d {.importc: "_mm512_loadu_pd", x86.}
+  func mm512_store_pd*(mem_addr: ptr float64, a: m512d) {.importc: "_mm512_store_pd", x86.}
+  func mm512_storeu_pd*(mem_addr: ptr float64, a: m512d) {.importc: "_mm512_storeu_pd", x86.}
+  func mm512_add_pd*(a, b: m512d): m512d {.importc: "_mm512_add_pd", x86.}
+  func mm512_mul_pd*(a, b: m512d): m512d {.importc: "_mm512_mul_pd", x86.}
+  func mm512_fmadd_pd*(a, b, c: m512d): m512d {.importc: "_mm512_fmadd_pd", x86.}
