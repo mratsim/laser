@@ -34,6 +34,8 @@ when defined(i386) or defined(amd64):
       raw: array[16, float32]
     m512d* {.importc: "__m512d", x86_type.} = object
       raw: array[8, float64]
+    m512i* {.importc: "__m512i", x86_type.} = object
+      raw: array[64, byte]
 
   # ############################################################
   #
@@ -233,9 +235,6 @@ when defined(i386) or defined(amd64):
   func mm256_loadu_si256*(mem_addr: ptr SomeInteger): m256i {.importc: "_mm256_loadu_si256", x86.}
   func mm256_storeu_si256*(mem_addr: ptr SomeInteger, a: m256i) {.importc: "_mm256_storeu_si256", x86.}
 
-  func mm256_set1_epi64x*(a: int64): m256i {.importc: "_mm256_set1_epi64x", x86.}
-    ## Broadcast an int64
-
   func mm256_castps_si256*(a: m256): m256i {.importc: "_mm256_castps_si256", x86.}
     ## Cast a float32x8 vectors into a 256-bit int vector with the same bit pattern
 
@@ -333,3 +332,33 @@ when defined(i386) or defined(amd64):
   func mm512_add_pd*(a, b: m512d): m512d {.importc: "_mm512_add_pd", x86.}
   func mm512_mul_pd*(a, b: m512d): m512d {.importc: "_mm512_mul_pd", x86.}
   func mm512_fmadd_pd*(a, b, c: m512d): m512d {.importc: "_mm512_fmadd_pd", x86.}
+
+  # # ############################################################
+  # #
+  # #                   AVX - integers - packed
+  # #
+  # # ############################################################
+
+  # func mm512_setzero_si512*(): m512i {.importc: "_mm512_setzero_si512", x86.}
+  # func mm512_set1_epi8*(a: int8 or uint8): m512i {.importc: "_mm512_set1_epi8", x86.}
+  # func mm512_set1_epi16*(a: int16 or uint16): m512i {.importc: "_mm512_set1_epi16", x86.}
+  # func mm512_set1_epi32*(a: int32 or uint32): m512i {.importc: "_mm512_set1_epi32", x86.}
+  # func mm512_set1_epi64*(a: int64 or uint64): m512i {.importc: "_mm512_set1_epi64", x86.}
+  # func mm512_load_si512*(mem_addr: ptr SomeInteger): m512i {.importc: "_mm512_load_si512", x86.}
+  # func mm512_loadu_si512*(mem_addr: ptr SomeInteger): m512i {.importc: "_mm512_loadu_si512", x86.}
+  # func mm512_storeu_si512*(mem_addr: ptr SomeInteger, a: m512i) {.importc: "_mm512_storeu_si512", x86.}
+
+  # func mm512_add_epi8*(a, b: m512i): m512i {.importc: "_mm512_add_epi8", x86.}
+  # func mm512_add_epi16*(a, b: m512i): m512i {.importc: "_mm512_add_epi16", x86.}
+  # func mm512_add_epi32*(a, b: m512i): m512i {.importc: "_mm512_add_epi32", x86.}
+  # func mm512_add_epi64*(a, b: m512i): m512i {.importc: "_mm512_add_epi64", x86.}
+
+  # func mm512_mullo_epi32*(a, b: m512i): m512i {.importc: "_mm512_mullo_epi32", x86.}
+  #   ## Multiply element-wise 2 vectors of 16 32-bit ints
+  #   ## into intermediate 16 32-bit ints, and keep the low 32-bit parts
+
+  # func mm512_mullo_epi64*(a, b: m512i): m512i {.importc: "_mm512_mullo_epi64", x86.}
+  #   ## Multiply element-wise 2 vectors of 8x 64-bit ints
+  #   ## into intermediate 8x 64-bit ints, and keep the low 64-bit parts
+
+  

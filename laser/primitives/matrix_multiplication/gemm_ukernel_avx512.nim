@@ -36,3 +36,21 @@ ukernel_generator(
     simd_add = mm512_add_pd,
     simd_fma = mm512_fmadd_pd
   )
+
+# template int32x16_muladd_unfused_avx512(a, b, c: m512i): m512i =
+#   mm512_add_epi32(mm512_mullo_epi32(a, b), c)
+
+# ukernel_generator(
+#     x86_AVX512,
+#     typ = int32,
+#     vectype = m512i,
+#     nb_scalars = 16,
+#     simd_setZero = mm512_setzero_si512,
+#     simd_broadcast_value = mm512_set1_epi32,
+#     simd_load_aligned = mm512_load_si512,
+#     simd_load_unaligned = mm512_loadu_si512,
+#     simd_store_unaligned = mm512_storeu_si512,
+#     simd_mul = mm512_mullo_epi32,
+#     simd_add = mm512_add_epi32,
+#     simd_fma = int32x16_muladd_unfused_avx512
+#     )
