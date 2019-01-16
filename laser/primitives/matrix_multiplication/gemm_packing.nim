@@ -21,7 +21,8 @@ withCompilerOptimHints()
 #
 # ############################################################
 
-proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
+proc pack_A_mc_kc*[T](
+      ukernel: static MicroKernel,
       packedA: ptr UncheckedArray[T],
       mc, kc: int,
       A: MatrixView[T]) =
@@ -60,7 +61,8 @@ proc pack_A_mc_kc*[T; ukernel: static MicroKernel](
 #
 # ############################################################
 
-proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
+proc pack_B_kc_nc*[T](
+      ukernel: static MicroKernel,
       packedB: ptr UncheckedArray[T],
       kc, nc: int,
       B: MatrixView[T]) =

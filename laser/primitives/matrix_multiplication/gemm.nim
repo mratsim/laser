@@ -45,7 +45,8 @@ withCompilerOptimHints()
 #
 # ############################################################
 
-proc gebp_mkernel[T; ukernel: static MicroKernel](
+proc gebp_mkernel[T](
+      ukernel: static MicroKernel,
       mc, nc, kc: int,
       alpha, beta: T,
       mcncC: MatrixView[T],
@@ -104,7 +105,8 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 #
 # ###########################################################################################
 
-proc gemm_impl[T; ukernel: static MicroKernel](
+proc gemm_impl[T](
+      ukernel: static MicroKernel,
       M, N, K: int,
       alpha: T, vA: MatrixView[T], vB: MatrixView[T],
       beta: T, vC: MatrixView[T],
@@ -123,7 +125,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     let kc = min(K - pc, tiles.kc) # Deal with edges  # A[0:M, pc:pc+kc]
 
     let kcncB = vB.stride(pc, 0)                      # B[pc:pc+kc, jc:jc+nc]
-    pack_B_kc_nc[T, ukernel](tiles.b, kc, nc, kcncB)  # PackB panel [kc, nc] (nc is large or unknown)
+    ukernel.pack_B_kc_nc(tiles.b, kc, nc, kcncB)      # PackB panel [kc, nc] (nc is large or unknown)
 
     # First time writing to C, we scale it, otherwise accumulate
     let beta = if pc == 0: beta else: 1.T
@@ -138,7 +140,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
       let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
       let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
-      pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
+      ukernel.pack_A_mc_kc(packA, mc, kc, mckcA)      # PackA block [mc, kc]
 
       gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
           mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
@@ -182,7 +184,7 @@ proc gemm_strided*[T: SomeNumber](
     template dispatch(cpu_features: static CPUFeatureX86): untyped{.dirty.} =
       template apply(ukernel: MicroKernel): untyped {.dirty.} =
         let tiles = ukernel.newTiles(T, M, N, K)
-        gemm_impl[T, ukernel](
+        ukernel.gemm_impl(
           M, N, K,
           alpha, vA, vB,
           beta, vC,
