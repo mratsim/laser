@@ -45,7 +45,6 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 # Params
 import
   ./gemm_common,
-  ../blas,
   ./arraymancer/blas_l3_gemm,
   ../../laser/primitives/matrix_multiplication/gemm
 
@@ -160,7 +159,7 @@ when isMainModule:
 
     when not defined(openmp):
       benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
-    benchArraymancerFallback(a, b, NbSamples)
+    # benchArraymancerFallback(a, b, NbSamples)
     benchLaserGEMM(a, b, NbSamples)
 
 # ####################################################
