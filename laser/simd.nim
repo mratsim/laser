@@ -50,9 +50,11 @@ when defined(i386) or defined(amd64):
   func mm_store_ps*(mem_addr: ptr float32, a: m128) {.importc: "_mm_store_ps", x86.}
   func mm_storeu_ps*(mem_addr: ptr float32, a: m128) {.importc: "_mm_storeu_ps", x86.}
   func mm_add_ps*(a, b: m128): m128 {.importc: "_mm_add_ps", x86.}
+  func mm_sub_ps*(a, b: m128): m128 {.importc: "_mm_sub_ps", x86.}
   func mm_mul_ps*(a, b: m128): m128 {.importc: "_mm_mul_ps", x86.}
   func mm_max_ps*(a, b: m128): m128 {.importc: "_mm_max_ps", x86.}
   func mm_min_ps*(a, b: m128): m128 {.importc: "_mm_min_ps", x86.}
+  func mm_or_ps*(a, b: m128): m128 {.importc: "_mm_or_ps", x86.}
 
   # ############################################################
   #
@@ -90,6 +92,7 @@ when defined(i386) or defined(amd64):
   func mm_loadu_pd*(mem_addr: ptr float64): m128d {.importc: "_mm_loadu_pd", x86.}
   func mm_storeu_pd*(mem_addr: ptr float64, a: m128d) {.importc: "_mm_storeu_pd", x86.}
   func mm_add_pd*(a, b: m128d): m128d {.importc: "_mm_add_pd", x86.}
+  func mm_sub_pd*(a, b: m128d): m128d {.importc: "_mm_sub_pd", x86.}
   func mm_mul_pd*(a, b: m128d): m128d {.importc: "_mm_mul_pd", x86.}
 
   # ############################################################
@@ -115,6 +118,10 @@ when defined(i386) or defined(amd64):
   func mm_and_si128*(a, b: m128i): m128i {.importc: "_mm_and_si128", x86.}
   func mm_slli_epi64*(a: m128i, imm8: cint): m128i {.importc: "_mm_slli_epi64", x86.}
     ## Shift 2xint64 left
+  func mm_srli_epi64*(a: m128i, imm8: cint): m128i {.importc: "_mm_srli_epi64", x86.}
+    ## Shift 2xint64 right
+  func mm_srli_epi32*(a: m128i, count: int32): m128i {.importc: "_mm_srli_epi32", x86.}
+  func mm_slli_epi32*(a: m128i, count: int32): m128i {.importc: "_mm_slli_epi32", x86.}
 
   func mm_mullo_epi16*(a, b: m128i): m128i {.importc: "_mm_mullo_epi16", x86.}
     ## Multiply element-wise 2 vectors of 8 16-bit ints
@@ -139,6 +146,28 @@ when defined(i386) or defined(amd64):
   func mm_set_epi32*(e3, e2, e1, e0: cint): m128i {.importc: "_mm_set_epi32", x86.}
     ## Initialize m128i with {e3, e2, e1, e0} (big endian order)
     ## Storing it will yield [e0, e1, e2, e3]
+
+  func mm_castps_si128*(a: m128): m128i {.importc: "_mm_castps_si128", x86.}
+    ## Cast a float32x4 vectors into a 128-bit int vector with the same bit pattern
+  func mm_castsi128_ps*(a: m128i): m128 {.importc: "_mm_castsi128_ps", x86.}
+    ## Cast a 128-bit int vector into a float32x8 vector with the same bit pattern
+  func mm_cvtps_epi32*(a: m128): m128i {.importc: "_mm_cvtps_epi32", x86.}
+    ## Convert a float32x4 to int32x4
+  func mm_cvtepi32_ps*(a: m128i): m128 {.importc: "_mm_cvtepi32_ps", x86.}
+    ## Convert a int32x4 to float32x4
+
+  func mm_cmpgt_epi32*(a, b: m128i): m128i {.importc: "_mm_cmpgt_epi32", x86.}
+    ## Compare a greater than b
+
+  func mm_cvtsi128_si32*(a: m128i): cint {.importc: "_mm_cvtsi128_si32", x86.}
+    ## Copy the low part of a to int32
+
+  func mm_extract_epi16*(a: m128i, imm8: cint): cint {.importc: "_mm_extract_epi16", x86.}
+    ## Extract an int16 from a, selected with imm8
+    ## and store it in the lower part of destination (padded with zeroes)
+
+  func mm_movemask_epi8*(a: m128i): int32 {.importc: "_mm_movemask_epi8", x86.}
+    ## Returns the sign bits from the operand
 
   # ############################################################
   #

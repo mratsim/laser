@@ -15,9 +15,7 @@
 #  - https://nic.schraudolph.org/pubs/Schraudolph99.pdf
 #    - Fast exp approximation using IEEE754 logarithmic nature
 
-import
-  math,
-  ./exp_log_common
+import ./exp_log_common
 
 # ############################################################
 #
@@ -25,9 +23,11 @@ import
 #
 # ############################################################
 
-proc fast_exp(x: float32): float32 =
+proc exp(x: float32): float32 =
 
-  static: assert cpuEndian == littleEndian, "Fast exp has not been tested on big-endian architectures"
+  static: assert cpuEndian == littleEndian, "Exp has not been tested on big-endian architectures"
+
+  # TODO: clamp?
 
   let r = int32(x * ExpA) # ->f32->i32->f32 Rounding is important
   let t = x - r.float32 * ExpB + 1
@@ -41,9 +41,10 @@ proc fast_exp(x: float32): float32 =
   result = t * cast[float32](ti)
 
 when isMainModule:
-
+  import math
+  
+  echo math.exp(0.5'f32)
   echo exp(0.5'f32)
-  echo fast_exp(0.5'f32)
 
+  echo math.exp(-0.5'f32)
   echo exp(-0.5'f32)
-  echo fast_exp(-0.5'f32)

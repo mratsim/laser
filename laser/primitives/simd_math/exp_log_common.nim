@@ -15,7 +15,7 @@
 #  - https://nic.schraudolph.org/pubs/Schraudolph99.pdf
 #    - Fast exp approximation using IEEE754 logarithmic nature
 
-import math
+from math import ln, pow
 
 # ############################################################
 #
@@ -42,4 +42,5 @@ func initExpLUT(): array[ExpBitsMask, int32] =
     let y = pow(2'f32, i.float32 / ExpBitsMask.float32)
     val = cast[int32](y) and (MantissaBitsMask - 1)
 
+# We need ExpLUT in the BSS so that we can take it's address so it can't be const
 let ExpLUT* = initExpLUT()

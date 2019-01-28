@@ -27,7 +27,7 @@ import
 # ############################################################
 
 func fast_clamp(x: m256, lo, hi: static float32): m256 {.inline.} =
-  const Lo32Mask = (not 0) shr 1 # 2^31 - 1 - 0b0111...1111
+  const Lo32Mask = (not 0'i32) shr 1 # 2^31 - 1 - 0b0111...1111
 
   let # We could skip those but min/max are slow and there is a carried dependency that limits throughput
     limit = mm256_and_si256(x.mm256_castps_si256, Lo32Mask.mm256_set1_epi32)
@@ -39,28 +39,28 @@ func fast_clamp(x: m256, lo, hi: static float32): m256 {.inline.} =
   else:
     result = x
 
-proc exp_float32x8_avx2*(x: m256): m256 {.inline.} =
+proc exp*(x: m256): m256 =
   let clamped = x.fast_clamp(ExpMin.float32, ExpMax.float32)
 
   let r = mm256_cvtps_epi32(mm256_mul_ps(clamped, mm256_set1_ps(ExpA)))
   var t = mm256_sub_ps(clamped, mm256_mul_ps(mm256_cvtepi32_ps(r), mm256_set1_ps(ExpB)))
   t = mm256_add_ps(t, mm256_set1_ps(1'f32))
 
-  var v8 = mm256_and_si256(r, mm256_set1_epi32(ExpBitsMask - 1))
-  var u8 = mm256_add_epi32(r, mm256_set1_epi32(127 shl ExpBits))
+  var v = mm256_and_si256(r, mm256_set1_epi32(ExpBitsMask - 1))
+  var u = mm256_add_epi32(r, mm256_set1_epi32(127 shl ExpBits))
 
-  u8 = mm256_srli_epi32(u8, ExpBits)
-  u8 = mm256_slli_epi32(u8, MantissaBits)
+  u = mm256_srli_epi32(u, ExpBits)
+  u = mm256_slli_epi32(u, MantissaBits)
 
-  let ti = mm256_i32gather_epi32(ExpLUT[0].unsafeAddr, v8, 4)
+  let ti = mm256_i32gather_epi32(ExpLUT[0].unsafeAddr, v, 4)
   var t0 = mm256_castsi256_ps(ti)
-  t0 = mm256_or_ps(t0, mm256_castsi256_ps(u8))
+  t0 = mm256_or_ps(t0, mm256_castsi256_ps(u))
   result = mm256_mul_ps(t, t0)
 
 when isMainModule:
 
   let a = mm256_set1_ps(0.5'f32)
-  let exp_a = exp_float32x8_avx2(a)
+  let exp_a = exp(a)
 
   var scalar: array[8, float32]
   mm256_store_ps(scalar[0].addr,exp_a)
