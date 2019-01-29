@@ -95,9 +95,6 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 const
   N     = 100*50000 # For example for use in softmax for a batch of 100 with dictionary size of 50000 words
   NbSamples = 300
-  CpuGhz = 2.7
-  NumCpuCores = 2
-  CpuFlopCycle = 32 # AVX2: 2xFMA/cycle = 2x8x2 - 2 x 8 floats x (1 add + 1 mul)
 
 let req_ops = N
 let req_bytes = sizeof(float32) * N
@@ -281,8 +278,6 @@ when isMainModule:
   echo &"Required number of operations: {req_ops.float / float(10^6):>9.3f} millions"
   echo &"Required bytes:                {req_bytes.float / float(10^6):>9.3f} MB"
   echo &"Arithmetic intensity:          {req_ops.float / req_bytes.float:>9.3f} FLOP/byte"
-  echo &"Theoretical peak single-core:  {CpuGhz * CpuFlopCycle:>9.3f} GFLOP/s"
-  echo &"Theoretical peak multi:        {CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GFLOP/s"
   block:
     let a = randomTensor([N], -10'f32 .. 10.0'f32)
     echo "a[0]: " & $a[0]
@@ -296,8 +291,9 @@ when isMainModule:
     benchSimdMathPrims(a, NbSamples)
     benchProdImplAVX2(a, NbSamples)
 
+######################################################
 ## Bench on i5-5257U Broadwell - serial implementation
-## Without FMA
+## FMA deactivated
 
 # Warmup: 1.2910 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
@@ -305,8 +301,6 @@ when isMainModule:
 # Required number of operations:     5.000 millions
 # Required bytes:                   20.000 MB
 # Arithmetic intensity:              0.250 FLOP/byte
-# Theoretical peak single-core:     86.400 GFLOP/s
-# Theoretical peak multi:          172.800 GFLOP/s
 # a[0]: -0.9999997019767761
 
 # Baseline <math.h>
@@ -374,3 +368,115 @@ when isMainModule:
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
+
+######################################################
+## Bench on i9-9980XE Skylake-X - serial implementation
+## OC @ 4.1 GHz, AVX 3.8 GHz
+## FMA activated
+
+# Warmup: 0.9066 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A - tensor shape: [5000000]
+# Required number of operations:     5.000 millions
+# Required bytes:                   20.000 MB
+# Arithmetic intensity:              0.250 FLOP/byte
+# a[0]: -9.999997138977051
+
+# Baseline <math.h>
+# Collected 300 samples in 5.024 seconds
+# Average time: 16.078 ms
+# Stddev  time: 0.020 ms
+# Min     time: 15.818 ms
+# Max     time: 16.225 ms
+# Perf:         0.311 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.540005829767324e-05
+
+# SSE mathfun
+# Collected 300 samples in 1.895 seconds
+# Average time: 5.648 ms
+# Stddev  time: 0.036 ms
+# Min     time: 5.469 ms
+# Max     time: 5.713 ms
+# Perf:         0.885 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.540006193565205e-05
+
+# SSE fast_exp_sse (low order polynomial)
+# Collected 300 samples in 1.072 seconds
+# Average time: 2.907 ms
+# Stddev  time: 0.009 ms
+# Min     time: 2.884 ms
+# Max     time: 2.951 ms
+# Perf:         1.720 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.545032061287202e-05
+
+# AVX2 fmath
+# Collected 300 samples in 0.966 seconds
+# Average time: 2.540 ms
+# Stddev  time: 0.022 ms
+# Min     time: 2.477 ms
+# Max     time: 2.664 ms
+# Perf:         1.969 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.540006193565205e-05
+
+# AVX2 FMA Minimax
+# Collected 300 samples in 0.909 seconds
+# Average time: 2.360 ms
+# Stddev  time: 0.028 ms
+# Min     time: 2.305 ms
+# Max     time: 2.434 ms
+# Perf:         2.118 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.539992369245738e-05
+
+# AVX2 mathfun
+# Collected 300 samples in 1.174 seconds
+# Average time: 3.242 ms
+# Stddev  time: 0.043 ms
+# Min     time: 3.175 ms
+# Max     time: 3.377 ms
+# Perf:         1.542 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.540006193565205e-05
+
+# AVX+FMA Schraudolph-approx
+# Collected 300 samples in 0.763 seconds
+# Average time: 1.872 ms
+# Stddev  time: 0.019 ms
+# Min     time: 1.844 ms
+# Max     time: 1.990 ms
+# Perf:         2.671 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.625692963600159e-05
+
+# Bench SIMD Math Prims
+# Collected 300 samples in 4.352 seconds
+# Average time: 13.839 ms
+# Stddev  time: 0.011 ms
+# Min     time: 13.831 ms
+# Max     time: 13.971 ms
+# Perf:         0.361 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.539986548479646e-05
+
+# AVX2 Prod implementation
+# Collected 300 samples in 0.931 seconds
+# Average time: 2.433 ms
+# Stddev  time: 0.032 ms
+# Min     time: 2.371 ms
+# Max     time: 2.563 ms
+# Perf:         2.055 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 4.540006193565205e-05

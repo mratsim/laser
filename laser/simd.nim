@@ -81,6 +81,11 @@ when defined(i386) or defined(amd64):
     ##   { A0, A1, A2, A3 }, { B0, B1, B2, B3 }
     ## Result:
     ##   { B2, B3, A2, A3 }
+  func mm_movelh_ps*(a, b: m128): m128 {.importc: "_mm_movelh_ps", x86.}
+    ## Input:
+    ##   { A0, A1, A2, A3 }, { B0, B1, B2, B3 }
+    ## Result:
+    ##   { A0, A1, B0, B1 }
 
   # ############################################################
   #
@@ -330,6 +335,7 @@ when defined(i386) or defined(amd64):
   func mm256_srli_epi32*(a: m256i, count: int32): m256i {.importc: "_mm256_srli_epi32", x86.}
   func mm256_slli_epi32*(a: m256i, count: int32): m256i {.importc: "_mm256_slli_epi32", x86.}
 
+  func mm_i32gather_epi32*(m: ptr (uint32 or int32), i: m128i, s: int32): m128i {.importc: "_mm_i32gather_epi32", x86.}
   func mm256_i32gather_epi32*(m: ptr (uint32 or int32), i: m256i, s: int32): m256i {.importc: "_mm256_i32gather_epi32", x86.}
 
   # ############################################################

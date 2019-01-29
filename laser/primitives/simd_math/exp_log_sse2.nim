@@ -26,26 +26,31 @@ import
 #
 # ############################################################
 
-func fast_clamp(x: m128, lo, hi: static float32): m128 {.inline.} =
-  const Lo32Mask = (not 0'i32) shr 1 # 2^31 - 1 - 0b0111...1111
+func fast_clamp(x: m128, lo, hi: static float32): m128 {.inline, noInit.} =
 
+  # This is slower
+  # result = mm_min_ps(x, hi.mm_set1_ps)
+  # result = mm_max_ps(result, lo.mm_set1_ps)
+
+  # This is faster
+  # --------------------------
+  const Lo32Mask = (not 0'i32) shr 1 # 2^31 - 1 - 0b0111...1111
+  
   let # We could skip those but min/max are slow and there is a carried dependency that limits throughput
     limit = mm_and_si128(x.mm_castps_si128, Lo32Mask.mm_set1_epi32)
     over = mm_cmpgt_epi32(limit, mm_set1_epi32(static(hi.uint32))).mm_movemask_epi8
-
+  
   if over != 0:
     result = mm_min_ps(x, hi.mm_set1_ps)
     result = mm_max_ps(result, lo.mm_set1_ps)
   else:
     result = x
 
-proc sse2_gather_explut_cvtps(v: m128i): m128 {.inline.} = 
+template sse2_gather_explut_cvtps(t0: untyped, v: m128i) = 
   ## Gather from ExpLUT according to v
   ## Gather result (int32) is casted to packed float32
-
-  # Gather only exists in AVX2,
-  # let ti = mm_i32gather_epi32(ExpLUT[0].unsafeAddr, v, 4)
-  # result = mm_castsi128_ps(ti)
+  # A template or inline proc that returns
+  # `t0` will slow down compute by 25%
 
   let
     v0 = mm_cvtsi128_si32(v)
@@ -55,19 +60,19 @@ proc sse2_gather_explut_cvtps(v: m128i): m128 {.inline.} =
     v3 = mm_extract_epi16(v, 6)
   
   # mm_insert_epi32 only in SSE4.1, we cannot work around with epi16
-  result = mm_castsi128_ps(mm_set1_epi32(ExpLUT[v0]))
+  var t0{.inject.} = mm_castsi128_ps(mm_set1_epi32(ExpLUT[v0]))
   var t1 = mm_castsi128_ps(mm_set1_epi32(ExpLUT[v1]))
   let t2 = mm_castsi128_ps(mm_set1_epi32(ExpLUT[v2]))
   let t3 = mm_castsi128_ps(mm_set1_epi32(ExpLUT[v3]))
 
-  t1 = mm_movehl_ps(t1, t3)
+  t1 = mm_movelh_ps(t1, t3)
   t1 = mm_castsi128_ps(mm_slli_epi64(mm_castps_si128(t1), 32))
 
-  result = mm_movehl_ps(result, t2)
-  result = mm_castsi128_ps(mm_srli_epi64(mm_castps_si128(result), 32))
-  result = mm_or_ps(result, t1)
+  t0 = mm_movelh_ps(t0, t2)
+  t0 = mm_castsi128_ps(mm_srli_epi64(mm_castps_si128(t0), 32))
+  t0 = mm_or_ps(t0, t1)
 
-proc exp*(x: m128): m128 {.inline.} =
+proc exp*(x: m128): m128 {.inline, noInit.} =
   let clamped = x.fast_clamp(ExpMin.float32, ExpMax.float32)
 
   let r = mm_cvtps_epi32(mm_mul_ps(clamped, mm_set1_ps(ExpA)))
@@ -77,10 +82,15 @@ proc exp*(x: m128): m128 {.inline.} =
   var v = mm_and_si128(r, mm_set1_epi32(ExpBitsMask - 1))
   var u = mm_add_epi32(r, mm_set1_epi32(127 shl ExpBits))
 
+  when false: # AVX2 only
+    let ti = mm_i32gather_epi32(ExpLUT[0].unsafeAddr, v, 4)
+    var t0 = mm_castsi128_ps(ti)
+  else:
+    sse2_gather_explut_cvtps(t0, v)
+
   u = mm_srli_epi32(u, ExpBits)
   u = mm_slli_epi32(u, MantissaBits)
 
-  var t0 = sse2_gather_explut_cvtps(v)
   t0 = mm_or_ps(t0, mm_castsi128_ps(u))
   result = mm_mul_ps(t, t0)
 

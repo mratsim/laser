@@ -24,11 +24,11 @@ from math import ln, pow
 # ############################################################
 
 const
-  ExpBits* = 10
-  ExpBitsMask* = 1 shl ExpBits
+  ExpBits* = 10'i32
+  ExpBitsMask* = 1'i32 shl ExpBits
 
-  MantissaBits* = 23
-  MantissaBitsMask* = 1 shl 23
+  MantissaBits* = 23'i32
+  MantissaBitsMask* = 1'i32 shl 23
 
   ln2 = ln(2'f32)
 
