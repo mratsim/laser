@@ -95,9 +95,6 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 const
   N     = 100*50000 # For example for use in softmax for a batch of 100 with dictionary size of 50000 words
   NbSamples = 100
-  CpuGhz = 2.7
-  NumCpuCores = 2
-  CpuFlopCycle = 32 # AVX2: 2xFMA/cycle = 2x8x2 - 2 x 8 floats x (1 add + 1 mul)
 
 let req_ops = N
 let req_bytes = sizeof(float32) * N
@@ -177,6 +174,18 @@ proc benchSSE_fast_exp_sse(a: Tensor[float32], nb_samples: int) =
     # Main work
     fast_exp_sse(output.storage.raw_data, a.storage.raw_data, a.size)
 
+import ../../laser/primitives/simd_math/exp_log_sse2
+vectorize(exp, exp_float32x4_sse2, mm_load_ps, mm_store_ps, 4)
+
+proc benchProdImplSSE2(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("SSE2 Prod implementation"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    exp_float32x4_sse2(output.storage.raw_data, a.storage.raw_data, a.size)
+
 # ###########################################
 
 when defined(fast_math):
@@ -194,8 +203,6 @@ when isMainModule:
   echo &"Required number of operations: {req_ops.float / float(10^6):>9.3f} millions"
   echo &"Required bytes:                {req_bytes.float / float(10^6):>9.3f} MB"
   echo &"Arithmetic intensity:          {req_ops.float / req_bytes.float:>9.3f} FLOP/byte"
-  echo &"Theoretical peak single-core:  {CpuGhz * CpuFlopCycle:>9.3f} GFLOP/s"
-  echo &"Theoretical peak multi:        {CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GFLOP/s"
   block:
     let a = randomTensor([N], -1.0'f32 .. 1.0'f32)
     echo "a[0]: " & $a[0]
@@ -203,11 +210,9 @@ when isMainModule:
     benchSSEMathfun(a, NbSamples)
     benchSSE_fmath(a, NbSamples)
     benchSSE_fast_exp_sse(a, NbSamples)
+    benchProdImplSSE2(a, NbSamples)
 
-# Unfortunately I can only pass -mavx2 globally with the cpp backend
-# configuring it in nim.cfg doesn't work so we need a separate AVX bench
-# as fmath has static if __AVX2__ even in the SSE code.
-
+######################################################
 ## Bench on i5-5257U Broadwell - serial implementation
 
 # Warmup: 1.2104 s, result 224 (displayed to avoid compiler optimizing warmup away)
@@ -216,8 +221,6 @@ when isMainModule:
 # Required number of operations:     5.000 millions
 # Required bytes:                   20.000 MB
 # Arithmetic intensity:              0.250 FLOP/byte
-# Theoretical peak single-core:     86.400 GFLOP/s
-# Theoretical peak multi:          172.800 GFLOP/s
 # a[0]: -0.9999997019767761
 
 # Baseline <math.h>
@@ -263,3 +266,71 @@ when isMainModule:
 
 # Display output[0] to make sure it's not optimized away
 # 0.3682391047477722
+
+
+######################################################
+## Bench on i9-9980XE Skylake-X - serial implementation
+## OC @ 4.1 GHz
+
+# Warmup: 0.9044 s, result 224 (displayed to avoid compiler optimizing warmup away)
+
+# A - tensor shape: [5000000]
+# Required number of operations:     5.000 millions
+# Required bytes:                   20.000 MB
+# Arithmetic intensity:              0.250 FLOP/byte
+# a[0]: -0.9999997019767761
+
+# Baseline <math.h>
+# Collected 100 samples in 1.718 seconds
+# Average time: 16.515 ms
+# Stddev  time: 0.094 ms
+# Min     time: 15.974 ms
+# Max     time: 16.608 ms
+# Perf:         0.303 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647
+
+# SSE mathfun
+# Collected 100 samples in 0.937 seconds
+# Average time: 8.699 ms
+# Stddev  time: 0.073 ms
+# Min     time: 8.403 ms
+# Max     time: 8.813 ms
+# Perf:         0.575 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795695304871
+
+# SSE fmath
+# Collected 100 samples in 0.589 seconds
+# Average time: 5.218 ms
+# Stddev  time: 0.022 ms
+# Min     time: 5.179 ms
+# Max     time: 5.279 ms
+# Perf:         0.958 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647
+
+# SSE fast_exp_sse (low order polynomial)
+# Collected 100 samples in 0.396 seconds
+# Average time: 3.287 ms
+# Stddev  time: 0.026 ms
+# Min     time: 3.192 ms
+# Max     time: 3.376 ms
+# Perf:         1.521 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3682391047477722
+
+# SSE2 Prod implementation
+# Collected 100 samples in 0.673 seconds
+# Average time: 6.064 ms
+# Stddev  time: 0.024 ms
+# Min     time: 6.017 ms
+# Max     time: 6.158 ms
+# Perf:         0.825 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647
