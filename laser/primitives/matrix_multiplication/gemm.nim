@@ -69,7 +69,9 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  omp_for(jrb, tiles.jr_num_nr_tiles, use_simd = false, nowait = true):
+  # debugecho "jr_num_nr_tiles: ", tiles.jr_num_nr_tiles
+  for jrb in 0||(tiles.jr_num_nr_tiles - 1):
+    # debugecho "jrb: ", jrb
     let jr = jrb * NR
     let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 

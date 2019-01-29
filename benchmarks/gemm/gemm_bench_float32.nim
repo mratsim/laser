@@ -238,7 +238,7 @@ when isMainModule:
 
     block:
       var error = mean_relative_error(challenger, reference)
-      doAssert error <= 1e-3'f32, $error
+      doAssert error <= 1.5e-2'f32, $error
 
 # Seems like my original Arraymancer BLAS has false sharing issue
 # FYI Apple accelerate is about 117~122GFLOP/s on my machine.
