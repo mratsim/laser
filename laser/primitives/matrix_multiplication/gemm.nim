@@ -69,9 +69,8 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  # debugecho "jr_num_nr_tiles: ", tiles.jr_num_nr_tiles
-  for jrb in 0||(tiles.jr_num_nr_tiles - 1):
-    # debugecho "jrb: ", jrb
+  # for jr in countup(0, nc-1, NR):
+  omp_taskloop(jrb, tiles.jr_num_nr_tiles, ""):
     let jr = jrb * NR
     let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
@@ -113,10 +112,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T],
       tiles: Tiles[T]
     ) =
-  let was_nested: cint = omp_get_nested()
-  defer: omp_set_nested(was_nested)
-  omp_set_nested(1)
-                                                      # A[0:M, 0:K]
+    
   # ####################################################################
   # 1. for jc = 0,...,n−1 in steps of nc
   # not partitioned currently nc = N
@@ -148,21 +144,23 @@ proc gemm_impl[T; ukernel: static MicroKernel](
 
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
-    for icb in 0||(tiles.ic_num_mc_tiles - 1):
-      let thread_id = omp_get_thread_num()
-      let packA = tiles.a + thread_id * tiles.mc * kc
-      prefetch(packA, Write, LowTemporalLocality)
-      let ic = icb * tiles.mc
-      let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
+    # for ic in countup(0, M-1, tiles.mc):
+    omp_parallel_if(M*N*K > 128*128*128):
+      omp_for(icb, tiles.ic_num_mc_tiles, use_simd = false, nowait = true):
+        let thread_id = omp_get_thread_num()
+        let packA = tiles.a + thread_id * tiles.mc * kc
+        prefetch(packA, Write, LowTemporalLocality)
+        let ic = icb * tiles.mc
+        let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
-      let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
-      pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
+        let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
+        pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
 
-      gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
-          mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
-          alpha, beta, vC.stride(ic, 0),              #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
-          tiles                                       #    βC[ic:ic+mc, jc:jc+nc]
-        )
+        gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
+            mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
+            alpha, beta, vC.stride(ic, 0),              #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
+            tiles                                       #    βC[ic:ic+mc, jc:jc+nc]
+          )
 
 # ############################################################
 #

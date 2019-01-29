@@ -344,16 +344,28 @@ template omp_master*(body: untyped): untyped =
   {.emit: "#pragma omp master".}
   block: body
 
+template omp_single*(body: untyped): untyped =
+  {.emit: "#pragma omp single".}
+  block: body
+
 template omp_barrier*(): untyped =
   {.emit: "#pragma omp barrier".}
+
+template omp_task*(annotation: static string, body: untyped): untyped =
+  {.emit: "#pragma omp task " & annotation.}
+  block: body
+
+template omp_taskwait*(): untyped =
+  {.emit: "#pragma omp taskwait".}
 
 template omp_taskloop*(
     index: untyped,
     length: Natural,
+    annotation: static string,
     body: untyped
   ) =
   ## OpenMP taskloop
-  const omp_annotation = "taskloop"
+  const omp_annotation = "taskloop " & annotation
   for `index`{.inject.} in `||`(0, length-1, omp_annotation):
     block: body
 
