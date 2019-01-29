@@ -22,13 +22,13 @@ proc mean_relative_error*[T: SomeFloat](y, y_true: seq[T]): T {.inline.} =
 
   result = 0.T
   for i in 0 ..< y.len:
-    result += relative_error(y, y_true)
-  result / y.len
+    result += relative_error(y[i], y_true[i])
+  result = result / y.len.T
 
 proc mean_absolute_error*[T: SomeFloat](y, y_true: seq[T]): T {.inline.} =
   doAssert y.len == y_true.len
 
   result = 0.T
   for i in 0 ..< y.len:
-    result += absolute_error(y, y_true)
-  result / y.len
+    result += absolute_error(y[i], y_true[i])
+  result = result / y.len.T

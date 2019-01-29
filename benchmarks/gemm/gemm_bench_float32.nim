@@ -17,7 +17,7 @@ proc warmup() =
   let stop = epochTime()
   echo &"Warmup: {stop - start:>4.4f} s, result {foo} (displayed to avoid compiler optimizing warmup away)"
 
-template printStats(name: string, output: openarray) {.dirty.} =
+template printStats(name: string, result: openarray) {.dirty.} =
   echo "\n" & name
   echo &"Collected {stats.n} samples in {global_stop - global_start:>4.3f} seconds"
   echo &"Average time: {stats.mean * 1000 :>4.3f} ms"
@@ -25,8 +25,8 @@ template printStats(name: string, output: openarray) {.dirty.} =
   echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
   echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
   echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GFLOP/s"
-  echo "\nDisplay output[0] to make sure it's not optimized away"
-  echo output[0] # Prevents compiler from optimizing stuff away
+  echo "\nDisplay result[0] to make sure it's not optimized away"
+  echo result[0] # Prevents compiler from optimizing stuff away
 
 template bench(name: string, initialisation, body: untyped) {.dirty.}=
   block: # Actual bench
@@ -39,7 +39,7 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
       let stop = epochTime()
       stats.push stop - start
     let global_stop = epochTime()
-    printStats(name, output)
+    printStats(name, result)
 
 # #############################################
 # Params
@@ -78,11 +78,11 @@ const cSourcesPath = currentSourcePath.rsplit(DirSep, 1)[0] & '/'
 
 # #############################################
 
-proc benchOpenBLAS(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchOpenBLAS(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
   bench("OpenBLAS benchmark"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size) # We zero memory between computation
   do:
     # Main work
     gemm(
@@ -90,41 +90,41 @@ proc benchOpenBLAS(a, b: seq[float32], nb_samples: int) =
       M, N, K,
       1, a[0].unsafeaddr, K,
       b[0].unsafeAddr, N,
-      0, output[0].addr, N
+      0, result[0].addr, N
     )
 
-proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
   bench("Arraymancer fallback BLAS"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size) # We zero memory between computation
   do:
     # Main work
     gemm_nn_fallback(
       M, N, K,
       1'f32,      a, 0, K, 1,       # offset, stride row, stride col
                   b, 0, N, 1,
-      0'f32, output, 0, N, 1
+      0'f32, result, 0, N, 1
     )
 
-proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) {.noinline.}=
-  var output = newSeq[float32](out_size)
+proc benchSimpleTiling(a, b: seq[float32], nb_samples: int): seq[float32] {.noinline.}=
+  result = newSeq[float32](out_size)
 
   let pa = a[0].unsafeAddr
   let pb = b[0].unsafeAddr
-  let po = output[0].addr
+  let pr = result[0].addr
   const blck = 32
 
   bench("Simple Tiling"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size) # We zero memory between computation
   do:
     {.emit: """
       #define min(a,b) (((a)<(b))?(a):(b))
 
       float (* __restrict A)[`K`] = (void*)`pa`;
       float (* __restrict B)[`N`] = (void*)`pb`;
-      float (* __restrict C)[`N`] = (void*)`po`;
+      float (* __restrict C)[`N`] = (void*)`pr`;
 
       #pragma omp parallel
       #pragma omp single
@@ -141,15 +141,15 @@ proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) {.noinline.}=
 
     """.}
 
-proc benchLaserGEMM(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchLaserGEMM(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
 
   let a_ptr{.restrict.} = a[0].unsafeAddr
   let b_ptr{.restrict.} = b[0].unsafeAddr
-  let c_ptr{.restrict.} = output[0].addr
+  let c_ptr{.restrict.} = result[0].addr
   bench("Laser production implementation"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size) # We zero memory between computation
   do:
     # Main work
     gemm_strided(
@@ -175,12 +175,12 @@ proc libjit_matmul_f(
       ) {.importc, cdecl.}
   # Note: Matrix C will be zero-mem'ed by libjit
 
-proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
 
   let a_ptr{.restrict.} = a[0].unsafeAddr
   let b_ptr{.restrict.} = b[0].unsafeAddr
-  let c_ptr{.restrict.} = output[0].addr
+  let c_ptr{.restrict.} = result[0].addr
 
   let cDims = [M, N]
   let aDims = [M, K]
@@ -212,6 +212,8 @@ when defined(openmp):
   {.passL: "-fopenmp".}
 
 when isMainModule:
+  import ../../laser/private/error_functions
+
   randomize(42) # For reproducibility
   warmup()
   echo ""
@@ -230,9 +232,13 @@ when isMainModule:
 
     # benchSimpleTiling(a, b, NbSamples)
     # benchArraymancerFallback(a, b, NbSamples)
-    benchOpenBLAS(a, b, NbSamples)
-    benchLaserGEMM(a, b, NbSamples)
+    let reference = benchOpenBLAS(a, b, NbSamples)
+    let challenger = benchLaserGEMM(a, b, NbSamples)
     # benchPyTorchGlow(a, b, NbSamples)
+
+    block:
+      var error = mean_relative_error(challenger, reference)
+      doAssert error <= 1e-3'f32, $error
 
 # Seems like my original Arraymancer BLAS has false sharing issue
 # FYI Apple accelerate is about 117~122GFLOP/s on my machine.

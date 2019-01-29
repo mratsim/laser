@@ -266,7 +266,7 @@ when isMainModule:
     # echo "result: ", res_ab
 
     doAssert res_ab == ab, $res_ab
-    # echo '\n'
+    echo "SUCCESS\n"
 
   block:
     let a = [[1.0, 2, 3],
@@ -293,7 +293,7 @@ when isMainModule:
     # echo "result: ", res_ab
 
     doAssert res_ab == ab, $res_ab
-    # echo '\n'
+    echo "SUCCESS\n"
 
   block:
     let a = [[1.0,2,3],
@@ -318,7 +318,7 @@ when isMainModule:
     # echo "result: ", res_ab
 
     doAssert res_ab == ab, $res_ab
-    # echo '\n'
+    echo "SUCCESS\n"
 
   block:
     # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
@@ -344,7 +344,7 @@ when isMainModule:
     # echo "result: ", res_ab
 
     doAssert res_ab == ab, $res_ab
-    # echo '\n'
+    echo "SUCCESS\n"
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication_;5;5;5;5?matrix1=[[%225%22,%226%22,%225%22,%228%22],[%228%22,%222%22,%228%22,%228%22],[%220%22,%225%22,%224%22,%220%22],[%224%22,%220%22,%225%22,%226%22],[%224%22,%225%22,%220%22,%223%22]]&matrix2=[[%225%22,%223%22,%226%22,%220%22],[%225%22,%222%22,%223%22,%223%22],[%228%22,%228%22,%222%22,%220%22],[%227%22,%227%22,%220%22,%220%22]]&operator=*
@@ -377,7 +377,7 @@ when isMainModule:
     # echo "result: ", res_ab
 
     doAssert res_ab == ab, $res_ab
-    # echo '\n'
+    echo "SUCCESS\n"
 
   block:
     let a =  [[2, 4,  3,  1,  3,  1,  3,  1],
@@ -408,7 +408,7 @@ when isMainModule:
     # echo "result: ", res_ab
 
     doAssert res_ab == ab, $res_ab
-    # echo '\n'
+    echo "SUCCESS\n"
 
   block:
     let a =  [[2, 1],
@@ -445,7 +445,7 @@ when isMainModule:
     # echo "result: ",   res_ab
 
     doAssert res_ab == ab, $res_ab
-    # echo '\n'
+    echo "SUCCESS\n"
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication?matrix1=[[%222%22,%224%22,%223%22,%221%22,%223%22,%221%22,%223%22,%221%22],[%221%22,%222%22,%221%22,%221%22,%222%22,%220%22,%224%22,%223%22],[%222%22,%220%22,%220%22,%223%22,%220%22,%224%22,%224%22,%221%22],[%221%22,%221%22,%224%22,%220%22,%223%22,%221%22,%223%22,%220%22],[%223%22,%224%22,%221%22,%221%22,%224%22,%222%22,%223%22,%224%22],[%222%22,%224%22,%220%22,%222%22,%223%22,%223%22,%223%22,%224%22],[%223%22,%220%22,%220%22,%223%22,%221%22,%224%22,%223%22,%221%22],[%224%22,%223%22,%222%22,%224%22,%221%22,%220%22,%220%22,%220%22]]&matrix2=[[%222%22,%222%22,%220%22,%224%22,%220%22,%220%22,%224%22,%222%22],[%222%22,%220%22,%220%22,%221%22,%221%22,%221%22,%223%22,%221%22],[%220%22,%222%22,%222%22,%220%22,%222%22,%222%22,%223%22,%223%22],[%220%22,%220%22,%221%22,%220%22,%224%22,%222%22,%224%22,%221%22],[%220%22,%220%22,%221%22,%223%22,%224%22,%222%22,%224%22,%222%22],[%224%22,%223%22,%224%22,%221%22,%224%22,%224%22,%220%22,%223%22],[%223%22,%223%22,%220%22,%222%22,%221%22,%222%22,%223%22,%223%22],[%222%22,%221%22,%222%22,%221%22,%222%22,%224%22,%224%22,%221%22]]&operator=*
@@ -491,4 +491,4 @@ when isMainModule:
     # echo "result: ",   res_ab
 
     doAssert res_ab == ab, $res_ab
-    # echo '\n'
+    echo "SUCCESS\n"
