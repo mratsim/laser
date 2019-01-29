@@ -69,7 +69,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  omp_for(jrb, tiles.jr_num_nr_tiles - 1, use_simd = false, nowait = true):
+  omp_for(jrb, tiles.jr_num_nr_tiles, use_simd = false, nowait = true):
     let jr = jrb * NR
     let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
@@ -83,7 +83,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
       prefetch(upanel_b, Read, ModerateTemporalLocality)
       let upanel_a = tiles.a + ir*kc
       prefetch(upanel_a, Read, ModerateTemporalLocality)
-
+      
       if nr == NR and mr == MR:
         # General case
         gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
