@@ -26,3 +26,9 @@ Very Small Matrices
 A Portable Compiler Approach,
     - http://www.cse.unsw.edu.au/~jingling/papers/cgo17.pdf
 - http://www.cs.utexas.edu/users/flame/pubs/bamarker_thesis.pdf
+
+## Implementations
+- Matmul with OpenMP tasks
+  https://www.openmp.org/wp-content/uploads/openmp-examples-4.5.0.pdf p78
+- Optimizing Matrix Multiplication on Xeon Phi
+  https://www.springer.com/cda/content/document/cda_downloaddocument/9783319064857-c9.pdf?SGWID=0-0-45-1471414-p176715535

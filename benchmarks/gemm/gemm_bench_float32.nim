@@ -50,9 +50,9 @@ import
   ../../laser/primitives/matrix_multiplication/gemm
 
 const
-  M     = 32*6*20
-  K     = 32*6*20
-  N     = 32*6*20
+  M     = 16*6*20
+  K     = 16*6*20
+  N     = 16*6*20
   NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
   CpuGhz = 3.6      # i9-9980XE OC All turbo 4.1GHz (AVX2 4.0GHz, AVX512 3.6GHz)
   NumCpuCores = 18
@@ -122,17 +122,22 @@ proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) {.noinline.}=
     {.emit: """
       #define min(a,b) (((a)<(b))?(a):(b))
 
-      float (* restrict A)[`K`] = (void*)`pa`;
-      float (* restrict B)[`N`] = (void*)`pb`;
-      float (* restrict C)[`N`] = (void*)`po`;
+      float (* __restrict A)[`K`] = (void*)`pa`;
+      float (* __restrict B)[`N`] = (void*)`pb`;
+      float (* __restrict C)[`N`] = (void*)`po`;
 
-      // TODO: where to parallelize?
+      #pragma omp parallel
+      #pragma omp single
       for (int j = 0; j < `N`; j+=`blck`)
         for (int k = 0; k < `K`; k+=`blck`)
-          for (int i = 0; i < `M`; i++)
-            for (int jj = j; jj<min(j+`blck`, `N`); jj++)
-              for (int kk = k; kk<min(k+`blck`, `K`); kk++)
-                C[i][jj] += A[i][kk] * B[kk][jj];
+          for (int i = 0; i < `M`; i+=`blck`)
+      #pragma omp task \
+            depend(in: A[i:`blck`][k:`blck`], B[k:`blck`][j:`blck`]) \
+            depend(inout: C[i:`blck`][j:`blck`])
+            for (int ii = i; ii<min(i+`blck`, `M`); ++ii)
+              for (int jj = j; jj<min(j+`blck`, `N`); ++jj)
+                for (int kk = k; kk<min(k+`blck`, `K`); ++kk)
+                  C[ii][jj] += A[ii][kk] * B[kk][jj];
 
     """.}
 
@@ -223,12 +228,11 @@ when isMainModule:
     let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
 
-    # when not defined(openmp):
-    #   benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
+    # benchSimpleTiling(a, b, NbSamples)
     # benchArraymancerFallback(a, b, NbSamples)
     benchOpenBLAS(a, b, NbSamples)
     benchLaserGEMM(a, b, NbSamples)
-    benchPyTorchGlow(a, b, NbSamples)
+    # benchPyTorchGlow(a, b, NbSamples)
 
 # Seems like my original Arraymancer BLAS has false sharing issue
 # FYI Apple accelerate is about 117~122GFLOP/s on my machine.

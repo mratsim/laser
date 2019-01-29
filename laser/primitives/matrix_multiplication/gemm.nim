@@ -69,7 +69,8 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  for jr in countup(0, nc-1, NR):
+  omp_for(jrb, tiles.jr_num_nr_tiles - 1, use_simd = false, nowait = true):
+    let jr = jrb * NR
     let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
     # ###################################
@@ -110,10 +111,25 @@ proc gemm_impl[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T],
       tiles: Tiles[T]
     ) =
+  let was_nested: cint = omp_get_nested()
+  defer: omp_set_nested(was_nested)
+  omp_set_nested(1)
                                                       # A[0:M, 0:K]
   # ####################################################################
   # 1. for jc = 0,...,n−1 in steps of nc
   # not partitioned currently nc = N
+  # According to BLIS paper, should be partitioned
+  # at socket level.
+  # This can be done with OpenMP using
+  #
+  #   omp_set_nested(1);  
+  #   n_sockets = omp_get_num_places();
+  #   #pragma omp parallel num_threads(n_sockets) proc_bind(spread)
+  #   {
+  #       n_procs = omp_get_place_num_procs(omp_get_num_places());
+  #       #pragma omp parallel num_threads(n_procs) proc_bind(close)
+  #       doStuff();
+  #   }
   let nc = N                                          # B[0:K, jc:jc+nc]
                                                       # C[0:M, jc:jc+nc]
   # ######################################
@@ -249,7 +265,7 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
+    doAssert res_ab == ab, $res_ab
     # echo '\n'
 
   block:
@@ -276,7 +292,7 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
+    doAssert res_ab == ab, $res_ab
     # echo '\n'
 
   block:
@@ -301,7 +317,7 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
+    doAssert res_ab == ab, $res_ab
     # echo '\n'
 
   block:
@@ -327,7 +343,7 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
+    doAssert res_ab == ab, $res_ab
     # echo '\n'
 
   block:
@@ -360,7 +376,7 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
+    doAssert res_ab == ab, $res_ab
     # echo '\n'
 
   block:
@@ -391,7 +407,7 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
+    doAssert res_ab == ab, $res_ab
     # echo '\n'
 
   block:
@@ -428,7 +444,7 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ",   res_ab
 
-    doAssert res_ab == ab
+    doAssert res_ab == ab, $res_ab
     # echo '\n'
 
   block:
@@ -474,5 +490,5 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ",   res_ab
 
-    doAssert res_ab == ab
+    doAssert res_ab == ab, $res_ab
     # echo '\n'

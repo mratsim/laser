@@ -37,12 +37,16 @@ when defined(openmp):
   proc omp_get_num_threads*(): cint {.omp.}
   proc omp_get_max_threads*(): cint {.omp.} # This takes hyperthreading into account
   proc omp_get_thread_num*(): cint {.omp.}
+  proc omp_set_nested*(x: cint) {.omp.}
+  proc omp_get_nested*(): cint {.omp.}
 
 else:
   template omp_set_num_threads*(x: cint) = discard
   template omp_get_num_threads*(): cint = 1
   template omp_get_max_threads*(): cint = 1
   template omp_get_thread_num*(): cint = 0
+  template omp_set_nested*(x: cint) = discard
+  template omp_get_nested*(): cint = cint 0
 
 # TODO tuning for architectures
 # https://github.com/zy97140/omp-benchmark-for-pytorch
@@ -342,6 +346,16 @@ template omp_master*(body: untyped): untyped =
 
 template omp_barrier*(): untyped =
   {.emit: "#pragma omp barrier".}
+
+template omp_taskloop*(
+    index: untyped,
+    length: Natural,
+    body: untyped
+  ) =
+  ## OpenMP taskloop
+  const omp_annotation = "taskloop"
+  for `index`{.inject.} in `||`(0, length-1, omp_annotation):
+    block: body
 
 import macros
 macro omp_flush*(variables: varargs[untyped]): untyped =

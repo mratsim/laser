@@ -177,7 +177,7 @@ type Tiles*[T] = ref object
     # Nim doesn't support arbitrary increment with OpenMP
     # So we store indexing/edge case data in tiles for the parallelized loop
   ic_num_mc_tiles*: int   # For private L1-L2 and shared L3
-  # jr_num_nr_tiles*: int # For private L1 and shared L2 cache
+  jr_num_nr_tiles*: int   # For private L1 and shared L2 cache
 
   # Allocation data
     # TODO Save on cache line, use an aligned allocator to not track this
@@ -238,6 +238,7 @@ proc newTiles*(
   # Parallel config
   # Ic loop parallel means that each thread will share a panel B and pack a different A
   result.ic_num_mc_tiles = (M+result.mc-1) div result.mc
+  result.jr_num_nr_tiles = (result.nc+nr-1) div nr
 
   # Packing
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
