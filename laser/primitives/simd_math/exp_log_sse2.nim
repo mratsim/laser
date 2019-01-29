@@ -67,7 +67,7 @@ proc sse2_gather_explut_cvtps(v: m128i): m128 {.inline.} =
   result = mm_castsi128_ps(mm_srli_epi64(mm_castps_si128(result), 32))
   result = mm_or_ps(result, t1)
 
-proc exp*(x: m128): m128 =
+proc exp*(x: m128): m128 {.inline.} =
   let clamped = x.fast_clamp(ExpMin.float32, ExpMax.float32)
 
   let r = mm_cvtps_epi32(mm_mul_ps(clamped, mm_set1_ps(ExpA)))
@@ -95,4 +95,3 @@ when isMainModule:
   echo scalar
 
   echo exp(0.5'f32)
-

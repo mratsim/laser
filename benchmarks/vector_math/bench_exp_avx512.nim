@@ -94,7 +94,7 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 
 const
   N     = 100*50000 # For example for use in softmax for a batch of 100 with dictionary size of 50000 words
-  NbSamples = 100
+  NbSamples = 300
   CpuGhz = 2.7
   NumCpuCores = 2
   CpuFlopCycle = 32 # AVX2: 2xFMA/cycle = 2x8x2 - 2 x 8 floats x (1 add + 1 mul)
@@ -152,18 +152,6 @@ proc benchSSEMathfun(a: Tensor[float32], nb_samples: int) =
     # Main work
     sse_mathfun_exp_ps(output.storage.raw_data, a.storage.raw_data, a.size)
 
-proc sse_fmath_exp_ps(x: m128): m128 {.importcpp: "fmath::exp_ps(@)", header: cSourcesPath & "lib_fmath.hpp".}
-vectorize(sse_fmath_exp_ps, sse_fmath_exp_ps, mm_load_ps, mm_store_ps, 4)
-
-proc benchSSE_fmath(a: Tensor[float32], nb_samples: int) =
-  var output = newTensor[float32](a.shape)
-  bench("SSE fmath"):
-    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    output.setZero() # We zero memory between computation
-  do:
-    # Main work
-    sse_fmath_exp_ps(output.storage.raw_data, a.storage.raw_data, a.size)
-
 {.compile: "lib_sse_exp.c".}
 proc fast_exp_sse(x: m128): m128 {.importc.}
 vectorize(fast_exp_sse, fast_exp_sse, mm_load_ps, mm_store_ps, 4)
@@ -177,17 +165,99 @@ proc benchSSE_fast_exp_sse(a: Tensor[float32], nb_samples: int) =
     # Main work
     fast_exp_sse(output.storage.raw_data, a.storage.raw_data, a.size)
 
-import ../../laser/primitives/simd_math/exp_log_sse2
-vectorize(exp, exp_float32x4_sse2, mm_load_ps, mm_store_ps, 4)
+proc avx2_fmath_exp_ps(x: m256): m256 {.importcpp: "fmath::exp_ps256(@)", header: cSourcesPath & "lib_fmath.hpp".}
+vectorize(avx2_fmath_exp_ps, avx2_fmath_exp_ps, mm256_load_ps, mm256_store_ps, 8)
 
-proc benchProdImplSSE2(a: Tensor[float32], nb_samples: int) =
+proc benchAVX2_fmath(a: Tensor[float32], nb_samples: int) =
   var output = newTensor[float32](a.shape)
-  bench("SSE2 Prod implementation"):
+  bench("AVX2 fmath"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    exp_float32x4_sse2(output.storage.raw_data, a.storage.raw_data, a.size)
+    avx2_fmath_exp_ps(output.storage.raw_data, a.storage.raw_data, a.size)
+
+{.compile: "lib_minimax.c".}
+proc avx2_fma_minimax_exp(x: m256): m256 {.importc: "faster_more_accurate_exp_avx2".}
+vectorize(avx2_fma_minimax_exp, avx2_fma_minimax_exp, mm256_load_ps, mm256_store_ps, 8)
+
+proc benchAVX2_FMA_minimax(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("AVX2 FMA Minimax"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    avx2_fma_minimax_exp(output.storage.raw_data, a.storage.raw_data, a.size)
+
+proc avx2_mathfun_exp256_ps(x: m256): m256 {.
+    importc: "exp256_ps",
+    header: cSourcesPath & "lib_avx_mathfun.h"
+    .}
+vectorize(avx2_mathfun_exp256_ps, avx2_mathfun_exp256_ps, mm256_load_ps, mm256_store_ps, 8)
+
+proc benchAVX2_mathfun(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("AVX2 mathfun"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    avx2_mathfun_exp256_ps(output.storage.raw_data, a.storage.raw_data, a.size)
+
+proc fma_schraudolph_exp(x: m256): m256 {.
+    importc: "_mm256_expfaster_ps",
+    header: cSourcesPath & "lib_schraudolph_approx.h"
+    .}
+vectorize(fma_schraudolph_exp, fma_schraudolph_exp, mm256_load_ps, mm256_store_ps, 8)
+
+proc benchSchraudolph_approx(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("AVX+FMA Schraudolph-approx"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    fma_schraudolph_exp(output.storage.raw_data, a.storage.raw_data, a.size)
+
+proc simd_math_prims_exp(x: float32): float32 {.
+    importc: "expapprox",
+    header: cSourcesPath & "lib_simd_math_prims.h"
+    .}
+
+proc benchSimdMathPrims(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("Bench SIMD Math Prims"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    for i in 0 ..< a.size:
+      output.storage.raw_data[i] = simd_math_prims_exp(a.storage.raw_data[i])
+
+import ../../laser/primitives/simd_math/exp_log_avx2
+vectorize(exp, exp_float32x8_avx2, mm256_load_ps, mm256_store_ps, 8)
+
+proc benchProdImplAVX2(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("AVX2 Prod implementation"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    exp_float32x8_avx2(output.storage.raw_data, a.storage.raw_data, a.size)
+
+import ../../laser/primitives/simd_math/exp_log_avx512
+vectorize(exp, exp_float32x16_avx512, mm512_load_ps, mm512_store_ps, 16)
+
+proc benchProdImplAVX512(a: Tensor[float32], nb_samples: int) =
+  var output = newTensor[float32](a.shape)
+  bench("AVX512 Prod implementation"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    output.setZero() # We zero memory between computation
+  do:
+    # Main work
+    exp_float32x16_avx512(output.storage.raw_data, a.storage.raw_data, a.size)
 
 # ###########################################
 
@@ -197,6 +267,8 @@ when defined(fast_math):
 when defined(march_native):
   {.passC:"-march=native".}
 
+# Note that due to latencies, FMA might be slower if no instruction-level parallelism is used
+{.passC:"-mavx512f -mavx512dq -mavx512bw -mfma".}
 
 when isMainModule:
   randomize(42) # For reproducibility
@@ -209,21 +281,23 @@ when isMainModule:
   echo &"Theoretical peak single-core:  {CpuGhz * CpuFlopCycle:>9.3f} GFLOP/s"
   echo &"Theoretical peak multi:        {CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GFLOP/s"
   block:
-    let a = randomTensor([N], -1.0'f32 .. 1.0'f32)
+    let a = randomTensor([N], -10'f32 .. 10.0'f32)
     echo "a[0]: " & $a[0]
     benchBaseline(a, NbSamples)
     benchSSEMathfun(a, NbSamples)
-    benchSSE_fmath(a, NbSamples)
     benchSSE_fast_exp_sse(a, NbSamples)
-    benchProdImplSSE2(a, NbSamples)
-
-# Unfortunately I can only pass -mavx2 globally with the cpp backend
-# configuring it in nim.cfg doesn't work so we need a separate AVX bench
-# as fmath has static if __AVX2__ even in the SSE code.
+    benchAVX2_fmath(a, NbSamples)
+    benchAVX2_FMA_minimax(a, NbSamples)
+    benchAVX2_mathfun(a, NbSamples)
+    benchSchraudolph_approx(a, NbSamples)
+    benchSimdMathPrims(a, NbSamples)
+    benchProdImplAVX2(a, NbSamples)
+    benchProdImplAVX512(a, NbSamples)
 
 ## Bench on i5-5257U Broadwell - serial implementation
+## Without FMA
 
-# Warmup: 1.2104 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 1.2910 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A - tensor shape: [5000000]
 # Required number of operations:     5.000 millions
@@ -234,45 +308,67 @@ when isMainModule:
 # a[0]: -0.9999997019767761
 
 # Baseline <math.h>
-# Collected 100 samples in 2.625 seconds
-# Average time: 24.991 ms
-# Stddev  time: 0.675 ms
-# Min     time: 24.576 ms
-# Max     time: 29.511 ms
-# Perf:         0.200 GEXPOP/s
+# Collected 100 samples in 3.256 seconds
+# Average time: 31.279 ms
+# Stddev  time: 8.266 ms
+# Min     time: 26.100 ms
+# Max     time: 51.445 ms
+# Perf:         0.160 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
 
 # SSE mathfun
-# Collected 100 samples in 1.131 seconds
-# Average time: 10.069 ms
-# Stddev  time: 0.253 ms
-# Min     time: 9.948 ms
-# Max     time: 11.963 ms
-# Perf:         0.497 GEXPOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 0.3678795397281647
-
-# SSE fmath
-# Collected 100 samples in 0.726 seconds
-# Average time: 6.027 ms
-# Stddev  time: 0.433 ms
-# Min     time: 5.700 ms
-# Max     time: 8.140 ms
-# Perf:         0.830 GEXPOP/s
+# Collected 100 samples in 1.143 seconds
+# Average time: 10.174 ms
+# Stddev  time: 0.373 ms
+# Min     time: 9.973 ms
+# Max     time: 12.245 ms
+# Perf:         0.491 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3678795397281647
 
 # SSE fast_exp_sse (low order polynomial)
 # Collected 100 samples in 0.599 seconds
-# Average time: 4.759 ms
-# Stddev  time: 0.173 ms
-# Min     time: 4.618 ms
-# Max     time: 5.791 ms
-# Perf:         1.051 GEXPOP/s
+# Average time: 4.761 ms
+# Stddev  time: 0.243 ms
+# Min     time: 4.629 ms
+# Max     time: 6.447 ms
+# Perf:         1.050 GEXPOP/s
 
 # Display output[0] to make sure it's not optimized away
 # 0.3682391047477722
+
+# AVX2 fmath
+# Collected 100 samples in 0.511 seconds
+# Average time: 3.837 ms
+# Stddev  time: 0.532 ms
+# Min     time: 3.558 ms
+# Max     time: 7.243 ms
+# Perf:         1.303 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647
+
+# AVX2 FMA Minimax
+# Collected 100 samples in 0.557 seconds
+# Average time: 4.339 ms
+# Stddev  time: 0.336 ms
+# Min     time: 4.169 ms
+# Max     time: 6.688 ms
+# Perf:         1.152 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678786158561707
+
+# AVX2 mathfun
+# Collected 100 samples in 0.704 seconds
+# Average time: 5.780 ms
+# Stddev  time: 0.693 ms
+# Min     time: 5.118 ms
+# Max     time: 7.001 ms
+# Perf:         0.865 GEXPOP/s
+
+# Display output[0] to make sure it's not optimized away
+# 0.3678795397281647

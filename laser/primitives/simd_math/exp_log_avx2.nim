@@ -39,7 +39,7 @@ func fast_clamp(x: m256, lo, hi: static float32): m256 {.inline.} =
   else:
     result = x
 
-proc exp*(x: m256): m256 =
+proc exp*(x: m256): m256 {.inline.} =
   let clamped = x.fast_clamp(ExpMin.float32, ExpMax.float32)
 
   let r = mm256_cvtps_epi32(mm256_mul_ps(clamped, mm256_set1_ps(ExpA)))

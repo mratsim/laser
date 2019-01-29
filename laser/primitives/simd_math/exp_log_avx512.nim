@@ -39,7 +39,7 @@ func fast_clamp(x: m512, lo, hi: static float32): m512 {.inline.} =
   else:
     result = x
 
-proc exp*(x: m512): m512 =
+proc exp*(x: m512): m512 {.inline.}=
   let clamped = x.fast_clamp(ExpMin.float32, ExpMax.float32)
 
   let r = mm512_cvtps_epi32(mm512_mul_ps(clamped, mm512_set1_ps(ExpA)))
