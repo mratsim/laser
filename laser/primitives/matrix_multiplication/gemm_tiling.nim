@@ -253,15 +253,11 @@ type Tiles*[T] = ref object
   b*: ptr UncheckedArray[T]
   mc*, nc*, kc*: int
 
-  # Multithreading
-    # Nim doesn't support arbitrary increment with OpenMP
-    # So we store indexing/edge case data in tiles for the parallelized loop
-  ic_num_mc_tiles*: int   # For private L1-L2 and shared L3
-  jr_num_nr_tiles*: int   # For private L1 and shared L2 cache
-  upanelA_size*: int      # Each thread uses a different upanel of A
+  # Multithreaded panels
+  ic_num_tasks*: int   # For private L1-L2 and shared L3
+  upanelA_size*: int   # Each thread uses a different upanel of A
 
   # Allocation data
-    # TODO Save on cache line, use an aligned allocator to not track this
   a_alloc_mem: pointer
   b_alloc_mem: pointer
   # The Tiles data structure takes 64-byte = 1 cache-line
@@ -318,13 +314,12 @@ proc newTiles*(
 
   # Parallel config
   # Ic loop parallel means that each thread will share a panel B and pack a different A
-  result.ic_num_mc_tiles = (M+result.mc-1) div result.mc
-  result.jr_num_nr_tiles = (result.nc+nr-1) div nr
+  result.ic_num_tasks = (M+result.mc-1) div result.mc
 
   # Packing
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
   result.upanelA_size = result.kc*round_step_up(result.mc, mr)
-  let bufA_size = T.sizeof * result.upanelA_size * result.ic_num_mc_tiles
+  let bufA_size = T.sizeof * result.upanelA_size * result.ic_num_tasks
   let bufB_size = T.sizeof * result.kc*round_step_up(result.nc, nr)
 
   result.a_alloc_mem = allocShared(bufA_size + 63)

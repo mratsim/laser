@@ -74,9 +74,8 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
   # for jr in countup(0, nc-1, NR):
-  for jrb in 0 .. tiles.jr_num_nr_tiles-1:
-    omp_task("firstprivate(`jrb`)"):
-      let jr = jrb * NR
+  for jr in countup(0, tiles.nc-1, NR):
+    omp_task("firstprivate(`jr`)"):
       let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
       # ###################################
@@ -167,12 +166,12 @@ proc gemm_impl[T; ukernel: static MicroKernel](
         # ####################################
         # 3. for ic = 0,...,m−1 in steps of mc
         # for ic in countup(0, M-1, tiles.mc):
-        for icb in 0 .. tiles.ic_num_mc_tiles-1:
-          omp_task("firstprivate(`icb`)"):
+        for ict in 0 ..< tiles.ic_num_tasks:
+          omp_task("firstprivate(`ict`)"):
             const MR = ukernel.extract_mr
-            let packA = tiles.a + icb * tiles.upanelA_size
+            let packA = tiles.a + ict * tiles.upanelA_size
             prefetch(packA, Write, LowTemporalLocality)
-            let ic = icb * tiles.mc
+            let ic = ict * tiles.mc
             let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
             let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
