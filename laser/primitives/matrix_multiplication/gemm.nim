@@ -47,7 +47,8 @@ withCompilerOptimHints()
 
 proc gebp_mkernel[T; ukernel: static MicroKernel](
       mc, nc, kc: int,
-      alpha, beta: T,
+      alpha: T, packA: ptr UncheckedArray[T],
+      beta: T,
       mcncC: MatrixView[T],
       tiles: Tiles[T]
     ) =
@@ -73,7 +74,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
   # for jr in countup(0, nc-1, NR):
-  omp_taskloop(jrb, tiles.jr_num_nr_tiles, "nogroup"):
+  for jrb in 0 .. tiles.jr_num_nr_tiles-1:
     let jr = jrb * NR
     let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
@@ -85,7 +86,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
       let upanel_b = tiles.b + jr*kc
       prefetch(upanel_b, Read, ModerateTemporalLocality)
-      let upanel_a = tiles.a + ir*kc
+      let upanel_a = packA + ir*kc
       prefetch(upanel_a, Read, ModerateTemporalLocality)
       
       if nr == NR and mr == MR:
@@ -165,8 +166,8 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     # for ic in countup(0, M-1, tiles.mc):
     omp_parallel_if(parallelize):
       omp_for(icb, tiles.ic_num_mc_tiles, use_simd = false, nowait = true):
-        let thread_id = omp_get_thread_num()
-        let packA = tiles.a + thread_id * tiles.mc * kc
+        const MR = ukernel.extract_mr
+        let packA = tiles.a + icb * tiles.upanelA_size
         prefetch(packA, Write, LowTemporalLocality)
         let ic = icb * tiles.mc
         let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
@@ -176,8 +177,9 @@ proc gemm_impl[T; ukernel: static MicroKernel](
 
         gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
             mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
-            alpha, beta, vC.stride(ic, 0),              #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
-            tiles                                       #    βC[ic:ic+mc, jc:jc+nc]
+            alpha, packA,                               #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +   
+            beta, vC.stride(ic, 0),                     #    βC[ic:ic+mc, jc:jc+nc]
+            tiles                                       
           )
 
 # ############################################################

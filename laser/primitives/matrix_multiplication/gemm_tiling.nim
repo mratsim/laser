@@ -31,7 +31,7 @@
 
 import
   ../../cpuinfo, ../../compiler_optim_hints,
-  ../../private/memory,
+  ../../private/[memory, align_unroller],
   typetraits, macros,
   ./gemm_utils
 
@@ -258,6 +258,7 @@ type Tiles*[T] = ref object
     # So we store indexing/edge case data in tiles for the parallelized loop
   ic_num_mc_tiles*: int   # For private L1-L2 and shared L3
   jr_num_nr_tiles*: int   # For private L1 and shared L2 cache
+  upanelA_size*: int      # Each thread uses a different upanel of A
 
   # Allocation data
     # TODO Save on cache line, use an aligned allocator to not track this
@@ -322,8 +323,9 @@ proc newTiles*(
 
   # Packing
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
-  let bufA_size = T.sizeof * result.kc*(result.mc+mr) * result.ic_num_mc_tiles
-  let bufB_size = T.sizeof * result.kc*(result.nc+nr)
+  result.upanelA_size = result.kc*round_step_up(result.mc, mr)
+  let bufA_size = T.sizeof * result.upanelA_size * result.ic_num_mc_tiles
+  let bufB_size = T.sizeof * result.kc*round_step_up(result.nc, nr)
 
   result.a_alloc_mem = allocShared(bufA_size + 63)
   result.b_alloc_mem = allocShared(bufB_size + 63)
