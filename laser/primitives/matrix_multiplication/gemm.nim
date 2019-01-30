@@ -162,27 +162,24 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     let beta = if pc == 0: beta else: 1.T
 
     omp_parallel_if(parallelize):
-      omp_single_nowait:
-        # ####################################
-        # 3. for ic = 0,...,m−1 in steps of mc
-        # for ic in countup(0, M-1, tiles.mc):
-        for ict in 0 ..< tiles.ic_num_tasks:
-          omp_task("firstprivate(`ict`)"):
-            const MR = ukernel.extract_mr
-            let packA = tiles.a + ict * tiles.upanelA_size
-            prefetch(packA, Write, LowTemporalLocality)
-            let ic = ict * tiles.mc
-            let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
+      # ####################################
+      # 3. for ic = 0,...,m−1 in steps of mc
+      # for ic in countup(0, M-1, tiles.mc):
+      omp_for(ict, tiles.ic_num_tasks, use_simd=false, nowait=true):
+        let packA = tiles.a + ict * tiles.upanelA_size
+        prefetch(packA, Write, LowTemporalLocality)
+        let ic = ict * tiles.mc
+        let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
-            let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
-            pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
+        let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
+        pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
 
-            gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
-                mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
-                alpha, packA,                               #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +   
-                beta, vC.stride(ic, 0),                     #    βC[ic:ic+mc, jc:jc+nc]
-                tiles                                       
-              )
+        gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
+            mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
+            alpha, packA,                               #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +   
+            beta, vC.stride(ic, 0),                     #    βC[ic:ic+mc, jc:jc+nc]
+            tiles                                       
+          )
 
 # ############################################################
 #
