@@ -85,7 +85,7 @@ proc benchOpenBLAS(a, b: seq[float32], nb_samples: int): seq[float32] =
   result = newSeq[float32](out_size)
   bench("OpenBLAS benchmark"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(result[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
   do:
     # Main work
     gemm(
@@ -100,7 +100,7 @@ proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int): seq[float32]
   result = newSeq[float32](out_size)
   bench("Arraymancer fallback BLAS"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(result[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
   do:
     # Main work
     gemm_nn_fallback(
@@ -109,6 +109,29 @@ proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int): seq[float32]
                   b, 0, N, 1,
       0'f32, result, 0, N, 1
     )
+
+proc benchReference(a, b: seq[float32], nb_samples: int): seq[float32] {.noinline.}=
+  result = newSeq[float32](out_size)
+
+  let pa = a[0].unsafeAddr
+  let pb = b[0].unsafeAddr
+  let pr = result[0].addr
+
+  bench("Reference loop"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
+  do:
+    {.emit: """
+      float (* __restrict A)[`K`] = (void*)`pa`;
+      float (* __restrict B)[`N`] = (void*)`pb`;
+      float (* __restrict C)[`N`] = (void*)`pr`;
+
+      for (int i = 0; i < `M`; ++i)
+        for (int k = 0; k < `K`; ++k)
+          for (int j = 0; j < `N`; ++j)
+            C[i][j] += A[i][k] * B[k][j];
+
+    """.}
 
 proc benchSimpleTiling(a, b: seq[float32], nb_samples: int): seq[float32] {.noinline.}=
   result = newSeq[float32](out_size)
@@ -120,7 +143,7 @@ proc benchSimpleTiling(a, b: seq[float32], nb_samples: int): seq[float32] {.noin
 
   bench("Simple Tiling"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(result[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
   do:
     {.emit: """
       #define min(a,b) (((a)<(b))?(a):(b))
@@ -152,7 +175,7 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int): seq[float32] =
   let c_ptr{.restrict.} = result[0].addr
   bench("Laser production implementation"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(result[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
   do:
     # Main work
     gemm_strided(
@@ -217,7 +240,7 @@ when isMainModule:
   import ../../laser/private/error_functions
 
   randomize(42) # For reproducibility
-  warmup()
+  warmup() # Not needed with ref implementation warmup
   echo ""
   echo "A matrix shape: " & $ashape
   echo "B matrix shape: " & $bshape
@@ -229,19 +252,29 @@ when isMainModule:
   echo &"Theoretical peak multi:        {TheoThreadedPeak:>9.3f} GFLOP/s"
   echo "Make sure to not bench Apple Accelerate or the default Linux BLAS."
   block:
-    let a = newSeqWith(M*K, float32 rand(1.0))
-    let b = newSeqWith(K*N, float32 rand(1.0))
+    let a = newSeqWith(M*K, float32 rand(-0.1..0.1))
+    let b = newSeqWith(K*N, float32 rand(-0.1..0.1))
 
-    # benchSimpleTiling(a, b, NbSamples)
-    # benchArraymancerFallback(a, b, NbSamples)
-    let reference = benchOpenBLAS(a, b, NbSamples)
-    let challenger = benchLaserGEMM(a, b, NbSamples)
+    # let reference = benchReference(a, b, NbSamples)
+    # let simpleTiling = benchSimpleTiling(a, b, NbSamples)
+    # let arraymancer = benchArraymancerFallback(a, b, NbSamples)
+    let vendorBlas = benchOpenBLAS(a, b, NbSamples)
+    let laser = benchLaserGEMM(a, b, NbSamples)
     # benchPyTorchGlow(a, b, NbSamples)
 
     block:
-      var error = mean_relative_error(challenger, reference)
-      echo "Mean Relative Error compared to OpenBLAS: ", error
-      doAssert error <= 1.5e-2'f32, $error
+
+      # var error = mean_relative_error(vendorBlas, reference)
+      # echo "Mean Relative Error of OpenBLAS vs reference: ", error
+      # doAssert error <= 1e-5'f32, $error
+
+      # error = mean_relative_error(challenger, reference)
+      # echo "Mean Relative Error compared to Reference: ", error
+      # doAssert error <= 1e-5'f32, $error
+
+      var error = mean_relative_error(vendorBlas, laser)
+      echo "Mean Relative Error compared to vendor BLAS: ", error
+      doAssert error <= 1e-5'f32, $error
 
 # Seems like my original Arraymancer BLAS has false sharing issue
 # FYI Apple accelerate is about 117~122GFLOP/s on my machine.
