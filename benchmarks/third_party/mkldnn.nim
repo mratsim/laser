@@ -8,8 +8,10 @@ const cSourcesPath = currentSourcePath.rsplit(DirSep, 1)[0] & '/'
 # {.passC:"-std=c++11".}
 
 {.compile: cSourcesPath & "mkl-dnn/src/common/utils.cpp".}
-{.compile: cSourcesPath & "mkl-dnn/src/cpu/gemm/f32/ref_gemm_f32.cpp".}
 {.compile: cSourcesPath & "mkl-dnn/src/cpu/gemm/f32/gemm_utils_f32.cpp".}
+{.compile: cSourcesPath & "mkl-dnn/src/cpu/gemm/f32/ref_gemm_f32.cpp".}
+{.compile: cSourcesPath & "mkl-dnn/src/cpu/gemm/f32/jit_avx_gemm_f32.cpp".}
+{.compile: cSourcesPath & "mkl-dnn/src/cpu/gemm/f32/jit_avx512_common_gemm_f32.cpp".}
 
 
 type MkldnnStatus {.importc: "mkldnn_status_t".} = enum
@@ -42,4 +44,28 @@ proc mkldnn_ref_gemm*[T](
 ): MkldnnStatus {.
   importcpp:"mkldnn::impl::cpu::ref_gemm<'*6>(@)",
   header: cSourcesPath & "mkl-dnn/src/cpu/gemm/f32/ref_gemm_f32.hpp"
+.}
+
+proc mkldnn_jit_avx_gemm_f32*(
+  transa: ptr char, transb: ptr char,
+  M, N, K: ptr int32,
+  alpha, A: ptr float32, lda: ptr int32,
+         B: ptr float32, ldb: ptr int32,
+  beta,  C: ptr float32, ldc: ptr int32,
+      bias: ptr float32 
+): MkldnnStatus {.
+  importcpp:"mkldnn::impl::cpu::jit_avx_gemm_f32(@)",
+  header: cSourcesPath & "mkl-dnn/src/cpu/gemm/f32/jit_avx_gemm_f32.hpp"
+.}
+
+proc mkldnn_jit_avx512_common_gemm_f32*(
+  transa: ptr char, transb: ptr char,
+  M, N, K: ptr int32,
+  alpha, A: ptr float32, lda: ptr int32,
+         B: ptr float32, ldb: ptr int32,
+  beta,  C: ptr float32, ldc: ptr int32,
+      bias: ptr float32 
+): MkldnnStatus {.
+  importcpp:"mkldnn::impl::cpu::jit_avx512_common_gemm_f32(@)",
+  header: cSourcesPath & "mkl-dnn/src/cpu/gemm/f32/jit_avx512_common_gemm_f32.hpp"
 .}

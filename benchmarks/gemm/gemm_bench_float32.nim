@@ -52,7 +52,7 @@ const
   K     = 16*6*20
   N     = 16*6*20
   NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
-  CpuGhz = 3.6      # i9-9980XE OC All turbo 4.1GHz (AVX2 4.0GHz, AVX512 3.6GHz)
+  CpuGhz = 3.5      # i9-9980XE OC All turbo 4.1GHz (AVX2 4.0GHz, AVX512 3.5GHz)
   NumCpuCores = 18
   VectorWidth = 16  # 8 float32 for AVX2, 16 for AVX512
   InstrCycle = 2    # How many instructions per cycle, (2xFMAs or 1xFMA for example)
@@ -185,43 +185,43 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int): seq[float32] =
       0'f32,  c_ptr, N, 1
     )
 
-# import ../third_party/pytorch_glow/libjit_matmul
-#   # Hack due to conflicts between "-std=c++11" requires by Glow
-#   # and incompatible with C files in cpuinfo.
-#   # We can't use the proper:
-#     # {.compile: "pytorch_glow/libjit_matmul.cpp".}
-#     # {.passC: "-std=c++11 -mavx -mfma".}
-#     # ^^^ This is configured in nim.cfg instead
+import ../third_party/pytorch_glow/libjit_matmul
+  # Hack due to conflicts between "-std=c++11" requires by Glow
+  # and incompatible with C files in cpuinfo.
+  # We can't use the proper:
+    # {.compile: "pytorch_glow/libjit_matmul.cpp".}
+    # {.passC: "-std=c++11 -mavx -mfma".}
+    # ^^^ This is configured in nim.cfg instead
 
-# proc libjit_matmul_f(
-#           c, a, b: ptr float32,
-#           cDims, aDims, bDims: ptr array[2, int]
-#       ) {.importc, cdecl.}
-#   # Note: Matrix C will be zero-mem'ed by libjit
+proc libjit_matmul_f(
+          c, a, b: ptr float32,
+          cDims, aDims, bDims: ptr array[2, int]
+      ) {.importc, cdecl.}
+  # Note: Matrix C will be zero-mem'ed by libjit
 
-# proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int): seq[float32] =
-#   result = newSeq[float32](out_size)
+proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
 
-#   let a_ptr{.restrict.} = a[0].unsafeAddr
-#   let b_ptr{.restrict.} = b[0].unsafeAddr
-#   let c_ptr{.restrict.} = result[0].addr
+  let a_ptr{.restrict.} = a[0].unsafeAddr
+  let b_ptr{.restrict.} = b[0].unsafeAddr
+  let c_ptr{.restrict.} = result[0].addr
 
-#   let cDims = [M, N]
-#   let aDims = [M, K]
-#   let bDims = [K, N]
+  let cDims = [M, N]
+  let aDims = [M, K]
+  let bDims = [K, N]
 
-#   let cDims_ptr{.restrict.} = cDims.unsafeAddr
-#   let aDims_ptr{.restrict.} = aDims.unsafeAddr
-#   let bDims_ptr{.restrict.} = bDims.unsafeAddr
+  let cDims_ptr{.restrict.} = cDims.unsafeAddr
+  let aDims_ptr{.restrict.} = aDims.unsafeAddr
+  let bDims_ptr{.restrict.} = bDims.unsafeAddr
 
-#   bench("PyTorch Glow: libjit matmul implementation"):
-#     discard # zeroMem done by libjit
-#   do:
-#     # Main work
-#     libjit_matmul_f(
-#       c_ptr, a_ptr, b_ptr,
-#       cDims_ptr, aDims_ptr, bDims_ptr
-#     )
+  bench("PyTorch Glow: libjit matmul implementation (with AVX+FMA)"):
+    discard # zeroMem done by libjit
+  do:
+    # Main work
+    libjit_matmul_f(
+      c_ptr, a_ptr, b_ptr,
+      cDims_ptr, aDims_ptr, bDims_ptr
+    )
 
 import ../third_party/mkldnn
 proc benchMkldnnRef(a, b: seq[float32], nb_samples: int): seq[float32] =
@@ -238,10 +238,7 @@ proc benchMkldnnRef(a, b: seq[float32], nb_samples: int): seq[float32] =
     beta = 0'f32
     ldc = int32 N
 
-    bias = newSeq[float32](N)
-
-
-  bench("MKL-DNN reference GEMM benchmark (note that it also add a bias)"):
+  bench("MKL-DNN reference GEMM benchmark"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
     zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
   do:
@@ -252,7 +249,63 @@ proc benchMkldnnRef(a, b: seq[float32], nb_samples: int): seq[float32] =
       alpha.addr, a[0].unsafeaddr, lda.addr,
                   b[0].unsafeAddr, ldb.addr,
       beta.addr,  result[0].addr, ldc.addr,
-                  bias[0].addr
+                  bias = nil
+    )
+
+proc benchMkldnnJitAVX(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
+
+  var # MKL-DNN wants pointers as input
+    trans = 'N'
+    m = int32 M
+    n = int32 N
+    k = int32 K
+    alpha = 1'f32
+    lda = int32 K
+    ldb = int32 N
+    beta = 0'f32
+    ldc = int32 N
+
+  bench("MKL-DNN JIT AVX benchmark"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
+  do:
+    # Main work
+    discard mkldnn_jit_avx_gemm_f32(
+      trans.addr, trans.addr,
+      m.addr, n.addr, k.addr,
+      alpha.addr, a[0].unsafeaddr, lda.addr,
+                  b[0].unsafeAddr, ldb.addr,
+      beta.addr,  result[0].addr, ldc.addr,
+                  bias = nil
+    )
+
+proc benchMkldnnJitAVX512(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
+
+  var # MKL-DNN wants pointers as input
+    trans = 'N'
+    m = int32 M
+    n = int32 N
+    k = int32 K
+    alpha = 1'f32
+    lda = int32 K
+    ldb = int32 N
+    beta = 0'f32
+    ldc = int32 N
+
+  bench("MKL-DNN JIT AVX512 benchmark"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
+  do:
+    # Main work
+    discard mkldnn_jit_avx512_common_gemm_f32(
+      trans.addr, trans.addr,
+      m.addr, n.addr, k.addr,
+      alpha.addr, a[0].unsafeaddr, lda.addr,
+                  b[0].unsafeAddr, ldb.addr,
+      beta.addr,  result[0].addr, ldc.addr,
+                  bias = nil
     )
 
 # ###########################################
@@ -271,7 +324,7 @@ when isMainModule:
   import ../../laser/private/error_functions
 
   randomize(42) # For reproducibility
-  warmup() # Not needed with ref implementation warmup
+  # warmup() # Not needed with ref implementation warmup
   echo ""
   echo "A matrix shape: " & $ashape
   echo "B matrix shape: " & $bshape
@@ -286,16 +339,17 @@ when isMainModule:
     let a = newSeqWith(M*K, float32 rand(-0.1..0.1))
     let b = newSeqWith(K*N, float32 rand(-0.1..0.1))
 
-    # let reference = benchReference(a, b, NbSamples)
-    # let simpleTiling = benchSimpleTiling(a, b, NbSamples)
-    # let arraymancer = benchArraymancerFallback(a, b, NbSamples)
+    let reference = benchReference(a, b, NbSamples)
+    let simpleTiling = benchSimpleTiling(a, b, NbSamples)
+    let arraymancer = benchArraymancerFallback(a, b, NbSamples)
     let vendorBlas = benchOpenBLAS(a, b, NbSamples)
     let laser = benchLaserGEMM(a, b, NbSamples)
-    # let glow = benchPyTorchGlow(a, b, NbSamples)
+    let glow = benchPyTorchGlow(a, b, NbSamples)
     let mkldnnref = benchMkldnnRef(a, b, NbSamples)
+    let mkldnnjitavx = benchMkldnnJitAVX(a, b, NbSamples)
+    let mkldnnjitavx512 = benchMkldnnJitAVX512(a, b, NbSamples)
 
     block:
-
       # var error = mean_relative_error(vendorBlas, reference)
       # echo "Mean Relative Error of OpenBLAS vs reference: ", error
       # doAssert error <= 1e-5'f32, $error
@@ -322,58 +376,10 @@ when isMainModule:
 ###############################
 # OpenMP
 
-# i9_9980XE Skylake-X 18 cores overclocked 4.1 GHz all-turbo, 4.0 GHz AVX turbo, 3.6 GHz AVX512 turbo
+# i9_9980XE Skylake-X 18 cores overclocked 4.1 GHz all-turbo, 4.0 GHz AVX turbo, 3.5 GHz AVX512 turbo
 # PyTorch Glow compiled with AVX2 as AVX512 is slower
-# Warmup: 0.9018 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
-# A matrix shape: (M: 3840, N: 3840)
-# B matrix shape: (M: 3840, N: 3840)
-# Output shape: (M: 3840, N: 3840)
-# Required number of operations: 113246.208 millions
-# Required bytes:                  117.965 MB
-# Arithmetic intensity:            960.000 FLOP/byte
-# Theoretical peak single-core:    230.400 GFLOP/s
-# Theoretical peak multi:         4147.200 GFLOP/s
-# Make sure to not bench Apple Accelerate or the default Linux BLAS.
-
-# OpenBLAS benchmark
-# Collected 10 samples in 0.504 seconds
-# Average time: 49.841 ms
-# Stddev  time: 4.290 ms
-# Min     time: 48.066 ms
-# Max     time: 61.994 ms
-# Perf:         2272.149 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 950.1965942382812
-
-# Laser production implementation
-# Collected 10 samples in 0.653 seconds
-# Average time: 64.678 ms
-# Stddev  time: 2.742 ms
-# Min     time: 63.140 ms
-# Max     time: 71.649 ms
-# Perf:         1750.928 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 950.1968383789062
-
-# PyTorch Glow: libjit matmul implementation
-# Collected 10 samples in 16.555 seconds
-# Average time: 1655.510 ms
-# Stddev  time: 0.204 ms
-# Min     time: 1655.276 ms
-# Max     time: 1655.983 ms
-# Perf:         68.406 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 950.1965942382812
-
-###############################
-# i5-5227U 2.7 GHz Broadwell dual core AVX2
-
-# $  ./build/bench_gemm
-# Warmup: 1.1900 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Warmup: 0.9063 s, result 224 (displayed to avoid compiler optimizing warmup away)
 
 # A matrix shape: (M: 1920, N: 1920)
 # B matrix shape: (M: 1920, N: 1920)
@@ -381,129 +387,79 @@ when isMainModule:
 # Required number of operations: 14155.776 millions
 # Required bytes:                   29.491 MB
 # Arithmetic intensity:            480.000 FLOP/byte
-# Theoretical peak single-core:     86.400 GFLOP/s
-# Theoretical peak multi:          172.800 GFLOP/s
+# Theoretical peak single-core:    224.000 GFLOP/s
+# Theoretical peak multi:         4032.000 GFLOP/s
 # Make sure to not bench Apple Accelerate or the default Linux BLAS.
 
-# OpenBLAS benchmark
-# Collected 10 samples in 0.977 seconds
-# Average time: 97.464 ms
-# Stddev  time: 1.479 ms
-# Min     time: 95.994 ms
-# Max     time: 101.073 ms
-# Perf:         145.241 GFLOP/s
+# Reference loop
+# Collected 10 samples in 10.352 seconds
+# Average time: 1034.621 ms
+# Stddev  time: 3.193 ms
+# Min     time: 1029.729 ms
+# Max     time: 1040.034 ms
+# Perf:         13.682 GFLOP/s
 
-# Display output[0] to make sure it's not optimized away
-# 470.7781372070312
+# Simple Tiling
+# Collected 10 samples in 16.658 seconds
+# Average time: 1665.251 ms
+# Stddev  time: 488.574 ms
+# Min     time: 274.804 ms
+# Max     time: 1825.817 ms
+# Perf:         8.501 GFLOP/s
 
-# Laser production implementation
-# Collected 10 samples in 1.039 seconds
-# Average time: 103.659 ms
-# Stddev  time: 4.858 ms
-# Min     time: 97.393 ms
-# Max     time: 114.670 ms
-# Perf:         136.561 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 470.778076171875
-
-###############################
-# Serial - Nim code compiled without -d:openmp
-# i9_9980XE Skylake-X 18 cores overclocked 4.1 GHz all-turbo, 4.0 GHz AVX turbo, 3.6 GHz AVX512 turbo
-# PyTorch Glow compiled with AVX2 as AVX512 is slower
-# For some reason OPENBLAS_NUM_THREADS=1 is ignore on Linux ...
-
-# # $ OPENBLAS_NUM_THREADS=1 ./build/bench_gemm
-# Warmup: 0.9034 s, result 224 (displayed to avoid compiler optimizing warmup away)
-
-# A matrix shape: (M: 3840, N: 3840)
-# B matrix shape: (M: 3840, N: 3840)
-# Output shape: (M: 3840, N: 3840)
-# Required number of operations: 113246.208 millions
-# Required bytes:                  117.965 MB
-# Arithmetic intensity:            960.000 FLOP/byte
-# Theoretical peak single-core:    230.400 GFLOP/s
-# Theoretical peak multi:         4147.200 GFLOP/s
-# Make sure to not bench Apple Accelerate or the default Linux BLAS.
+# Arraymancer fallback BLAS
+# Collected 10 samples in 22.953 seconds
+# Average time: 2294.844 ms
+# Stddev  time: 1.488 ms
+# Min     time: 2293.406 ms
+# Max     time: 2297.158 ms
+# Perf:         6.169 GFLOP/s
 
 # OpenBLAS benchmark
-# Collected 10 samples in 0.499 seconds
-# Average time: 49.279 ms
-# Stddev  time: 3.924 ms
-# Min     time: 47.855 ms
-# Max     time: 60.436 ms
-# Perf:         2298.061 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 950.1965942382812
+# Collected 10 samples in 0.090 seconds
+# Average time: 8.344 ms
+# Stddev  time: 5.493 ms
+# Min     time: 6.586 ms
+# Max     time: 23.977 ms
+# Perf:         1696.506 GFLOP/s
 
 # Laser production implementation
-# Collected 10 samples in 6.828 seconds
-# Average time: 682.218 ms
-# Stddev  time: 9.549 ms
-# Min     time: 667.896 ms
-# Max     time: 693.479 ms
-# Perf:         165.997 GFLOP/s
+# Collected 10 samples in 0.089 seconds
+# Average time: 8.396 ms
+# Stddev  time: 3.306 ms
+# Min     time: 7.219 ms
+# Max     time: 17.793 ms
+# Perf:         1686.090 GFLOP/s
 
-# Display output[0] to make sure it's not optimized away
-# 950.1968383789062
+# PyTorch Glow: libjit matmul implementation (with AVX+FMA)
+# Collected 10 samples in 1.895 seconds
+# Average time: 189.521 ms
+# Stddev  time: 2.362 ms
+# Min     time: 188.692 ms
+# Max     time: 196.239 ms
+# Perf:         74.693 GFLOP/s
 
-# PyTorch Glow: libjit matmul implementation
-# Collected 10 samples in 17.060 seconds
-# Average time: 1705.967 ms
-# Stddev  time: 0.332 ms
-# Min     time: 1705.659 ms
-# Max     time: 1706.847 ms
-# Perf:         66.382 GFLOP/s
+# MKL-DNN reference GEMM benchmark
+# Collected 10 samples in 0.381 seconds
+# Average time: 37.376 ms
+# Stddev  time: 5.534 ms
+# Min     time: 34.748 ms
+# Max     time: 49.298 ms
+# Perf:         378.741 GFLOP/s
 
-# Display output[0] to make sure it's not optimized away
-# 950.1965942382812
+# MKL-DNN JIT AVX benchmark
+# Collected 10 samples in 0.101 seconds
+# Average time: 9.385 ms
+# Stddev  time: 4.980 ms
+# Min     time: 7.717 ms
+# Max     time: 23.549 ms
+# Perf:         1508.331 GFLOP/s
 
-###############################
-# i5-5227U 2.7 GHz Broadwell dual core AVX2
-
-# $ OPENBLAS_NUM_THREADS=1 ./build/bench_gemm
-# Warmup: 1.1973 s, result 224 (displayed to avoid compiler optimizing warmup away)
-
-# A matrix shape: (M: 1920, N: 1920)
-# B matrix shape: (M: 1920, N: 1920)
-# Output shape: (M: 1920, N: 1920)
-# Required number of operations: 14155.776 millions
-# Required bytes:                   29.491 MB
-# Arithmetic intensity:            480.000 FLOP/byte
-# Theoretical peak single-core:     86.400 GFLOP/s
-# Theoretical peak multi:          172.800 GFLOP/s
-# Make sure to not bench Apple Accelerate or the default Linux BLAS.
-
-# OpenBLAS benchmark
-# Collected 10 samples in 1.893 seconds
-# Average time: 189.041 ms
-# Stddev  time: 2.558 ms
-# Min     time: 186.120 ms
-# Max     time: 193.507 ms
-# Perf:         74.882 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 470.7781372070312
-
-# Laser production implementation
-# Collected 10 samples in 1.942 seconds
-# Average time: 193.975 ms
-# Stddev  time: 4.279 ms
-# Min     time: 190.571 ms
-# Max     time: 205.327 ms
-# Perf:         72.978 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 470.778076171875
-
-# PyTorch Glow: libjit matmul implementation
-# Collected 10 samples in 2.216 seconds
-# Average time: 221.567 ms
-# Stddev  time: 2.270 ms
-# Min     time: 218.499 ms
-# Max     time: 225.679 ms
-# Perf:         63.889 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 470.778076171875
+# MKL-DNN JIT AVX512 benchmark
+# Collected 10 samples in 0.084 seconds
+# Average time: 7.798 ms
+# Stddev  time: 9.361 ms
+# Min     time: 4.685 ms
+# Max     time: 34.417 ms
+# Perf:         1815.302 GFLOP/s
+# Mean Relative Error compared to vendor BLAS: 3.045843413929106e-06
