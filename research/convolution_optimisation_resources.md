@@ -276,3 +276,4 @@ They use either the base convolution or the separable convolution as building bl
 - https://itpeernetwork.intel.com/myth-busted-general-purpose-cpus-cant-tackle-deep-neural-network-training/
 - http://proceedings.mlr.press/v80/zhang18d/zhang18d.pdf
 - https://github.com/wasd96040501/conv3x3
+- Deep Tensor Convolution on multi core https://arxiv.org/pdf/1611.06565.pdf

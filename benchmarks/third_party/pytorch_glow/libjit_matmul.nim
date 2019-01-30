@@ -1,5 +1,10 @@
 # Hack to allow "-std=c++11" only on this file
 # and avoid conflict with C files from cpuinfo
+
+import os, strutils
+const cSourcesPath = currentSourcePath.rsplit(DirSep, 1)[0] & '/'
+{.passC: "-I" & cSourcesPath.}
+
 {.emit: """
 /**
  * Copyright (c) 2017-present, Facebook, Inc.

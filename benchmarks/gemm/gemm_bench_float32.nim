@@ -43,7 +43,7 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 # Params
 import
   ./gemm_common,
-  ../blas,
+  ../third_party/blas,
   ./arraymancer/blas_l3_gemm,
   ../../laser/primitives/matrix_multiplication/gemm
 
@@ -185,8 +185,7 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int): seq[float32] =
       0'f32,  c_ptr, N, 1
     )
 
-# {.passC: "-I" & cSourcesPath & "pytorch_glow/".}
-# import pytorch_glow/libjit_matmul
+# import ../third_party/pytorch_glow/libjit_matmul
 #   # Hack due to conflicts between "-std=c++11" requires by Glow
 #   # and incompatible with C files in cpuinfo.
 #   # We can't use the proper:
@@ -260,7 +259,7 @@ when isMainModule:
     # let arraymancer = benchArraymancerFallback(a, b, NbSamples)
     let vendorBlas = benchOpenBLAS(a, b, NbSamples)
     let laser = benchLaserGEMM(a, b, NbSamples)
-    # benchPyTorchGlow(a, b, NbSamples)
+    # let glow = benchPyTorchGlow(a, b, NbSamples)
 
     block:
 
