@@ -86,7 +86,7 @@ type
 
   X86_FeatureMap = array[CPUFeatureX86, int]
 
-const X86_vecsize_float: X86_FeatureMap = [
+const X86_vecwidth_float: X86_FeatureMap = [
   x86_Generic:         1,
   x86_SSE:     128 div 8,
   x86_SSE2:    128 div 8,
@@ -97,38 +97,82 @@ const X86_vecsize_float: X86_FeatureMap = [
   x86_AVX512:  512 div 8
 ]
 
-const X86_vecsize_int: X86_FeatureMap = [
+const X86_vecwidth_int: X86_FeatureMap = [
   x86_Generic:         1,
   x86_SSE:             1,
   x86_SSE2:    128 div 8,
-  x86_SSE4_1:   128 div 8,
+  x86_SSE4_1:  128 div 8,
   x86_AVX:     128 div 8,  # Not even addition with integer AVX
   x86_AVX_FMA: 128 div 8,
   x86_AVX2:    256 div 8,
   x86_AVX512:  512 div 8
 ]
 
-# mr * nr < number of registers - 4
-# 4 registers are needed to hold Ã and ~B and loop index
-const X86_regs: X86_FeatureMap = [
-  x86_Generic: 2,
-  x86_SSE:     2, # 8 XMM regs in 32-bit, 16 in 64-bit (we assume 32-bit mode)
-  x86_SSE2:    6,
-  x86_SSE4_1:  6,
-  x86_AVX:     6, # 16 YMM registers
-  x86_AVX_FMA: 6,
-  x86_AVX2:    6,
-  x86_AVX512: 14  # 32 ZMM registers
-]
+# 4 registers are needed for loop indexes
+# To issue 2xFMAs in parallel we need to use 2x general purpose registers
+# We want to hold C of size MR * NR completely in SIMD registers as well
+# On x86-64 with 16 general purpose registers (GPR) and 32 SIMD registers (SIMD):
+#    - 2xMR + 4 <= 16 GPR
+#    - MR * NR <= 32
+when defined(amd64): # 64-bit
+  # MR configuration - registers for the rows of Ã
+  # 16 General purpose registers
+  const X86_regs: X86_FeatureMap = [
+    x86_Generic: 2,
+    x86_SSE:     6,
+    x86_SSE2:    6,
+    x86_SSE4_1:  6,
+    x86_AVX:     6,
+    x86_AVX_FMA: 6,
+    x86_AVX2:    6,
+    x86_AVX512:  6
+  ]
+
+  # NR configuration - Nb of ~B SIMD vectors
+  const NbVecs: X86_FeatureMap = [
+      x86_Generic: 1,
+      x86_SSE:     2, # 16 XMM registers - 16/6 = 2
+      x86_SSE2:    2,
+      x86_SSE4_1:  2,
+      x86_AVX:     2, # 16 YMM registers - 16/6 = 2
+      x86_AVX_FMA: 2,
+      x86_AVX2:    2,
+      x86_AVX512:  4  # 32 ZMM registers - 32/6 = 5 - bench: 4 is 8% faster
+    ]
+else: # 32-bit
+  # MR configuration - registers for the rows of Ã
+  # 8 General purpose registers
+  const X86_regs: X86_FeatureMap = [
+    x86_Generic: 2,
+    x86_SSE:     2,
+    x86_SSE2:    2,
+    x86_SSE4_1:  2,
+    x86_AVX:     2,
+    x86_AVX_FMA: 2,
+    x86_AVX2:    2,
+    x86_AVX512:  2 
+  ]
+
+  # NR configuration - Nb of ~B SIMD vectors
+  const NbVecs: X86_FeatureMap = [
+      x86_Generic: 1,
+      x86_SSE:     2, # 8 XMM registers
+      x86_SSE2:    2,
+      x86_SSE4_1:  2,
+      x86_AVX:     2, # 8 YMM registers
+      x86_AVX_FMA: 2,
+      x86_AVX2:    2,
+      x86_AVX512:  2  # 8 ZMM registers
+    ]
 
 func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc, c_unit_stride: bool): MicroKernel =
   result.cpu_simd = cpu
   result.c_unit_stride = c_unit_stride
   result.pt = 128
   when T is SomeFloat:
-    result.nb_scalars = max(1, X86_vecsize_float[cpu] div T.sizeof)
+    result.nb_scalars = max(1, X86_vecwidth_float[cpu] div T.sizeof)
   elif T is SomeInteger: # Integers
-    result.nb_scalars = max(1, X86_vecsize_int[cpu] div T.sizeof)
+    result.nb_scalars = max(1, X86_vecwidth_int[cpu] div T.sizeof)
   else:
     {.error: "Unsupported type: " & T.type.name.}
 
@@ -140,7 +184,7 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc, c_unit_stride: bool): MicroKe
   # in the inner loop and untranspose in the epilogue
 
   result.mr = X86_regs[cpu]                 # 2~6 registers for the rows of Ã
-  result.nb_vecs_nr = 2                     # x2 for 2 SIMD vectors of B
+  result.nb_vecs_nr = NbVecs[cpu]           # x2 for 2 SIMD vectors of B
   result.nr = result.nb_vecs_nr * result.nb_scalars
 
 #############################################
