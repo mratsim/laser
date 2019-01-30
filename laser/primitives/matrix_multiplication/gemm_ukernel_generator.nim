@@ -184,14 +184,16 @@ macro ukernel_simd_impl*(
       NbScalars = ukernel.nb_scalars
 
     ## Registers
+    # We keep all C in registers MR*NR size occupying MR*NbVecs
+    # We keep NbVecs slivers of A and B for C updates
     var
-      rA: seq[NimNode]           # array[MR div 2, V]
+      rA: seq[NimNode]           # array[NbVecs, V]
       rB: seq[NimNode]           # array[NbVecs, V]
       rAB = nnkBracket.newTree() # array[MR, array[NbVecs, V]]
     for jj in 0 ..< NbVecs:
+      rA.add genSym(nskVar, "A" & $jj)
       rB.add genSym(nskVar, "B" & $jj)
     for i in 0 ..< MR:
-      rA.add genSym(nskVar, "A" & $i)
       var rABi = nnkBracket.newTree()
       for j in 0 ..< NbVecs:
         rABi.add genSym(nskVar, "AB" & $i & "__" & $j)
@@ -234,16 +236,15 @@ macro ukernel_simd_impl*(
         `a0` = `simd_broadcast_value`(`A`[`k`*`MR`])
 
     for i in 0 ..< MR:
-      # for ii in 0 ..< 2:
-      #   # broadcast next iteration
-      #   let a_next = rA[(ii+1) mod 2]
-      #   echo "a_next: ", $a_next
-      #   bcast_fma.add quote do:
-      #     `a_next` = `simd_broadcast_value`(`A`[`k`*`MR`+(`ii`+1)*`NbScalars`])
-
-      let a = rA[i]
+      # broadcast next iteration
+      let next_register_idx = (i+1) mod NbVecs
+      let a_next = rA[next_register_idx]
       bcast_fma.add quote do:
-        `a` = `simd_broadcast_value`(`A`[`k`*`MR`+`i`])
+        # At the edge: `i`+1 = MR so equivalent to loading A[(k+1)*MR]
+        `a_next` = `simd_broadcast_value`(`A`[`k`*`MR`+(`i`+1)])
+      
+      # load current
+      let a = rA[i mod NbVecs]
 
       # Do FMA on the current one
       # echo "a: ", $a
