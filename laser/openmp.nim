@@ -348,6 +348,10 @@ template omp_single*(body: untyped): untyped =
   {.emit: "#pragma omp single".}
   block: body
 
+template omp_single_nowait*(body: untyped): untyped =
+  {.emit: "#pragma omp single nowait".}
+  block: body
+
 template omp_barrier*(): untyped =
   {.emit: "#pragma omp barrier".}
 
