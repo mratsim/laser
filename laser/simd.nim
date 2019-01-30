@@ -113,9 +113,9 @@ when defined(i386) or defined(amd64):
   func mm_set1_epi16*(a: int16 or uint16): m128i {.importc: "_mm_set1_epi16", x86.}
   func mm_set1_epi32*(a: int32 or uint32): m128i {.importc: "_mm_set1_epi32", x86.}
   func mm_set1_epi64x*(a: int64 or uint64): m128i {.importc: "_mm_set1_epi64x", x86.}
-  func mm_load_si128*(mem_addr: ptr SomeInteger): m128i {.importc: "_mm_load_si128", x86.}
-  func mm_loadu_si128*(mem_addr: ptr SomeInteger): m128i {.importc: "_mm_loadu_si128", x86.}
-  func mm_storeu_si128*(mem_addr: ptr SomeInteger, a: m128i) {.importc: "_mm_storeu_si128", x86.}
+  func mm_load_si128*(mem_addr: ptr m128i): m128i {.importc: "_mm_load_si128", x86.}
+  func mm_loadu_si128*(mem_addr: ptr m128i): m128i {.importc: "_mm_loadu_si128", x86.}
+  func mm_storeu_si128*(mem_addr: ptr m128i, a: m128i) {.importc: "_mm_storeu_si128", x86.}
   func mm_add_epi8*(a, b: m128i): m128i {.importc: "_mm_add_epi8", x86.}
   func mm_add_epi16*(a, b: m128i): m128i {.importc: "_mm_add_epi16", x86.}
   func mm_add_epi32*(a, b: m128i): m128i {.importc: "_mm_add_epi32", x86.}
@@ -268,9 +268,9 @@ when defined(i386) or defined(amd64):
   func mm256_set1_epi16*(a: int16 or uint16): m256i {.importc: "_mm256_set1_epi16", x86.}
   func mm256_set1_epi32*(a: int32 or uint32): m256i {.importc: "_mm256_set1_epi32", x86.}
   func mm256_set1_epi64x*(a: int64 or uint64): m256i {.importc: "_mm256_set1_epi64x", x86.}
-  func mm256_load_si256*(mem_addr: ptr SomeInteger): m256i {.importc: "_mm256_load_si256", x86.}
-  func mm256_loadu_si256*(mem_addr: ptr SomeInteger): m256i {.importc: "_mm256_loadu_si256", x86.}
-  func mm256_storeu_si256*(mem_addr: ptr SomeInteger, a: m256i) {.importc: "_mm256_storeu_si256", x86.}
+  func mm256_load_si256*(mem_addr: ptr m256i): m256i {.importc: "_mm256_load_si256", x86.}
+  func mm256_loadu_si256*(mem_addr: ptr m256i): m256i {.importc: "_mm256_loadu_si256", x86.}
+  func mm256_storeu_si256*(mem_addr: ptr m256i, a: m256i) {.importc: "_mm256_storeu_si256", x86.}
 
   func mm256_castps_si256*(a: m256): m256i {.importc: "_mm256_castps_si256", x86.}
     ## Cast a float32x8 vectors into a 256-bit int vector with the same bit pattern

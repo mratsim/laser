@@ -32,7 +32,7 @@ type MkldnnStatus {.importc: "mkldnn_status_t".} = enum
     # Queried element is not required for given primitive
     MkldnnNotRequired = 8
 
-proc mkldnn_ref_gemm*[T: float32](
+proc mkldnn_ref_gemm*[T](
   transa: ptr char, transb: ptr char,
   M, N, K: ptr int32,
   alpha, A: ptr T, lda: ptr int32,

@@ -241,12 +241,12 @@ proc benchMkldnnRef(a, b: seq[float32], nb_samples: int): seq[float32] =
     bias = newSeq[float32](N)
 
 
-  bench("MKL-DNN reference GEMM benchmark"):
+  bench("MKL-DNN reference GEMM benchmark (note that it also add a bias)"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
     zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
   do:
     # Main work
-    let mkldnn_status = mkldnn_ref_gemm(
+    discard mkldnn_ref_gemm(
       trans.addr, trans.addr,
       m.addr, n.addr, k.addr,
       alpha.addr, a[0].unsafeaddr, lda.addr,
@@ -254,7 +254,6 @@ proc benchMkldnnRef(a, b: seq[float32], nb_samples: int): seq[float32] =
       beta.addr,  result[0].addr, ldc.addr,
                   bias[0].addr
     )
-
 
 # ###########################################
 
