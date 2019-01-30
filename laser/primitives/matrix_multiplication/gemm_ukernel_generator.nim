@@ -39,6 +39,17 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
           MR = ukernel.extract_mr()
           NR = ukernel.extract_nr()
 
+        # var A : array[30, `T`]
+        # var B : array[30, `T`]
+        #
+        # for i in 0 ..< 30:
+        #   A[i] = packedA[i]
+        #   B[i] = packedB[i]
+        #
+        # debugecho(A)
+        # debugecho(B)
+        # debugecho(to_ptr(AB, MR, NR, `T`)[])
+
         gebb_ukernel_edge_epilogue(
                 alpha, to_ptr(AB, MR, NR, `T`),
                 beta, vC, mr, nr
@@ -59,12 +70,12 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
           MR = ukernel.extract_mr()
           NR = ukernel.extract_nr()
 
-        when is_c_unit_stride:
-          `epilogue_name`(alpha, AB, beta, vC)
-        else:
-          gebb_ukernel_epilogue_fallback(
-            alpha, to_ptr(AB, MR, NR, `T`),
-            beta, vC)
+        # when is_c_unit_stride:
+        #   `epilogue_name`(alpha, AB, beta, vC)
+        # else:
+        gebb_ukernel_epilogue_fallback(
+          alpha, to_ptr(AB, MR, NR, `T`),
+          beta, vC)
 
 # #############################################################
 
@@ -141,86 +152,121 @@ macro ukernel_simd_impl*(
       simd_setZero, simd_load_aligned, simd_broadcast_value, simd_fma: untyped
     ): untyped =
 
-  result = newStmtList()
 
-  ## ukernel config
-  let
-    MR = ukernel.mr
-    NR = ukernel.nr
-    NbVecs = ukernel.nb_vecs_nr # == NR div NbScalars
-    NbScalars = ukernel.nb_scalars
+  let MR = ukernel.mr
+  let NR = ukernel.nr
 
-  ## Registers
-  var
-    rA: seq[NimNode]           # array[MR div 2, V]
-    rB: seq[NimNode]           # array[NbVecs, V]
-    rAB = nnkBracket.newTree() # array[MR, array[NbVecs, V]]
-  for i in 0 ..< NbVecs:
-    rA.add genSym(nskVar, "A" & $i)
-    rB.add genSym(nskVar, "B" & $i)
-  for i in 0 ..< MR:
-    var rABi = nnkBracket.newTree()
-    for j in 0 ..< NbVecs:
-      rABi.add genSym(nskVar, "AB" & $i & "__" & $j)
-    rAB.add rABi
+  # echo "MR: ", MR
+  # echo "NR: ", NR
 
-  ## Declare
-  var declBody = newStmtList()
-  for a in rA:
-    declBody.add quote do:
-      var `a`{.noinit.}: `V`
-  for b in rB:
-    declBody.add quote do:
-      var `b`{.noinit.}: `V`
-  for i in 0 ..< MR:
-    for j in 0 ..< NbVecs:
-      let ab = rAB[i][j]
+  if false:
+    result = quote do:
+      var AB{.align_variable.}: array[`MR`, array[`NR`, float64]]
+      var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
+      var  B {.restrict.} = assume_aligned packedB # [kc, nc] by chunks of nr
+
+      for k in 0 ..< kc:
+        prefetch(B[(k+1)*`NR`].addr, Read, LowTemporalLocality)
+        for i in 0 ..< `MR`:
+          for j in 0 ..< `NR`-1:
+            AB[i][j] += A[k*`MR`+i] * B[k*`NR`+j]
+
+      AB
+
+  else:
+    result = newStmtList()
+
+    ## ukernel config
+    let
+      MR = ukernel.mr
+      NR = ukernel.nr
+      NbVecs = ukernel.nb_vecs_nr # == NR div NbScalars
+      NbScalars = ukernel.nb_scalars
+
+    ## Registers
+    var
+      rA: seq[NimNode]           # array[MR div 2, V]
+      rB: seq[NimNode]           # array[NbVecs, V]
+      rAB = nnkBracket.newTree() # array[MR, array[NbVecs, V]]
+    for jj in 0 ..< NbVecs:
+      rB.add genSym(nskVar, "B" & $jj)
+    for i in 0 ..< MR:
+      rA.add genSym(nskVar, "A" & $i)
+      var rABi = nnkBracket.newTree()
+      for j in 0 ..< NbVecs:
+        rABi.add genSym(nskVar, "AB" & $i & "__" & $j)
+      rAB.add rABi
+
+    ## Declare
+    var declBody = newStmtList()
+    for a in rA:
       declBody.add quote do:
-        var `ab` = `simd_setZero`()
+        var `a`{.noinit.}: `V`
+    for b in rB:
+      declBody.add quote do:
+        var `b`{.noinit.}: `V`
+    for i in 0 ..< MR:
+      for j in 0 ..< NbVecs:
+        let ab = rAB[i][j]
+        declBody.add quote do:
+          var `ab` = `simd_setZero`()
 
-  let k = genSym(nskForVar)
+    let k = genSym(nskForVar)
 
-  ## Prefetch
-  var prefetchBody = newStmtList()
-  for jj in 0 ..< NbVecs:
-    prefetchBody.add quote do:
-      prefetch(`B`[(`k`+1)*`NR`+`jj`*`NbScalars`].addr, Read, LowTemporalLocality)
+    ## Prefetch
+    var prefetchBody = newStmtList()
+    for jj in 0 ..< NbVecs:
+      prefetchBody.add quote do:
+        prefetch(`B`[(`k`+1)*`NR`+`jj`*`NbScalars`].addr, Read, LowTemporalLocality)
 
-  ## Load
-  var loadBody = newStmtList()
-  for jj in 0 ..< NbVecs:
-    let b = rB[jj]
-    loadBody.add quote do:
-      `b` = `simd_load_aligned`(`B`[`k`*`NR`+`jj`*`NbScalars`].addr)
+    ## Load
+    var loadBody = newStmtList()
+    for jj in 0 ..< NbVecs:
+      let b = rB[jj]
+      loadBody.add quote do:
+        `b` = `simd_load_aligned`(`B`[`k`*`NR`+`jj`*`NbScalars`].addr)
 
-  ## Interleaved broadcast and FMA
-  var bcast_fma = newStmtList()
-  block:
-    let a0 = rA[0]
-    bcast_fma.add quote do:
-      `a0` = `simd_broadcast_value`(`A`[`k`*`MR`])
-
-  for i in countup(0, MR-1, 2):
-    for ii in 0 ..< NbVecs:
-      # broadcast next iteration
-      let a_next = rA[(ii+1) mod NbVecs]
+    ## Interleaved broadcast and FMA
+    var bcast_fma = newStmtList()
+    block:
+      let a0 = rA[0]
       bcast_fma.add quote do:
-        `a_next` = `simd_broadcast_value`(`A`[`k`*`MR`+(`i`+1)+`ii`*`NbScalars`])
+        `a0` = `simd_broadcast_value`(`A`[`k`*`MR`])
+
+    for i in 0 ..< MR:
+      # for ii in 0 ..< 2:
+      #   # broadcast next iteration
+      #   let a_next = rA[(ii+1) mod 2]
+      #   echo "a_next: ", $a_next
+      #   bcast_fma.add quote do:
+      #     `a_next` = `simd_broadcast_value`(`A`[`k`*`MR`+(`ii`+1)*`NbScalars`])
+
+      let a = rA[i]
+      bcast_fma.add quote do:
+        `a` = `simd_broadcast_value`(`A`[`k`*`MR`+`i`])
 
       # Do FMA on the current one
-      let a = rA[ii]
+      # echo "a: ", $a
       for jj in 0 ..< NbVecs:
         let b = rB[jj]
-        let AB = rAB[min(MR-1, i + ii)][jj]
+        let AB = rAB[i][jj]
+        # if i == 1:
+        #   bcast_fma.add quote do:
+        #     debugEcho "\ni: ", `i` #, " - ii: ", `ii`
+        #     debugecho "before FMA - AB: ", cast[array[2, float64]](`AB`)
+        #     debugecho "before FMA - A*B: ", cast[array[2, float64]](`a`), " * ", cast[array[2, float64]](`b`)
         bcast_fma.add quote do:
           `AB` = `simd_fma`(`a`, `b`, `AB`)
+        # if i == 1:
+        #   bcast_fma.add quote do:
+        #     debugecho "after FMA - AB: ", cast[array[2, float64]](`AB`)
 
-  ## Assemble:
-  result = quote do:
-    `declBody`
-    for `k` in 0 ..< `kc`:
-      `loadBody`
-      `prefetchBody`
-      `bcast_fma`
-    ## Write registers to a MR/NR array
-    `rAB`
+    ## Assemble:
+    result = quote do:
+      `declBody`
+      for `k` in 0 ..< `kc`:
+        `loadBody`
+        `prefetchBody`
+        `bcast_fma`
+      ## Write registers to a MR/NR array
+      `rAB`

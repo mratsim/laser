@@ -17,7 +17,7 @@ proc warmup() =
   let stop = epochTime()
   echo &"Warmup: {stop - start:>4.4f} s, result {foo} (displayed to avoid compiler optimizing warmup away)"
 
-template printStats(name: string, output: openarray) {.dirty.} =
+template printStats(name: string, result: openarray) {.dirty.} =
   echo "\n" & name
   echo &"Collected {stats.n} samples in {global_stop - global_start:>4.3f} seconds"
   echo &"Average time: {stats.mean * 1000 :>4.3f} ms"
@@ -25,8 +25,6 @@ template printStats(name: string, output: openarray) {.dirty.} =
   echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
   echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
   echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GFLOP/s"
-  echo "\nDisplay output[0] to make sure it's not optimized away"
-  echo output[0] # Prevents compiler from optimizing stuff away
 
 template bench(name: string, initialisation, body: untyped) {.dirty.}=
   block: # Actual bench
@@ -39,7 +37,7 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
       let stop = epochTime()
       stats.push stop - start
     let global_stop = epochTime()
-    printStats(name, output)
+    printStats(name, result)
 
 # #############################################
 # Params
@@ -50,9 +48,9 @@ import
   ../../laser/primitives/matrix_multiplication/gemm
 
 const
-  M     = 32*6*20
-  K     = 32*6*20
-  N     = 32*6*20
+  M     = 16*6*20
+  K     = 16*6*20
+  N     = 16*6*20
   NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
   CpuGhz = 3.6      # i9-9980XE OC All turbo 4.1GHz (AVX2 4.0GHz, AVX512 3.6GHz)
   NumCpuCores = 18
@@ -78,11 +76,11 @@ const cSourcesPath = currentSourcePath.rsplit(DirSep, 1)[0] & '/'
 
 # #############################################
 
-proc benchOpenBLAS(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchOpenBLAS(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
   bench("OpenBLAS benchmark"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size) # We zero memory between computation
   do:
     # Main work
     gemm(
@@ -90,61 +88,66 @@ proc benchOpenBLAS(a, b: seq[float32], nb_samples: int) =
       M, N, K,
       1, a[0].unsafeaddr, K,
       b[0].unsafeAddr, N,
-      0, output[0].addr, N
+      0, result[0].addr, N
     )
 
-proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
   bench("Arraymancer fallback BLAS"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size) # We zero memory between computation
   do:
     # Main work
     gemm_nn_fallback(
       M, N, K,
       1'f32,      a, 0, K, 1,       # offset, stride row, stride col
                   b, 0, N, 1,
-      0'f32, output, 0, N, 1
+      0'f32, result, 0, N, 1
     )
 
-proc benchSimpleTiling(a, b: seq[float32], nb_samples: int) {.noinline.}=
-  var output = newSeq[float32](out_size)
+proc benchSimpleTiling(a, b: seq[float32], nb_samples: int): seq[float32] {.noinline.}=
+  result = newSeq[float32](out_size)
 
   let pa = a[0].unsafeAddr
   let pb = b[0].unsafeAddr
-  let po = output[0].addr
+  let pr = result[0].addr
   const blck = 32
 
   bench("Simple Tiling"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size) # We zero memory between computation
   do:
     {.emit: """
       #define min(a,b) (((a)<(b))?(a):(b))
 
-      float (* restrict A)[`K`] = (void*)`pa`;
-      float (* restrict B)[`N`] = (void*)`pb`;
-      float (* restrict C)[`N`] = (void*)`po`;
+      float (* __restrict A)[`K`] = (void*)`pa`;
+      float (* __restrict B)[`N`] = (void*)`pb`;
+      float (* __restrict C)[`N`] = (void*)`pr`;
 
-      // TODO: where to parallelize?
+      #pragma omp parallel
+      #pragma omp single
       for (int j = 0; j < `N`; j+=`blck`)
         for (int k = 0; k < `K`; k+=`blck`)
-          for (int i = 0; i < `M`; i++)
-            for (int jj = j; jj<min(j+`blck`, `N`); jj++)
-              for (int kk = k; kk<min(k+`blck`, `K`); kk++)
-                C[i][jj] += A[i][kk] * B[kk][jj];
+          for (int i = 0; i < `M`; i+=`blck`)
+      #pragma omp task \
+            depend(in: A[i:`blck`][k:`blck`], B[k:`blck`][j:`blck`]) \
+            depend(inout: C[i:`blck`][j:`blck`])
+            for (int ii = i; ii<min(i+`blck`, `M`); ++ii)
+              for (int jj = j; jj<min(j+`blck`, `N`); ++jj)
+                for (int kk = k; kk<min(k+`blck`, `K`); ++kk)
+                  C[ii][jj] += A[ii][kk] * B[kk][jj];
 
     """.}
 
-proc benchLaserGEMM(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+proc benchLaserGEMM(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
 
   let a_ptr{.restrict.} = a[0].unsafeAddr
   let b_ptr{.restrict.} = b[0].unsafeAddr
-  let c_ptr{.restrict.} = output[0].addr
+  let c_ptr{.restrict.} = result[0].addr
   bench("Laser production implementation"):
     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(output[0].addr, out_size) # We zero memory between computation
+    zeroMem(result[0].addr, out_size) # We zero memory between computation
   do:
     # Main work
     gemm_strided(
@@ -154,45 +157,44 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int) =
       0'f32,  c_ptr, N, 1
     )
 
-{.passC: "-I" & cSourcesPath & "pytorch_glow/".}
+# {.passC: "-I" & cSourcesPath & "pytorch_glow/".}
+# import pytorch_glow/libjit_matmul
+#   # Hack due to conflicts between "-std=c++11" requires by Glow
+#   # and incompatible with C files in cpuinfo.
+#   # We can't use the proper:
+#     # {.compile: "pytorch_glow/libjit_matmul.cpp".}
+#     # {.passC: "-std=c++11 -mavx -mfma".}
+#     # ^^^ This is configured in nim.cfg instead
 
-import pytorch_glow/libjit_matmul
-  # Hack due to conflicts between "-std=c++11" requires by Glow
-  # and incompatible with C files in cpuinfo.
-  # We can't use the proper:
-    # {.compile: "pytorch_glow/libjit_matmul.cpp".}
-    # {.passC: "-std=c++11 -mavx -mfma".}
-    # ^^^ This is configured in nim.cfg instead
+# proc libjit_matmul_f(
+#           c, a, b: ptr float32,
+#           cDims, aDims, bDims: ptr array[2, int]
+#       ) {.importc, cdecl.}
+#   # Note: Matrix C will be zero-mem'ed by libjit
 
-proc libjit_matmul_f(
-          c, a, b: ptr float32,
-          cDims, aDims, bDims: ptr array[2, int]
-      ) {.importc, cdecl.}
-  # Note: Matrix C will be zero-mem'ed by libjit
+# proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int): seq[float32] =
+#   result = newSeq[float32](out_size)
 
-proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int) =
-  var output = newSeq[float32](out_size)
+#   let a_ptr{.restrict.} = a[0].unsafeAddr
+#   let b_ptr{.restrict.} = b[0].unsafeAddr
+#   let c_ptr{.restrict.} = result[0].addr
 
-  let a_ptr{.restrict.} = a[0].unsafeAddr
-  let b_ptr{.restrict.} = b[0].unsafeAddr
-  let c_ptr{.restrict.} = output[0].addr
+#   let cDims = [M, N]
+#   let aDims = [M, K]
+#   let bDims = [K, N]
 
-  let cDims = [M, N]
-  let aDims = [M, K]
-  let bDims = [K, N]
+#   let cDims_ptr{.restrict.} = cDims.unsafeAddr
+#   let aDims_ptr{.restrict.} = aDims.unsafeAddr
+#   let bDims_ptr{.restrict.} = bDims.unsafeAddr
 
-  let cDims_ptr{.restrict.} = cDims.unsafeAddr
-  let aDims_ptr{.restrict.} = aDims.unsafeAddr
-  let bDims_ptr{.restrict.} = bDims.unsafeAddr
-
-  bench("PyTorch Glow: libjit matmul implementation"):
-    discard # zeroMem done by libjit
-  do:
-    # Main work
-    libjit_matmul_f(
-      c_ptr, a_ptr, b_ptr,
-      cDims_ptr, aDims_ptr, bDims_ptr
-    )
+#   bench("PyTorch Glow: libjit matmul implementation"):
+#     discard # zeroMem done by libjit
+#   do:
+#     # Main work
+#     libjit_matmul_f(
+#       c_ptr, a_ptr, b_ptr,
+#       cDims_ptr, aDims_ptr, bDims_ptr
+#     )
 
 # ###########################################
 
@@ -207,6 +209,8 @@ when defined(openmp):
   {.passL: "-fopenmp".}
 
 when isMainModule:
+  import ../../laser/private/error_functions
+
   randomize(42) # For reproducibility
   warmup()
   echo ""
@@ -223,12 +227,16 @@ when isMainModule:
     let a = newSeqWith(M*K, float32 rand(1.0))
     let b = newSeqWith(K*N, float32 rand(1.0))
 
-    # when not defined(openmp):
-    #   benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
+    # benchSimpleTiling(a, b, NbSamples)
     # benchArraymancerFallback(a, b, NbSamples)
-    benchOpenBLAS(a, b, NbSamples)
-    benchLaserGEMM(a, b, NbSamples)
-    benchPyTorchGlow(a, b, NbSamples)
+    let reference = benchOpenBLAS(a, b, NbSamples)
+    let challenger = benchLaserGEMM(a, b, NbSamples)
+    # benchPyTorchGlow(a, b, NbSamples)
+
+    block:
+      var error = mean_relative_error(challenger, reference)
+      echo "Mean Relative Error compared to OpenBLAS: ", error
+      doAssert error <= 1.5e-2'f32, $error
 
 # Seems like my original Arraymancer BLAS has false sharing issue
 # FYI Apple accelerate is about 117~122GFLOP/s on my machine.

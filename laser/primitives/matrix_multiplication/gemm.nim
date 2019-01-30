@@ -64,12 +64,17 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # Nim doesn't support arbitrary increment with OpenMP
   # So we store indexing/edge case data in tiles
-  const MR = ukernel.extract_mr
-  const NR = ukernel.extract_nr
+  const
+    MR = ukernel.extract_mr
+    NR = ukernel.extract_nr
+    PT = ukernel.extract_pt
+    grainsize = PT div NR
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  for jr in countup(0, nc-1, NR):
+  # for jr in countup(0, nc-1, NR):
+  omp_taskloop(jrb, tiles.jr_num_nr_tiles, "nogroup"):
+    let jr = jrb * NR
     let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
     # ###################################
@@ -82,7 +87,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
       prefetch(upanel_b, Read, ModerateTemporalLocality)
       let upanel_a = tiles.a + ir*kc
       prefetch(upanel_a, Read, ModerateTemporalLocality)
-
+      
       if nr == NR and mr == MR:
         # General case
         gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
@@ -110,10 +115,37 @@ proc gemm_impl[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T],
       tiles: Tiles[T]
     ) =
-                                                      # A[0:M, 0:K]
+
+  # ####################################################################
+  # Loop partitioning
+  #   - We parallelize around ic loop (partitions M dimension)
+  #   - and jr loop (partitions N dimension)
+  #
+  # Currently the first loop nc = N is not partitioned.
+  # According to BLIS paper, it should be partitioned at socket level.
+  # This can be done with OpenMP using
+  #
+  #   omp_set_nested(1);  
+  #   n_sockets = omp_get_num_places();
+  #   #pragma omp parallel num_threads(n_sockets) proc_bind(spread)
+  #   {
+  #       n_procs = omp_get_place_num_procs(omp_get_num_places());
+  #       #pragma omp parallel num_threads(n_procs) proc_bind(close)
+  #       doStuff();
+  #   }
+
+  # Hyperthreading will pollute the L1, L2 caches and the TLB
+  # as we intentionally choose parameters so that about
+  # half of the core caches is taken by micropanels of A and B.
+  # But somehow fixing num_threads to anything other than my number of logical threads
+  # kills my perf (and even also OpenBLAS when it's run at the same time)
+
+  const PT = ukernel.extract_pt
+  let parallelize = M*N*K > PT*PT*PT
+  # let nb_threads = cpuinfo_get_cores_count() # get physical cores
+
   # ####################################################################
   # 1. for jc = 0,...,n−1 in steps of nc
-  # not partitioned currently nc = N
   let nc = N                                          # B[0:K, jc:jc+nc]
                                                       # C[0:M, jc:jc+nc]
   # ######################################
@@ -130,21 +162,23 @@ proc gemm_impl[T; ukernel: static MicroKernel](
 
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
-    for icb in 0||(tiles.ic_num_mc_tiles - 1):
-      let thread_id = omp_get_thread_num()
-      let packA = tiles.a + thread_id * tiles.mc * kc
-      prefetch(packA, Write, LowTemporalLocality)
-      let ic = icb * tiles.mc
-      let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
+    # for ic in countup(0, M-1, tiles.mc):
+    omp_parallel_if(parallelize):
+      omp_for(icb, tiles.ic_num_mc_tiles, use_simd = false, nowait = true):
+        let thread_id = omp_get_thread_num()
+        let packA = tiles.a + thread_id * tiles.mc * kc
+        prefetch(packA, Write, LowTemporalLocality)
+        let ic = icb * tiles.mc
+        let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
-      let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
-      pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
+        let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
+        pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
 
-      gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
-          mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
-          alpha, beta, vC.stride(ic, 0),              #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
-          tiles                                       #    βC[ic:ic+mc, jc:jc+nc]
-        )
+        gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
+            mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
+            alpha, beta, vC.stride(ic, 0),              #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +
+            tiles                                       #    βC[ic:ic+mc, jc:jc+nc]
+          )
 
 # ############################################################
 #
@@ -249,8 +283,8 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
-    # echo '\n'
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
 
   block:
     let a = [[1.0, 2, 3],
@@ -276,8 +310,8 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
-    # echo '\n'
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
 
   block:
     let a = [[1.0,2,3],
@@ -301,8 +335,8 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
-    # echo '\n'
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
 
   block:
     # example from http://www.intmath.com/matrices-determinants/matrix-multiplication-examples.php
@@ -327,8 +361,8 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
-    # echo '\n'
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication_;5;5;5;5?matrix1=[[%225%22,%226%22,%225%22,%228%22],[%228%22,%222%22,%228%22,%228%22],[%220%22,%225%22,%224%22,%220%22],[%224%22,%220%22,%225%22,%226%22],[%224%22,%225%22,%220%22,%223%22]]&matrix2=[[%225%22,%223%22,%226%22,%220%22],[%225%22,%222%22,%223%22,%223%22],[%228%22,%228%22,%222%22,%220%22],[%227%22,%227%22,%220%22,%220%22]]&operator=*
@@ -360,8 +394,8 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
-    # echo '\n'
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
 
   block:
     let a =  [[2, 4,  3,  1,  3,  1,  3,  1],
@@ -391,8 +425,8 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ", res_ab
 
-    doAssert res_ab == ab
-    # echo '\n'
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
 
   block:
     let a =  [[2, 1],
@@ -428,8 +462,8 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ",   res_ab
 
-    doAssert res_ab == ab
-    # echo '\n'
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
 
   block:
     # from http://www.calcul.com/show/calculator/matrix-multiplication?matrix1=[[%222%22,%224%22,%223%22,%221%22,%223%22,%221%22,%223%22,%221%22],[%221%22,%222%22,%221%22,%221%22,%222%22,%220%22,%224%22,%223%22],[%222%22,%220%22,%220%22,%223%22,%220%22,%224%22,%224%22,%221%22],[%221%22,%221%22,%224%22,%220%22,%223%22,%221%22,%223%22,%220%22],[%223%22,%224%22,%221%22,%221%22,%224%22,%222%22,%223%22,%224%22],[%222%22,%224%22,%220%22,%222%22,%223%22,%223%22,%223%22,%224%22],[%223%22,%220%22,%220%22,%223%22,%221%22,%224%22,%223%22,%221%22],[%224%22,%223%22,%222%22,%224%22,%221%22,%220%22,%220%22,%220%22]]&matrix2=[[%222%22,%222%22,%220%22,%224%22,%220%22,%220%22,%224%22,%222%22],[%222%22,%220%22,%220%22,%221%22,%221%22,%221%22,%223%22,%221%22],[%220%22,%222%22,%222%22,%220%22,%222%22,%222%22,%223%22,%223%22],[%220%22,%220%22,%221%22,%220%22,%224%22,%222%22,%224%22,%221%22],[%220%22,%220%22,%221%22,%223%22,%224%22,%222%22,%224%22,%222%22],[%224%22,%223%22,%224%22,%221%22,%224%22,%224%22,%220%22,%223%22],[%223%22,%223%22,%220%22,%222%22,%221%22,%222%22,%223%22,%223%22],[%222%22,%221%22,%222%22,%221%22,%222%22,%224%22,%224%22,%221%22]]&operator=*
@@ -474,5 +508,5 @@ when isMainModule:
     # echo "expected: ", ab
     # echo "result: ",   res_ab
 
-    doAssert res_ab == ab
-    # echo '\n'
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
