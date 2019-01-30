@@ -65,6 +65,7 @@ type
     nb_scalars*: int # Ideally MicroKernel should be generic over T
     nb_vecs_nr*: int
     c_unit_stride*: bool # We can use SIMD for the epilogue of C has a unit_stride
+    pt*: int # Parallelization threshold
 
     # TODO: ARM support
     #   - https://github.com/nim-lang/Nim/issues/9679
@@ -123,6 +124,7 @@ const X86_regs: X86_FeatureMap = [
 func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc, c_unit_stride: bool): MicroKernel =
   result.cpu_simd = cpu
   result.c_unit_stride = c_unit_stride
+  result.pt = 128
   when T is SomeFloat:
     result.nb_scalars = max(1, X86_vecsize_float[cpu] div T.sizeof)
   elif T is SomeInteger: # Integers
@@ -159,6 +161,9 @@ macro extract_nb_vecs_nr*(ukernel: static MicroKernel): untyped =
   result = newLit ukernel.nb_vecs_nr
 macro extract_c_unit_stride*(ukernel: static MicroKernel): untyped =
   result = newLit ukernel.c_unit_stride
+macro extract_pt*(ukernel: static MicroKernel): untyped =
+  result = newLit ukernel.pt
+
 
 # ############################################################
 #

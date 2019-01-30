@@ -25,8 +25,6 @@ template printStats(name: string, result: openarray) {.dirty.} =
   echo &"Min     time: {stats.min * 1000 :>4.3f} ms"
   echo &"Max     time: {stats.max * 1000 :>4.3f} ms"
   echo &"Perf:         {req_ops.float / stats.mean / float(10^9):>4.3f} GFLOP/s"
-  echo "\nDisplay result[0] to make sure it's not optimized away"
-  echo result[0] # Prevents compiler from optimizing stuff away
 
 template bench(name: string, initialisation, body: untyped) {.dirty.}=
   block: # Actual bench
@@ -159,45 +157,44 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int): seq[float32] =
       0'f32,  c_ptr, N, 1
     )
 
-{.passC: "-I" & cSourcesPath & "pytorch_glow/".}
+# {.passC: "-I" & cSourcesPath & "pytorch_glow/".}
+# import pytorch_glow/libjit_matmul
+#   # Hack due to conflicts between "-std=c++11" requires by Glow
+#   # and incompatible with C files in cpuinfo.
+#   # We can't use the proper:
+#     # {.compile: "pytorch_glow/libjit_matmul.cpp".}
+#     # {.passC: "-std=c++11 -mavx -mfma".}
+#     # ^^^ This is configured in nim.cfg instead
 
-import pytorch_glow/libjit_matmul
-  # Hack due to conflicts between "-std=c++11" requires by Glow
-  # and incompatible with C files in cpuinfo.
-  # We can't use the proper:
-    # {.compile: "pytorch_glow/libjit_matmul.cpp".}
-    # {.passC: "-std=c++11 -mavx -mfma".}
-    # ^^^ This is configured in nim.cfg instead
+# proc libjit_matmul_f(
+#           c, a, b: ptr float32,
+#           cDims, aDims, bDims: ptr array[2, int]
+#       ) {.importc, cdecl.}
+#   # Note: Matrix C will be zero-mem'ed by libjit
 
-proc libjit_matmul_f(
-          c, a, b: ptr float32,
-          cDims, aDims, bDims: ptr array[2, int]
-      ) {.importc, cdecl.}
-  # Note: Matrix C will be zero-mem'ed by libjit
+# proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int): seq[float32] =
+#   result = newSeq[float32](out_size)
 
-proc benchPyTorchGlow(a, b: seq[float32], nb_samples: int): seq[float32] =
-  result = newSeq[float32](out_size)
+#   let a_ptr{.restrict.} = a[0].unsafeAddr
+#   let b_ptr{.restrict.} = b[0].unsafeAddr
+#   let c_ptr{.restrict.} = result[0].addr
 
-  let a_ptr{.restrict.} = a[0].unsafeAddr
-  let b_ptr{.restrict.} = b[0].unsafeAddr
-  let c_ptr{.restrict.} = result[0].addr
+#   let cDims = [M, N]
+#   let aDims = [M, K]
+#   let bDims = [K, N]
 
-  let cDims = [M, N]
-  let aDims = [M, K]
-  let bDims = [K, N]
+#   let cDims_ptr{.restrict.} = cDims.unsafeAddr
+#   let aDims_ptr{.restrict.} = aDims.unsafeAddr
+#   let bDims_ptr{.restrict.} = bDims.unsafeAddr
 
-  let cDims_ptr{.restrict.} = cDims.unsafeAddr
-  let aDims_ptr{.restrict.} = aDims.unsafeAddr
-  let bDims_ptr{.restrict.} = bDims.unsafeAddr
-
-  bench("PyTorch Glow: libjit matmul implementation"):
-    discard # zeroMem done by libjit
-  do:
-    # Main work
-    libjit_matmul_f(
-      c_ptr, a_ptr, b_ptr,
-      cDims_ptr, aDims_ptr, bDims_ptr
-    )
+#   bench("PyTorch Glow: libjit matmul implementation"):
+#     discard # zeroMem done by libjit
+#   do:
+#     # Main work
+#     libjit_matmul_f(
+#       c_ptr, a_ptr, b_ptr,
+#       cDims_ptr, aDims_ptr, bDims_ptr
+#     )
 
 # ###########################################
 
@@ -238,6 +235,7 @@ when isMainModule:
 
     block:
       var error = mean_relative_error(challenger, reference)
+      echo "Mean Relative Error compared to OpenBLAS: ", error
       doAssert error <= 1.5e-2'f32, $error
 
 # Seems like my original Arraymancer BLAS has false sharing issue

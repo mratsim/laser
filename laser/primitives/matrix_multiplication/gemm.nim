@@ -64,13 +64,16 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # Nim doesn't support arbitrary increment with OpenMP
   # So we store indexing/edge case data in tiles
-  const MR = ukernel.extract_mr
-  const NR = ukernel.extract_nr
+  const
+    MR = ukernel.extract_mr
+    NR = ukernel.extract_nr
+    PT = ukernel.extract_pt
+    grainsize = PT div NR
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
   # for jr in countup(0, nc-1, NR):
-  omp_taskloop(jrb, tiles.jr_num_nr_tiles, ""):
+  omp_taskloop(jrb, tiles.jr_num_nr_tiles, "nogroup"):
     let jr = jrb * NR
     let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
@@ -112,12 +115,14 @@ proc gemm_impl[T; ukernel: static MicroKernel](
       beta: T, vC: MatrixView[T],
       tiles: Tiles[T]
     ) =
-    
+
   # ####################################################################
-  # 1. for jc = 0,...,n−1 in steps of nc
-  # not partitioned currently nc = N
-  # According to BLIS paper, should be partitioned
-  # at socket level.
+  # Loop partitioning
+  #   - We parallelize around ic loop (partitions M dimension)
+  #   - and jr loop (partitions N dimension)
+  #
+  # Currently the first loop nc = N is not partitioned.
+  # According to BLIS paper, it should be partitioned at socket level.
   # This can be done with OpenMP using
   #
   #   omp_set_nested(1);  
@@ -128,6 +133,19 @@ proc gemm_impl[T; ukernel: static MicroKernel](
   #       #pragma omp parallel num_threads(n_procs) proc_bind(close)
   #       doStuff();
   #   }
+
+  # Hyperthreading will pollute the L1, L2 caches and the TLB
+  # as we intentionally choose parameters so that about
+  # half of the core caches is taken by micropanels of A and B.
+  # But somehow fixing num_threads to anything other than my number of logical threads
+  # kills my perf (and even also OpenBLAS when it's run at the same time)
+
+  const PT = ukernel.extract_pt
+  let parallelize = M*N*K > PT*PT*PT
+  # let nb_threads = cpuinfo_get_cores_count() # get physical cores
+
+  # ####################################################################
+  # 1. for jc = 0,...,n−1 in steps of nc
   let nc = N                                          # B[0:K, jc:jc+nc]
                                                       # C[0:M, jc:jc+nc]
   # ######################################
@@ -145,7 +163,7 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     # ####################################
     # 3. for ic = 0,...,m−1 in steps of mc
     # for ic in countup(0, M-1, tiles.mc):
-    omp_parallel_if(M*N*K > 128*128*128):
+    omp_parallel_if(parallelize):
       omp_for(icb, tiles.ic_num_mc_tiles, use_simd = false, nowait = true):
         let thread_id = omp_get_thread_num()
         let packA = tiles.a + thread_id * tiles.mc * kc
