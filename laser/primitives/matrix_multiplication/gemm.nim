@@ -75,8 +75,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
   # 4. for jr = 0,...,nc−1 in steps of nr
   # for jr in countup(0, nc-1, NR):
   for jrb in 0 .. tiles.jr_num_nr_tiles-1:
-    {.emit: "#pragma omp task firstprivate(`jrb`)".}
-    block:
+    omp_task("firstprivate(`jrb`)"):
       let jr = jrb * NR
       let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
@@ -163,17 +162,13 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     # First time writing to C, we scale it, otherwise accumulate
     let beta = if pc == 0: beta else: 1.T
 
-
-    {.emit: "#pragma omp parallel if(`parallelize`)".}
-    block:
-      {.emit: "#pragma omp single nowait".}
-      block:
+    omp_parallel_if(parallelize):
+      omp_single_nowait:
         # ####################################
         # 3. for ic = 0,...,m−1 in steps of mc
         # for ic in countup(0, M-1, tiles.mc):
         for icb in 0 .. tiles.ic_num_mc_tiles-1:
-          {.emit: "#pragma omp task firstprivate(`icb`)".}
-          block:
+          omp_task("firstprivate(`icb`)"):
             const MR = ukernel.extract_mr
             let packA = tiles.a + icb * tiles.upanelA_size
             prefetch(packA, Write, LowTemporalLocality)
