@@ -223,6 +223,39 @@ proc benchLaserGEMM(a, b: seq[float32], nb_samples: int): seq[float32] =
 #       cDims_ptr, aDims_ptr, bDims_ptr
 #     )
 
+import ../third_party/mkldnn
+proc benchMkldnnRef(a, b: seq[float32], nb_samples: int): seq[float32] =
+  result = newSeq[float32](out_size)
+
+  var # MKL-DNN wants pointers as input
+    trans = 'N'
+    m = int32 M
+    n = int32 N
+    k = int32 K
+    alpha = 1'f32
+    lda = int32 K
+    ldb = int32 N
+    beta = 0'f32
+    ldc = int32 N
+
+    bias = newSeq[float32](N)
+
+
+  bench("MKL-DNN reference GEMM benchmark"):
+    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
+  do:
+    # Main work
+    let mkldnn_status = mkldnn_ref_gemm(
+      trans.addr, trans.addr,
+      m.addr, n.addr, k.addr,
+      alpha.addr, a[0].unsafeaddr, lda.addr,
+                  b[0].unsafeAddr, ldb.addr,
+      beta.addr,  result[0].addr, ldc.addr,
+                  bias[0].addr
+    )
+
+
 # ###########################################
 
 when defined(fast_math):
@@ -260,6 +293,7 @@ when isMainModule:
     let vendorBlas = benchOpenBLAS(a, b, NbSamples)
     let laser = benchLaserGEMM(a, b, NbSamples)
     # let glow = benchPyTorchGlow(a, b, NbSamples)
+    let mkldnnref = benchMkldnnRef(a, b, NbSamples)
 
     block:
 
