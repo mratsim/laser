@@ -108,14 +108,44 @@ const X86_vecwidth_int: X86_FeatureMap = [
   x86_AVX512:  512 div 8
 ]
 
-# 4 registers are needed for loop indexes
-# To issue 2xFMAs in parallel we need to use 2x general purpose registers
-# We want to hold C of size MR * NR completely in SIMD registers as well
-# On x86-64 with 16 general purpose registers (GPR) and 32 SIMD registers (SIMD):
-#    - 2xMR + 4 <= 16 GPR
-#    - MR * NR <= 32
+# Registers constraints and micro-kernel tuning
+#   - To issue 2xFMAs in parallel we need to use 2x SIMD registers
+#   - We want to hold C of size MR * NR completely in SIMD registers as well
+#     as each value is reused k times during accumulation C[i, j] += A[i, k] * B[k, j]
+#   - We should have enough SIMD registers left to hold
+#     the corresponding sections of A and B (at least 4, 2xA and 2xB for FMAs)
+#
+# On x86-64 X SIMD registers that can issue 2xFMAs per cycle:
+#    - NbVecs is 2 minimum
+#    - RegsPerVec = 2 * NbVecs => 4 minimum (for A and for B)
+#    - NR = NbVecs * NbScalarsPerSIMD
+#    - C: MR*NR and uses MR*NbVecs SIMD registers 
+#    - MR*NbVecs + RegsPerVec <= X
+#       -> MR*NbVecs + 2 * NbVecs <= X
+#       -> (MR+2) * NbVecs <= X
+#
+# Some solutions:
+#    - AVX with 16 registers:
+#          - MR = 6, NbVecs = 2
+#            FP32: 8xFP32 per SIMD --> NR = 2x8
+#                  ukernel = 6x16
+#            FP64, ukernel = 6x8
+#          - MR = 2, NbVecs = 4
+#            FP32: 8xFP32 per SIMD --> NR = 4x8
+#                  ukernel = 2x32
+#            FP64, ukernel = 2x16
+#    - AVX512 with 32 registers
+#          - MR = 6, NbVecs = 4
+#            FP32 ukernel = 6x64
+#            FP64 ukernel = 6x32
+#          - MR = 2, NbVecs = 8
+#            FP32 ukernel = 2x128
+#            FP64 ukernel = 2x64
+#          - MR = 14, NbVecs = 2
+#            FP32 ukernel = 14x32
+#            FP64 ukernel = 14x16
 when defined(amd64): # 64-bit
-  # MR configuration - registers for the rows of Ã
+  # MR configuration - rows of Ã in micro kernel
   # 16 General purpose registers
   const X86_regs: X86_FeatureMap = [
     x86_Generic: 2,
@@ -125,19 +155,20 @@ when defined(amd64): # 64-bit
     x86_AVX:     6,
     x86_AVX_FMA: 6,
     x86_AVX2:    6,
-    x86_AVX512:  6
+    x86_AVX512:  14
   ]
 
   # NR configuration - Nb of ~B SIMD vectors
+  # We will also keep as many rows of Ã in SIMD registers at the same time
   const NbVecs: X86_FeatureMap = [
       x86_Generic: 1,
-      x86_SSE:     2, # 16 XMM registers - 16/6 = 2
+      x86_SSE:     2, # 16 XMM registers
       x86_SSE2:    2,
       x86_SSE4_1:  2,
-      x86_AVX:     2, # 16 YMM registers - 16/6 = 2
+      x86_AVX:     2, # 16 YMM registers
       x86_AVX_FMA: 2,
       x86_AVX2:    2,
-      x86_AVX512:  4  # 32 ZMM registers - 32/6 = 5 - bench: 4 is 8% faster
+      x86_AVX512:  2  # 32 ZMM registers
     ]
 else: # 32-bit
   # MR configuration - registers for the rows of Ã
@@ -184,7 +215,7 @@ func x86_ukernel*(cpu: CPUFeatureX86, T: typedesc, c_unit_stride: bool): MicroKe
   # in the inner loop and untranspose in the epilogue
 
   result.mr = X86_regs[cpu]                 # 2~6 registers for the rows of Ã
-  result.nb_vecs_nr = NbVecs[cpu]           # x2 for 2 SIMD vectors of B
+  result.nb_vecs_nr = NbVecs[cpu]           # SIMD vectors of B
   result.nr = result.nb_vecs_nr * result.nb_scalars
 
 #############################################
