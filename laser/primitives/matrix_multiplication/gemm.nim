@@ -75,34 +75,36 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
   # 4. for jr = 0,...,nc−1 in steps of nr
   # for jr in countup(0, nc-1, NR):
   for jrb in 0 .. tiles.jr_num_nr_tiles-1:
-    let jr = jrb * NR
-    let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
+    {.emit: "#pragma omp task firstprivate(`jrb`)".}
+    block:
+      let jr = jrb * NR
+      let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
-    # ###################################
-    # 5. for ir = 0,...,m−1 in steps of mr
-    for ir in countup(0, mc-1, MR):
-      let mr = min(mc - ir, MR)
-      let c_aux = mcncC.stride(ir, jr)               # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
+      # ###################################
+      # 5. for ir = 0,...,m−1 in steps of mr
+      for ir in countup(0, mc-1, MR):
+        let mr = min(mc - ir, MR)
+        let c_aux = mcncC.stride(ir, jr)               # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
 
-      let upanel_b = tiles.b + jr*kc
-      prefetch(upanel_b, Read, ModerateTemporalLocality)
-      let upanel_a = packA + ir*kc
-      prefetch(upanel_a, Read, ModerateTemporalLocality)
-      
-      if nr == NR and mr == MR:
-        # General case
-        gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
-                kc,                                  #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
-          alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
-          beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
-        )                                            #    βC[ic:ic+mc, jc:jc+nc]
-      else:
-        # Matrix edges
-        gebb_ukernel_edge[T, ukernel](               # GEBB microkernel + epilogue
-          mr, nr, kc,                                #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
-          alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
-          beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
-        )                                            #    βC[ic:ic+mc, jc:jc+nc]
+        let upanel_b = tiles.b + jr*kc
+        prefetch(upanel_b, Read, ModerateTemporalLocality)
+        let upanel_a = packA + ir*kc
+        prefetch(upanel_a, Read, ModerateTemporalLocality)
+        
+        if nr == NR and mr == MR:
+          # General case
+          gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
+                  kc,                                  #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
+            alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+            beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+          )                                            #    βC[ic:ic+mc, jc:jc+nc]
+        else:
+          # Matrix edges
+          gebb_ukernel_edge[T, ukernel](               # GEBB microkernel + epilogue
+            mr, nr, kc,                                #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
+            alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+            beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+          )                                            #    βC[ic:ic+mc, jc:jc+nc]
 
 # ###########################################################################################
 #
@@ -161,26 +163,32 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     # First time writing to C, we scale it, otherwise accumulate
     let beta = if pc == 0: beta else: 1.T
 
-    # ####################################
-    # 3. for ic = 0,...,m−1 in steps of mc
-    # for ic in countup(0, M-1, tiles.mc):
-    omp_parallel_if(parallelize):
-      omp_for(icb, tiles.ic_num_mc_tiles, use_simd = false, nowait = true):
-        const MR = ukernel.extract_mr
-        let packA = tiles.a + icb * tiles.upanelA_size
-        prefetch(packA, Write, LowTemporalLocality)
-        let ic = icb * tiles.mc
-        let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
-        let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
-        pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
+    {.emit: "#pragma omp parallel if(`parallelize`)".}
+    block:
+      {.emit: "#pragma omp single nowait".}
+      block:
+        # ####################################
+        # 3. for ic = 0,...,m−1 in steps of mc
+        # for ic in countup(0, M-1, tiles.mc):
+        for icb in 0 .. tiles.ic_num_mc_tiles-1:
+          {.emit: "#pragma omp task firstprivate(`icb`)".}
+          block:
+            const MR = ukernel.extract_mr
+            let packA = tiles.a + icb * tiles.upanelA_size
+            prefetch(packA, Write, LowTemporalLocality)
+            let ic = icb * tiles.mc
+            let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
-        gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
-            mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
-            alpha, packA,                               #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +   
-            beta, vC.stride(ic, 0),                     #    βC[ic:ic+mc, jc:jc+nc]
-            tiles                                       
-          )
+            let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
+            pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)  # PackA block [mc, kc]
+
+            gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
+                mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
+                alpha, packA,                               #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +   
+                beta, vC.stride(ic, 0),                     #    βC[ic:ic+mc, jc:jc+nc]
+                tiles                                       
+              )
 
 # ############################################################
 #
