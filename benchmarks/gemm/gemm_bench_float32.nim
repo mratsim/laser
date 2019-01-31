@@ -154,15 +154,15 @@ proc benchSimpleTiling(a, b: seq[float32], nb_samples: int): seq[float32] {.noin
 
       #pragma omp parallel
       #pragma omp single
-      for (int j = 0; j < `N`; j+=`blck`)
+      for (int i = 0; i < `M`; i+=`blck`)
         for (int k = 0; k < `K`; k+=`blck`)
-          for (int i = 0; i < `M`; i+=`blck`)
+          for (int j = 0; j < `N`; j+=`blck`)
       #pragma omp task \
             depend(in: A[i:`blck`][k:`blck`], B[k:`blck`][j:`blck`]) \
             depend(inout: C[i:`blck`][j:`blck`])
             for (int ii = i; ii<min(i+`blck`, `M`); ++ii)
-              for (int jj = j; jj<min(j+`blck`, `N`); ++jj)
-                for (int kk = k; kk<min(k+`blck`, `K`); ++kk)
+              for (int kk = k; kk<min(k+`blck`, `K`); ++kk)
+                for (int jj = j; jj<min(j+`blck`, `N`); ++jj)
                   C[ii][jj] += A[ii][kk] * B[kk][jj];
 
     """.}
@@ -341,7 +341,7 @@ when isMainModule:
 
     let reference = benchReference(a, b, NbSamples)
     let simpleTiling = benchSimpleTiling(a, b, NbSamples)
-    let arraymancer = benchArraymancerFallback(a, b, NbSamples)
+    # let arraymancer = benchArraymancerFallback(a, b, NbSamples)
     let vendorBlas = benchOpenBLAS(a, b, NbSamples)
     let laser = benchLaserGEMM(a, b, NbSamples)
     let glow = benchPyTorchGlow(a, b, NbSamples)

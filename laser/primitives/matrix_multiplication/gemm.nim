@@ -73,7 +73,6 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  # for jr in countup(0, nc-1, NR):
   for jr in countup(0, tiles.nc-1, NR):
     omp_task("firstprivate(`jr`)"):
       let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
@@ -164,7 +163,6 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     omp_parallel_if(parallelize):
       # ####################################
       # 3. for ic = 0,...,m−1 in steps of mc
-      # for ic in countup(0, M-1, tiles.mc):
       omp_for(ict, tiles.ic_num_tasks, use_simd=false, nowait=true):
         let packA = tiles.a + ict * tiles.upanelA_size
         prefetch(packA, Write, LowTemporalLocality)
