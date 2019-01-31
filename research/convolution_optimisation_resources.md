@@ -277,3 +277,4 @@ They use either the base convolution or the separable convolution as building bl
 - http://proceedings.mlr.press/v80/zhang18d/zhang18d.pdf
 - https://github.com/wasd96040501/conv3x3
 - Deep Tensor Convolution on multi core https://arxiv.org/pdf/1611.06565.pdf
+- Optimizing CNN Model Inference on CPU https://arxiv.org/pdf/1809.02697.pdf
