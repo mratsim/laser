@@ -18,7 +18,7 @@ withCompilerOptimHints()
 # ############################################################
 
 template dispatch(
-    return_from_func: static bool,
+    return_void: static bool,
     func_call: untyped): untyped {.dirty.} =
   ## Warning: statements after dispatch are unreachable
   template dispatch_opt(cpu_features: static CPUFeatureX86): untyped {.dirty.} =
@@ -27,10 +27,11 @@ template dispatch(
     # c_unit_stride is not relevant here
     const ukernel = cpu_features.x86_ukernel(A, c_unit_stride = false)
 
-    when return_from_func:
-      return func_call 
-    else:
+    when return_void:
       func_call
+      return
+    else:
+      return func_call 
 
   when defined(i386) or defined(amd64):
     when T is float32:
@@ -72,7 +73,7 @@ func gemm_prepackB_mem_required*(
   ## Returns the amount of memory that needs to be preallocated
   ## to pack matrix B.
 
-  dispatch(return_from_func = true):
+  dispatch(return_void = false):
     gemm_prepackB_mem_required_impl(
       ukernel, T, M, N, K
     )
@@ -86,7 +87,6 @@ proc gemm_prepackB_impl[T; ukernel: static MicroKernel](
   let (MC, NC, KC) = ukernel.partitionMNK(T, M, N, K)
   let pc_num_iter = get_num_tiles(K, KC)
   let upanelB_size = KC * round_step_up(NC, ukernel.nr)
-  
   for pct in 0||(pc_num_iter-1):
     let pc = pct * KC
     let kc = min(K - pc, KC)
@@ -118,7 +118,7 @@ proc gemm_prepackB*[T](
   let vB = src_B.toMatrixView(rowStrideB, colStrideB)
   let dst = cast[ptr UncheckedArray[T]](dst_packedB)
 
-  dispatch(return_from_func = false):
+  dispatch(return_void = true):
     gemm_prepackB_impl[T, ukernel](
       dst,
       M, N, K,
