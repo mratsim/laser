@@ -1,4 +1,4 @@
-2x Xeon Gold 6154, Skylake X, 2 sockets 36 cores with AVX512 support.
+2x Xeon Gold 6154, Skylake-SP, 2 sockets 36 cores with AVX512 support.
 
   - 2x FMA units per core
 
