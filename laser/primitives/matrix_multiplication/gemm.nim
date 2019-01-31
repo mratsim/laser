@@ -162,10 +162,10 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     omp_parallel_if(parallelize):
       # ####################################
       # 3. for ic = 0,...,m−1 in steps of mc
-      omp_for(ict, tiles.ic_num_tasks, use_simd=false, nowait=true):
-        let packA = tiles.a + ict * tiles.upanelA_size
+      omp_for(icb, tiles.ic_num_tasks, use_simd=false, nowait=true):
+        let packA = tiles.a + icb * tiles.upanelA_size
         prefetch(packA, Write, LowTemporalLocality)
-        let ic = ict * tiles.mc
+        let ic = icb * tiles.mc
         let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
         let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]

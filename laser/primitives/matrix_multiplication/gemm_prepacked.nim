@@ -54,6 +54,12 @@ template dispatch(
       elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
   dispatch_opt(x86_Generic)
 
+# ############################################################
+#
+#                    Packing B
+#
+# ############################################################
+
 func gemm_prepackB_mem_required_impl*(
   ukernel: static MicroKernel,
   T: typedesc,
@@ -87,20 +93,21 @@ proc gemm_prepackB_impl[T; ukernel: static MicroKernel](
   let (MC, NC, KC) = ukernel.partitionMNK(T, M, N, K)
   let pc_num_iter = get_num_tiles(K, KC)
   let upanelB_size = KC * round_step_up(NC, ukernel.nr)
-  for pct in 0||(pc_num_iter-1):
-    let pc = pct * KC
-    let kc = min(K - pc, KC)
+  for pcb in 0||(pc_num_iter-1):
+    let packB = dst + pcb * upanelB_size
+    prefetch(packB, Write, LowTemporalLocality)
 
+    let pc = pcb * KC
+    let kc = min(K - pc, KC)
     let kcncB = vB.stride(pc, 0)
 
     # Note: pack_B also creates a parallel region
     #       this will cause issues if omp_get_nested = 1
     pack_B_kc_nc[T, ukernel](
-      dst + pct * upanelB_size,
+      packB,
       KC, NC, kcncB
     ) 
   
-
 proc gemm_prepackB*[T](
         dst_packedB: ptr (T or UncheckedArray[T]),
         M, N, K: int,
@@ -124,6 +131,88 @@ proc gemm_prepackB*[T](
       M, N, K,
       vB
     )
+
+# ############################################################
+#
+#                    Packing A
+#
+# ############################################################
+
+func gemm_prepackA_mem_required_impl*(
+  ukernel: static MicroKernel,
+  T: typedesc,
+  M, N, K: int): int =
+
+  let (MC, NC, KC) = ukernel.partitionMNK(T, M, N, K)
+  const MR = ukernel.mr
+
+  let pc_num_iter = get_num_tiles(K, KC)
+  let ic_num_iter = get_num_tiles(M, MC)
+  let upanelA_size = KC * round_step_up(MC, MR)
+
+  result = T.sizeof * upanelA_size * pc_num_iter * ic_num_iter
+
+func gemm_prepackA_mem_required*(
+  T: typedesc,
+  M, N, K: int): int =
+  ## Returns the amount of memory that needs to be preallocated
+  ## to pack matrix B.
+
+  dispatch(return_void = false):
+    gemm_prepackA_mem_required_impl(
+      ukernel, T, M, N, K
+    )
+
+proc gemm_prepackA_impl[T; ukernel: static MicroKernel](
+        dst: ptr UncheckedArray[T],
+        M, N, K: int,
+        vA: MatrixView[T]
+      ) =
+  
+  let (MC, NC, KC) = ukernel.partitionMNK(T, M, N, K)
+  const MR = ukernel.mr
+
+  let pc_num_iter = get_num_tiles(K, KC)
+  let ic_num_iter = get_num_tiles(M, MC)
+  let upanelA_size = KC * round_step_up(MC, MR)
+
+  for pcb in 0||(pc_num_iter-1):
+    let pc = pcb * KC
+    let kc = min(K - pc, KC)
+
+    for icb in 0 ..< ic_num_iter:
+      let packA = dst + pc*pc_num_iter + icb*upanelA_size
+      prefetch(packA, Write, LowTemporalLocality)
+      let ic = icb * MC
+      let mc = min(M-ic, MC)
+
+      let mckcA = vA.stride(ic, pc)
+      pack_A_mc_kc[T, ukernel](packA, mc, kc, mckcA)
+
+proc gemm_prepackA*[T](
+        dst_packedA: ptr (T or UncheckedArray[T]),
+        M, N, K: int,
+        src_A: ptr T, rowStrideA, colStrideA: int) =
+  ## Prepack matrix A of shape MxK
+  ## and strides rowStrideA and colStrideA
+  ## for matrix multiplication.
+  ## B must be 64-bit aligned.
+  ##
+  ## For optimal performance packing is machine and architecture dependent
+  ## i.e. it depends on detected features like AVX and number of cores
+  ## and may depend on your machine cache sizes in the future.
+  ## It is unsafe to store or serialize it.
+
+  let vA = src_A.toMatrixView(rowStrideA, colStrideA)
+  let dst = cast[ptr UncheckedArray[T]](dst_packedA)
+
+  dispatch(return_void = true):
+    gemm_prepackA_impl[T, ukernel](
+      dst,
+      M, N, K,
+      vA
+    )
+
 
 # ############################################################
 #
@@ -157,3 +246,22 @@ when isMainModule:
     )
 
     echo packB
+
+
+    let packedA_size = gemm_prepackA_mem_required(
+      float, M, N, K
+    )
+
+    let a = [[1.0, 2, 3],
+             [4.0, 5, 6],
+             [7.0, 8, 9]]
+
+    var packA = newSeq[float](packedA_size)
+
+    gemm_prepackA(
+      packA[0].addr,
+      M, N, K,
+      a[0][0].unsafeAddr,
+      3, 1
+    )
+    echo packA
