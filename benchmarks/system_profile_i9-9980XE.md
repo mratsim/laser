@@ -4,14 +4,17 @@ i9-9980XE, Skylake-X, 18 cores with AVX512 support
   - All clock turbo: 4.1 Ghz
   - All AVX clock turbo: 4.0 Ghz
   - All AVX512 clock turbo:  3.5 Ghz
-
   - 2x FMA units per core
+
+# Theoretical performance
+
   - Theoretical peak GFlop/s
       - Cores: 18
       - CpuGhz: 3.5
       - VectorWidth: 16
       - Instr/cycle: 2x FMA
       - Flop/Instr: 2 (FMA = 1 add + 1 mul)
+
       ==> 4032 GFlop/s
 
 # Performance report
