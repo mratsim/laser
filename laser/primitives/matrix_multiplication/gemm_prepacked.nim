@@ -85,7 +85,7 @@ func gemm_prepackB_mem_required*(
   #   )
 
   type A = T
-  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
   gemm_prepackB_mem_required_impl(
     ukernel, T, M, N, K
   )
@@ -139,7 +139,7 @@ proc gemm_prepackB*[T](
   #   )
 
   type A = T
-  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
   gemm_prepackB_impl[T, ukernel](
     dst,
     M, N, K,
@@ -178,7 +178,7 @@ func gemm_prepackA_mem_required*(
   #   )
 
   type A = T
-  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
   result = gemm_prepackA_mem_required_impl(
     ukernel, T, M, N, K
   )
@@ -234,7 +234,7 @@ proc gemm_prepackA*[T](
   #   )
 
   type A = T
-  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
   gemm_prepackA_impl[T, ukernel](
     dst,
     M, N, K,
@@ -319,7 +319,7 @@ proc gemm_packed*[T: SomeNumber](
   #   )
 
   type A = T
-  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
   ukernel.gemm_packed_impl(
     M, N, K,
     alpha, packedA, packedB,
@@ -333,6 +333,25 @@ proc gemm_packed*[T: SomeNumber](
 # ############################################################
 
 when isMainModule:
+
+  import
+    ../../tensor/[allocator, datatypes, initialization]
+
+  proc newTensor*[T](shape: varargs[int]): Tensor[T] =
+    # Needed for alignment
+    var size: int
+    initTensorMetadata(result, size, shape)
+    allocCpuStorage(result.storage, size)
+    setZero(result, check_contiguous = false)
+
+  proc toPtr*[T](t: Tensor[T]): ptr T =
+    cast[ptr T](t.unsafe_raw_data)
+
+  proc `$`[T](t: Tensor[T]): string =
+    var tmp = newSeq[T](t.size)
+    copyMem(tmp[0].addr, cast[ptr T](t.unsafe_raw_data), t.size * sizeof(T))
+    result = $tmp
+
   # Tests
   block:
     let
@@ -348,10 +367,10 @@ when isMainModule:
              [4.0, 5, 6],
              [7.0, 8, 9]]
 
-    var packB = newSeq[float](packedB_size)
+    var packB = newTensor[float64](packedB_size)
 
     gemm_prepackB(
-      packB[0].addr,
+      packB.toPtr,
       M, N, K,
       b[0][0].unsafeAddr,
       3, 1
@@ -368,10 +387,10 @@ when isMainModule:
              [4.0, 5, 6],
              [7.0, 8, 9]]
 
-    var packA = newSeq[float](packedA_size)
+    var packA = newTensor[float64](packedA_size)
 
     gemm_prepackA(
-      packA[0].addr,
+      packA.toPtr,
       M, N, K,
       a[0][0].unsafeAddr,
       3, 1
@@ -382,7 +401,7 @@ when isMainModule:
 
     gemm_packed(
       M, N, K,
-      1.0, packA[0].addr, packB[0].addr,
+      1.0, packA.toPtr, packB.toPtr,
       0.0, res_ab[0][0].addr, 3, 1
     )
 

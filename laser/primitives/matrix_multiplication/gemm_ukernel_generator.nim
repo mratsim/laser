@@ -30,6 +30,17 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
             alpha: `T`, packedA, packedB: ptr UncheckedArray[`T`],
             beta: `T`, vC: MatrixView[`T`]
           ) =
+
+        var A : array[30, `T`]
+        var B : array[30, `T`]
+        
+        for i in 0 ..< 30:
+          A[i] = packedA[i]
+          B[i] = packedB[i]
+        
+        debugecho(A)
+        debugecho(B)
+
         let AB{.align_variable.} = ukernel_simd_impl(
           ukernel, `V`, packedA, packedB, kc,
           `simd_setZero`, `simd_load_aligned`, `simd_broadcast_value`, `simd_fma`
@@ -39,15 +50,6 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
           MR = ukernel.extract_mr()
           NR = ukernel.extract_nr()
 
-        # var A : array[30, `T`]
-        # var B : array[30, `T`]
-        #
-        # for i in 0 ..< 30:
-        #   A[i] = packedA[i]
-        #   B[i] = packedB[i]
-        #
-        # debugecho(A)
-        # debugecho(B)
         # debugecho(to_ptr(AB, MR, NR, `T`)[])
 
         gebb_ukernel_edge_epilogue(
