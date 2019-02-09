@@ -74,15 +74,21 @@ func gemm_prepackB_mem_required_impl*(
   result = T.sizeof * upanelB_size * pc_num_iter
 
 func gemm_prepackB_mem_required*(
-  T: typedesc,
+  T: type,
   M, N, K: int): int =
   ## Returns the amount of memory that needs to be preallocated
   ## to pack matrix B.
 
-  dispatch(return_void = false):
-    gemm_prepackB_mem_required_impl(
-      ukernel, T, M, N, K
-    )
+  # dispatch(return_void = false):
+  #   gemm_prepackB_mem_required_impl(
+  #     ukernel, T, M, N, K
+  #   )
+
+  type A = T
+  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  gemm_prepackB_mem_required_impl(
+    ukernel, T, M, N, K
+  )
 
 proc gemm_prepackB_impl[T; ukernel: static MicroKernel](
         dst: ptr UncheckedArray[T],
@@ -125,12 +131,20 @@ proc gemm_prepackB*[T](
   let vB = src_B.toMatrixView(rowStrideB, colStrideB)
   let dst = cast[ptr UncheckedArray[T]](dst_packedB)
 
-  dispatch(return_void = true):
-    gemm_prepackB_impl[T, ukernel](
-      dst,
-      M, N, K,
-      vB
-    )
+  # dispatch(return_void = true):
+  #   gemm_prepackB_impl[T, ukernel](
+  #     dst,
+  #     M, N, K,
+  #     vB
+  #   )
+
+  type A = T
+  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  gemm_prepackB_impl[T, ukernel](
+    dst,
+    M, N, K,
+    vB
+  )
 
 # ############################################################
 #
@@ -158,10 +172,16 @@ func gemm_prepackA_mem_required*(
   ## Returns the amount of memory that needs to be preallocated
   ## to pack matrix B.
 
-  dispatch(return_void = false):
-    gemm_prepackA_mem_required_impl(
-      ukernel, T, M, N, K
-    )
+  # dispatch(return_void = false):
+  #   gemm_prepackA_mem_required_impl(
+  #     ukernel, T, M, N, K
+  #   )
+
+  type A = T
+  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  result = gemm_prepackA_mem_required_impl(
+    ukernel, T, M, N, K
+  )
 
 proc gemm_prepackA_impl[T; ukernel: static MicroKernel](
         dst: ptr UncheckedArray[T],
@@ -206,12 +226,20 @@ proc gemm_prepackA*[T](
   let vA = src_A.toMatrixView(rowStrideA, colStrideA)
   let dst = cast[ptr UncheckedArray[T]](dst_packedA)
 
-  dispatch(return_void = true):
-    gemm_prepackA_impl[T, ukernel](
-      dst,
-      M, N, K,
-      vA
-    )
+  # dispatch(return_void = true):
+  #   gemm_prepackA_impl[T, ukernel](
+  #     dst,
+  #     M, N, K,
+  #     vA
+  #   )
+
+  type A = T
+  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  gemm_prepackA_impl[T, ukernel](
+    dst,
+    M, N, K,
+    vA
+  )
 
 # ############################################################
 #
@@ -254,6 +282,9 @@ proc gemm_packed_impl[T](
     # First time writing to C, we scale it, otherwise accumulate
     let beta = if pc == 0: beta else: 1.T
 
+    echo packedB.repr
+    echo packedB[0]
+
     omp_parallel_if(parallelize):
       # ####################################
       # 3. for ic = 0,...,m−1 in steps of mc
@@ -279,13 +310,21 @@ proc gemm_packed*[T: SomeNumber](
 
   let vC = C.toMatrixView(rowStrideC, colStrideC)
 
-  dispatch(return_void = true):
-    # TODO - dispatch specialization when C is unit strided
-    ukernel.gemm_packed_impl(
-      M, N, K,
-      alpha, packedA, packedB,
-      beta, vC
-    )
+  # dispatch(return_void = true):
+  #   # TODO - dispatch specialization when C is unit strided
+  #   ukernel.gemm_packed_impl(
+  #     M, N, K,
+  #     alpha, packedA, packedB,
+  #     beta, vC
+  #   )
+
+  type A = T
+  const ukernel = x86_ukernel(x86_Generic, A, c_unit_stride = false)
+  ukernel.gemm_packed_impl(
+    M, N, K,
+    alpha, packedA, packedB,
+    beta, vC
+  )
 
 # ############################################################
 #
