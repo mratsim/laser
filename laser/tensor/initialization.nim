@@ -7,6 +7,7 @@ import
   ../openmp,
   ../compiler_optim_hints,
   ../strided_iteration/foreach,
+  ../dynamic_stack_arrays,
   ./datatypes, ./allocator,
   typetraits
 

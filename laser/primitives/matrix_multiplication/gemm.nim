@@ -45,12 +45,11 @@ withCompilerOptimHints()
 #
 # ############################################################
 
-proc gebp_mkernel[T; ukernel: static MicroKernel](
+proc gebp_mkernel*[T; ukernel: static MicroKernel](
       mc, nc, kc: int,
-      alpha: T, packA: ptr UncheckedArray[T],
+      alpha: T, packA, packB: ptr UncheckedArray[T],
       beta: T,
-      mcncC: MatrixView[T],
-      tiles: Tiles[T]
+      mcncC: MatrixView[T]
     ) =
   ## Macro kernel, multiply:
   ##  - a block A[mc, kc] * panel B[kc, N]
@@ -73,7 +72,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  for jr in countup(0, tiles.nc-1, NR):
+  for jr in countup(0, nc-1, NR):
     omp_task("firstprivate(`jr`)"):
       let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
@@ -83,7 +82,7 @@ proc gebp_mkernel[T; ukernel: static MicroKernel](
         let mr = min(mc - ir, MR)
         let c_aux = mcncC.stride(ir, jr)               # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
 
-        let upanel_b = tiles.b + jr*kc
+        let upanel_b = packB + jr*kc
         prefetch(upanel_b, Read, ModerateTemporalLocality)
         let upanel_a = packA + ir*kc
         prefetch(upanel_a, Read, ModerateTemporalLocality)
@@ -163,10 +162,10 @@ proc gemm_impl[T; ukernel: static MicroKernel](
     omp_parallel_if(parallelize):
       # ####################################
       # 3. for ic = 0,...,m−1 in steps of mc
-      omp_for(ict, tiles.ic_num_tasks, use_simd=false, nowait=true):
-        let packA = tiles.a + ict * tiles.upanelA_size
+      omp_for(icb, tiles.ic_num_tasks, use_simd=false, nowait=true):
+        let packA = tiles.a + icb * tiles.upanelA_size
         prefetch(packA, Write, LowTemporalLocality)
-        let ic = ict * tiles.mc
+        let ic = icb * tiles.mc
         let mc = min(M-ic, tiles.mc)                    # C[ic:ic+mc, jc:jc+nc]
 
         let mckcA = vA.stride(ic, pc)                   # A[ic:ic+mc, pc:pc+kc]
@@ -174,9 +173,8 @@ proc gemm_impl[T; ukernel: static MicroKernel](
 
         gebp_mkernel[T, ukernel](                       # GEBP macrokernel:
             mc, nc, kc,                                 #   C[ic:ic+mc, jc:jc+nc] =
-            alpha, packA,                               #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +   
-            beta, vC.stride(ic, 0),                     #    βC[ic:ic+mc, jc:jc+nc]
-            tiles                                       
+            alpha, packA, tiles.b,                      #    αA[ic:ic+mc, pc:pc+kc] * B[pc:pc+kc, jc:jc+nc] +   
+            beta, vC.stride(ic, 0)                      #    βC[ic:ic+mc, jc:jc+nc]                                     
           )
 
 # ############################################################
