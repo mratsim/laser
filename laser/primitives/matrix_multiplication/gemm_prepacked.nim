@@ -7,7 +7,7 @@ import
   ../../cpuinfo, ../../compiler_optim_hints, ../../openmp,
   ../../private/align_unroller,
   ./gemm_tiling, ./gemm_utils, ./gemm_packing,
-  ./gemm_ukernel_dispatch
+  ./gemm_ukernel_dispatch, ./gemm
 
 withCompilerOptimHints()
 
@@ -213,6 +213,79 @@ proc gemm_prepackA*[T](
       vA
     )
 
+# ############################################################
+#
+#                    Prepacked GEMM
+#
+# ############################################################
+
+proc gemm_packed_impl[T](
+      ukernel: static MicroKernel,
+      M, N, K: int,
+      alpha: T, packedA, packedB: ptr (T or UncheckedArray[T]),
+      beta: T, vC: MatrixView[T]
+    ) =
+
+  withCompilerOptimHints()
+  
+  const
+    MR = ukernel.mr
+    NR = ukernel.nr
+    PT = ukernel.pt
+  
+  let
+    parallelize = M*N*K > PT*PT*PT
+
+    (MC, NC, KC) = ukernel.partitionMNK(T, M, N, K)
+    pc_num_iter = get_num_tiles(K, KC)
+    ic_num_iter = get_num_tiles(M, MC)
+
+    upanelB_size = KC * round_step_up(NC, NR)
+    upanelA_size = KC * round_step_up(MC, MR)
+
+
+  # ######################################
+  # 2.   for pc = 0,...,k−1 in steps of kc
+  for pcb in 0 ..< pc_num_iter:
+    let packedB{.restrict.} = cast[ptr UncheckedArray[T]](packedB + pcb * upanelB_size)
+    let pc = pcb * KC
+    let kc = min(K - pc, KC)
+
+    # First time writing to C, we scale it, otherwise accumulate
+    let beta = if pc == 0: beta else: 1.T
+
+    omp_parallel_if(parallelize):
+      # ####################################
+      # 3. for ic = 0,...,m−1 in steps of mc
+      omp_for(icb, ic_num_iter, use_simd=false, nowait=true):
+        let packedA{.restrict.} = cast[ptr UncheckedArray[T]](packedA + icb * upanelA_size)
+        let ic = icb * MC
+        let mc = min(M-ic, MC)
+
+        gebp_mkernel[T, ukernel](
+          mc, NC, kc,
+          alpha, packedA, packedB,
+          beta, vc.stride(ic, 0)
+        )
+
+proc gemm_packed*[T: SomeNumber](
+      M, N, K: int,
+      alpha: T,
+      packedA: ptr (T or UncheckedArray[T]),
+      packedB: ptr (T or UncheckedArray[T]),
+      beta: T,
+      C: ptr (T or UncheckedArray[T]),
+      rowStrideC, colStrideC: int) =
+
+  let vC = C.toMatrixView(rowStrideC, colStrideC)
+
+  dispatch(return_void = true):
+    # TODO - dispatch specialization when C is unit strided
+    ukernel.gemm_packed_impl(
+      M, N, K,
+      alpha, packedA, packedB,
+      beta, vC
+    )
 
 # ############################################################
 #
@@ -265,3 +338,13 @@ when isMainModule:
       3, 1
     )
     echo packA
+
+    var res_ab: array[3, array[3, float]]
+
+    gemm_packed(
+      M, N, K,
+      1.0, packA[0].addr, packB[0].addr,
+      0.0, res_ab[0][0].addr, 3, 1
+    )
+
+    echo res_ab
