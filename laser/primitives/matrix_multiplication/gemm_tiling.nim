@@ -273,7 +273,7 @@ func partitionMNK*(
       ukernel: static MicroKernel,
       T: typedesc,
       M, N, K: Natural,
-    ): tuple[mc, kc, nc: int] =
+    ): tuple[mc, nc, kc: int] =
 
   result.nc = N # We don't partition over N
 

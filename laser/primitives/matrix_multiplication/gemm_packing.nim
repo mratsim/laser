@@ -74,8 +74,6 @@ proc pack_B_kc_nc*[T; ukernel: static MicroKernel](
   const NR = ukernel.extract_nr()
   let unroll_stop = nc.round_step_down(NR)
 
-  echo nc
-
   # 1. Pack n matrices of size kc*nr, n = nc/nr
   {.emit:"""
       #pragma omp parallel for

@@ -335,7 +335,7 @@ when isMainModule:
       a[0][0].unsafeAddr,
       K, 1
     )
-    echo packA
+    # echo packA
 
     let packedB_size = gemm_prepackB_mem_required(float, M, N, K)
     var packB = newTensor[float](packedB_size)
@@ -345,7 +345,7 @@ when isMainModule:
       b[0][0].unsafeAddr,
       N, 1
     )
-    echo packB
+    # echo packB
 
     var res_ab: array[M, array[N, float]]
     gemm_packed(
