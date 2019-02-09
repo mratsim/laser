@@ -31,15 +31,15 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
             beta: `T`, vC: MatrixView[`T`]
           ) =
 
-        var A : array[30, `T`]
-        var B : array[30, `T`]
+        # var A : array[30, `T`]
+        # var B : array[30, `T`]
         
-        for i in 0 ..< 30:
-          A[i] = packedA[i]
-          B[i] = packedB[i]
+        # for i in 0 ..< 30:
+        #   A[i] = packedA[i]
+        #   B[i] = packedB[i]
         
-        debugecho(A)
-        debugecho(B)
+        # debugecho(A)
+        # debugecho(B)
 
         let AB{.align_variable.} = ukernel_simd_impl(
           ukernel, `V`, packedA, packedB, kc,

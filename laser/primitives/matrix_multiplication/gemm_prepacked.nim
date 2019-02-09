@@ -33,25 +33,25 @@ template dispatch(
     else:
       return func_call 
 
-  when defined(i386) or defined(amd64):
-    when T is float32:
-      if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
-      elif cpuinfo_has_x86_fma3():    dispatch_opt(x86_AVX_FMA)
-      elif cpuinfo_has_x86_avx():     dispatch_opt(x86_AVX)
-      elif cpuinfo_has_x86_sse():     dispatch_opt(x86_SSE)
-    elif T is float64:
-      if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
-      elif cpuinfo_has_x86_fma3():    dispatch_opt(x86_AVX_FMA)
-      elif cpuinfo_has_x86_avx():     dispatch_opt(x86_AVX)
-      elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
-    elif T is int32 or T is uint32:
-      if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
-      elif cpuinfo_has_x86_avx2():    dispatch_opt(x86_AVX2)
-      elif cpuinfo_has_x86_sse41():   dispatch_opt(x86_SSE4_1)
-      elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
-    elif T is int64:
-      if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
-      elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
+  # when defined(i386) or defined(amd64):
+  #   when T is float32:
+  #     if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
+  #     elif cpuinfo_has_x86_fma3():    dispatch_opt(x86_AVX_FMA)
+  #     elif cpuinfo_has_x86_avx():     dispatch_opt(x86_AVX)
+  #     elif cpuinfo_has_x86_sse():     dispatch_opt(x86_SSE)
+  #   elif T is float64:
+  #     if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
+  #     elif cpuinfo_has_x86_fma3():    dispatch_opt(x86_AVX_FMA)
+  #     elif cpuinfo_has_x86_avx():     dispatch_opt(x86_AVX)
+  #     elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
+  #   elif T is int32 or T is uint32:
+  #     if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
+  #     elif cpuinfo_has_x86_avx2():    dispatch_opt(x86_AVX2)
+  #     elif cpuinfo_has_x86_sse41():   dispatch_opt(x86_SSE4_1)
+  #     elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
+  #   elif T is int64:
+  #     if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
+  #     elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
   dispatch_opt(x86_Generic)
 
 # ############################################################
@@ -79,16 +79,10 @@ func gemm_prepackB_mem_required*(
   ## Returns the amount of memory that needs to be preallocated
   ## to pack matrix B.
 
-  # dispatch(return_void = false):
-  #   gemm_prepackB_mem_required_impl(
-  #     ukernel, T, M, N, K
-  #   )
-
-  type A = T
-  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
-  gemm_prepackB_mem_required_impl(
-    ukernel, T, M, N, K
-  )
+  dispatch(return_void = false):
+    gemm_prepackB_mem_required_impl(
+      ukernel, T, M, N, K
+    )
 
 proc gemm_prepackB_impl[T; ukernel: static MicroKernel](
         dst: ptr UncheckedArray[T],
@@ -111,7 +105,7 @@ proc gemm_prepackB_impl[T; ukernel: static MicroKernel](
     #       this will cause issues if omp_get_nested = 1
     pack_B_kc_nc[T, ukernel](
       packB,
-      KC, NC, kcncB
+      kc, NC, kcncB
     ) 
   
 proc gemm_prepackB*[T](
@@ -128,23 +122,17 @@ proc gemm_prepackB*[T](
   ## and may depend on your machine cache sizes in the future.
   ## It is unsafe to store or serialize it.
 
+  doAssert (cast[int](dst_packedB) and 63) == 0, "The destination pointer must be 64-bit aligned"
+
   let vB = src_B.toMatrixView(rowStrideB, colStrideB)
   let dst = cast[ptr UncheckedArray[T]](dst_packedB)
 
-  # dispatch(return_void = true):
-  #   gemm_prepackB_impl[T, ukernel](
-  #     dst,
-  #     M, N, K,
-  #     vB
-  #   )
-
-  type A = T
-  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
-  gemm_prepackB_impl[T, ukernel](
-    dst,
-    M, N, K,
-    vB
-  )
+  dispatch(return_void = true):
+    gemm_prepackB_impl[T, ukernel](
+      dst,
+      M, N, K,
+      vB
+    )
 
 # ############################################################
 #
@@ -172,16 +160,10 @@ func gemm_prepackA_mem_required*(
   ## Returns the amount of memory that needs to be preallocated
   ## to pack matrix B.
 
-  # dispatch(return_void = false):
-  #   gemm_prepackA_mem_required_impl(
-  #     ukernel, T, M, N, K
-  #   )
-
-  type A = T
-  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
-  result = gemm_prepackA_mem_required_impl(
-    ukernel, T, M, N, K
-  )
+  dispatch(return_void = false):
+    gemm_prepackA_mem_required_impl(
+      ukernel, T, M, N, K
+    )
 
 proc gemm_prepackA_impl[T; ukernel: static MicroKernel](
         dst: ptr UncheckedArray[T],
@@ -216,30 +198,24 @@ proc gemm_prepackA*[T](
   ## Prepack matrix A of shape MxK
   ## and strides rowStrideA and colStrideA
   ## for matrix multiplication.
-  ## B must be 64-bit aligned.
+  ## A must be 64-bit aligned.
   ##
   ## For optimal performance packing is machine and architecture dependent
   ## i.e. it depends on detected features like AVX and number of cores
   ## and may depend on your machine cache sizes in the future.
   ## It is unsafe to store or serialize it.
 
+  doAssert (cast[int](dst_packedA) and 63) == 0, "The destination pointer must be 64-bit aligned"
+
   let vA = src_A.toMatrixView(rowStrideA, colStrideA)
   let dst = cast[ptr UncheckedArray[T]](dst_packedA)
 
-  # dispatch(return_void = true):
-  #   gemm_prepackA_impl[T, ukernel](
-  #     dst,
-  #     M, N, K,
-  #     vA
-  #   )
-
-  type A = T
-  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
-  gemm_prepackA_impl[T, ukernel](
-    dst,
-    M, N, K,
-    vA
-  )
+  dispatch(return_void = true):
+    gemm_prepackA_impl[T, ukernel](
+      dst,
+      M, N, K,
+      vA
+    )
 
 # ############################################################
 #
@@ -282,9 +258,6 @@ proc gemm_packed_impl[T](
     # First time writing to C, we scale it, otherwise accumulate
     let beta = if pc == 0: beta else: 1.T
 
-    echo packedB.repr
-    echo packedB[0]
-
     omp_parallel_if(parallelize):
       # ####################################
       # 3. for ic = 0,...,m−1 in steps of mc
@@ -310,21 +283,13 @@ proc gemm_packed*[T: SomeNumber](
 
   let vC = C.toMatrixView(rowStrideC, colStrideC)
 
-  # dispatch(return_void = true):
-  #   # TODO - dispatch specialization when C is unit strided
-  #   ukernel.gemm_packed_impl(
-  #     M, N, K,
-  #     alpha, packedA, packedB,
-  #     beta, vC
-  #   )
-
-  type A = T
-  const ukernel = x86_ukernel(x86_SSE2, A, c_unit_stride = false)
-  ukernel.gemm_packed_impl(
-    M, N, K,
-    alpha, packedA, packedB,
-    beta, vC
-  )
+  dispatch(return_void = true):
+    # TODO - dispatch specialization when C is unit strided
+    ukernel.gemm_packed_impl(
+      M, N, K,
+      alpha, packedA, packedB,
+      beta, vC
+    )
 
 # ############################################################
 #
@@ -335,7 +300,8 @@ proc gemm_packed*[T: SomeNumber](
 when isMainModule:
 
   import
-    ../../tensor/[allocator, datatypes, initialization]
+    ../../tensor/[allocator, datatypes, initialization],
+    strformat
 
   proc newTensor*[T](shape: varargs[int]): Tensor[T] =
     # Needed for alignment
@@ -352,57 +318,72 @@ when isMainModule:
     copyMem(tmp[0].addr, cast[ptr T](t.unsafe_raw_data), t.size * sizeof(T))
     result = $tmp
 
+  proc pack_and_test[M, N, K: static int; T](
+          a: array[M, array[K, T]],
+          b: array[K, array[N, T]],
+          ab: array[M, array[N, T]]
+        ) =
+    echo "M: ", M
+    echo "N: ", N
+    echo "K: ", K
+    echo fmt"A [{M}x{K}] * B[{K}x{N}] -> C[{M}x{N}]"
+    let packedA_size = gemm_prepackA_mem_required(float, M, N, K)
+    var packA = newTensor[float](packedA_size)
+    gemm_prepackA(
+      packA.toPtr,
+      M, N, K,
+      a[0][0].unsafeAddr,
+      K, 1
+    )
+    echo packA
+
+    let packedB_size = gemm_prepackB_mem_required(float, M, N, K)
+    var packB = newTensor[float](packedB_size)
+    gemm_prepackB(
+      packB.toPtr,
+      M, N, K,
+      b[0][0].unsafeAddr,
+      N, 1
+    )
+    echo packB
+
+    var res_ab: array[M, array[N, float]]
+    gemm_packed(
+      M, N, K,
+      1.0, packA.toPtr, packB.toPtr,
+      0.0, res_ab[0][0].addr, N, 1
+    )
+
+    doAssert res_ab == ab, $res_ab
+    echo "SUCCESS\n"
+
   # Tests
   block:
-    let
-      M = 3
-      N = 3
-      K = 3
-
-    let packedB_size = gemm_prepackB_mem_required(
-      float, M, N, K
-    )
+    let a = [[1.0, 2, 3],
+             [4.0, 5, 6],
+             [7.0, 8, 9]]
 
     let b = [[1.0, 2, 3],
              [4.0, 5, 6],
              [7.0, 8, 9]]
 
-    var packB = newTensor[float64](packedB_size)
+    let ab = [[30.0, 36, 42],
+             [66.0, 81, 96],
+             [102.0, 126, 150]]
 
-    gemm_prepackB(
-      packB.toPtr,
-      M, N, K,
-      b[0][0].unsafeAddr,
-      3, 1
-    )
+    pack_and_test(a, b, ab)
 
-    echo packB
-
-
-    let packedA_size = gemm_prepackA_mem_required(
-      float, M, N, K
-    )
-
+  block:
     let a = [[1.0, 2, 3],
-             [4.0, 5, 6],
-             [7.0, 8, 9]]
+             [1.0, 1, 1],
+             [1.0, 1, 1]]
 
-    var packA = newTensor[float64](packedA_size)
+    let b = [[1.0, 1],
+             [1.0, 1],
+             [1.0, 1]]
 
-    gemm_prepackA(
-      packA.toPtr,
-      M, N, K,
-      a[0][0].unsafeAddr,
-      3, 1
-    )
-    echo packA
+    let ab = [[6.0, 6],
+              [3.0, 3],
+              [3.0, 3]]
 
-    var res_ab: array[3, array[3, float]]
-
-    gemm_packed(
-      M, N, K,
-      1.0, packA.toPtr, packB.toPtr,
-      0.0, res_ab[0][0].addr, 3, 1
-    )
-
-    echo res_ab
+    pack_and_test(a, b, ab)
