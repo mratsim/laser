@@ -31,16 +31,6 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
             beta: `T`, vC: MatrixView[`T`]
           ) =
 
-        # var A : array[30, `T`]
-        # var B : array[30, `T`]
-        
-        # for i in 0 ..< 30:
-        #   A[i] = packedA[i]
-        #   B[i] = packedB[i]
-        
-        # debugecho(A)
-        # debugecho(B)
-
         let AB{.align_variable.} = ukernel_simd_impl(
           ukernel, `V`, packedA, packedB, kc,
           `simd_setZero`, `simd_load_aligned`, `simd_broadcast_value`, `simd_fma`
@@ -49,8 +39,6 @@ template ukernel_simd_proc(ukernel_name, epilogue_name: NimNode, edge: bool) {.d
           is_c_unit_stride = ukernel.extract_c_unit_stride()
           MR = ukernel.extract_mr()
           NR = ukernel.extract_nr()
-
-        # debugecho(to_ptr(AB, MR, NR, `T`)[])
 
         gebb_ukernel_edge_epilogue(
                 alpha, to_ptr(AB, MR, NR, `T`),
@@ -158,10 +146,7 @@ macro ukernel_simd_impl*(
   let MR = ukernel.mr
   let NR = ukernel.nr
 
-  # echo "MR: ", MR
-  # echo "NR: ", NR
-
-  if false:
+  if false: # Debug implementation
     result = quote do:
       var AB{.align_variable.}: array[`MR`, array[`NR`, float64]]
       var  A {.restrict.} = assume_aligned packedA # [kc, mc] by chunks of mr
@@ -172,10 +157,9 @@ macro ukernel_simd_impl*(
         for i in 0 ..< `MR`:
           for j in 0 ..< `NR`-1:
             AB[i][j] += A[k*`MR`+i] * B[k*`NR`+j]
-
       AB
 
-  else:
+  else: # Vectorized implementation
     result = newStmtList()
 
     ## ukernel config
@@ -249,20 +233,11 @@ macro ukernel_simd_impl*(
       let a = rA[i mod NbVecs]
 
       # Do FMA on the current one
-      # echo "a: ", $a
       for jj in 0 ..< NbVecs:
         let b = rB[jj]
         let AB = rAB[i][jj]
-        # if i == 1:
-        #   bcast_fma.add quote do:
-        #     debugEcho "\ni: ", `i` #, " - ii: ", `ii`
-        #     debugecho "before FMA - AB: ", cast[array[2, float64]](`AB`)
-        #     debugecho "before FMA - A*B: ", cast[array[2, float64]](`a`), " * ", cast[array[2, float64]](`b`)
         bcast_fma.add quote do:
           `AB` = `simd_fma`(`a`, `b`, `AB`)
-        # if i == 1:
-        #   bcast_fma.add quote do:
-        #     debugecho "after FMA - AB: ", cast[array[2, float64]](`AB`)
 
     ## Assemble:
     result = quote do:

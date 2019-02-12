@@ -340,7 +340,7 @@ when isMainModule:
     let b = newSeqWith(K*N, float32 rand(-0.1..0.1))
 
     let reference = benchReference(a, b, NbSamples)
-    let simpleTiling = benchSimpleTiling(a, b, NbSamples)
+    # let simpleTiling = benchSimpleTiling(a, b, NbSamples)
     # let arraymancer = benchArraymancerFallback(a, b, NbSamples)
     let vendorBlas = benchOpenBLAS(a, b, NbSamples)
     let laser = benchLaserGEMM(a, b, NbSamples)

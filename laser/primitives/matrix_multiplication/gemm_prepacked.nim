@@ -33,25 +33,25 @@ template dispatch(
     else:
       return func_call 
 
-  # when defined(i386) or defined(amd64):
-  #   when T is float32:
-  #     if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
-  #     elif cpuinfo_has_x86_fma3():    dispatch_opt(x86_AVX_FMA)
-  #     elif cpuinfo_has_x86_avx():     dispatch_opt(x86_AVX)
-  #     elif cpuinfo_has_x86_sse():     dispatch_opt(x86_SSE)
-  #   elif T is float64:
-  #     if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
-  #     elif cpuinfo_has_x86_fma3():    dispatch_opt(x86_AVX_FMA)
-  #     elif cpuinfo_has_x86_avx():     dispatch_opt(x86_AVX)
-  #     elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
-  #   elif T is int32 or T is uint32:
-  #     if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
-  #     elif cpuinfo_has_x86_avx2():    dispatch_opt(x86_AVX2)
-  #     elif cpuinfo_has_x86_sse41():   dispatch_opt(x86_SSE4_1)
-  #     elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
-  #   elif T is int64:
-  #     if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
-  #     elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
+  when defined(i386) or defined(amd64):
+    when T is float32:
+      if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
+      elif cpuinfo_has_x86_fma3():    dispatch_opt(x86_AVX_FMA)
+      elif cpuinfo_has_x86_avx():     dispatch_opt(x86_AVX)
+      elif cpuinfo_has_x86_sse():     dispatch_opt(x86_SSE)
+    elif T is float64:
+      if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
+      elif cpuinfo_has_x86_fma3():    dispatch_opt(x86_AVX_FMA)
+      elif cpuinfo_has_x86_avx():     dispatch_opt(x86_AVX)
+      elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
+    elif T is int32 or T is uint32:
+      if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
+      elif cpuinfo_has_x86_avx2():    dispatch_opt(x86_AVX2)
+      elif cpuinfo_has_x86_sse41():   dispatch_opt(x86_SSE4_1)
+      elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
+    elif T is int64:
+      if cpuinfo_has_x86_avx512f():   dispatch_opt(x86_AVX512)
+      elif cpuinfo_has_x86_sse2():    dispatch_opt(x86_SSE2)
   dispatch_opt(x86_Generic)
 
 # ############################################################
