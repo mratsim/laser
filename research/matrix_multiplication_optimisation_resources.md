@@ -7,12 +7,33 @@ TODO: very WIP
    but neither MKL or OpenBLAS supports it. Arbitrary strides are resolved during packing.
 3. In deep learning, GEMMs and convolutions (which often use GEMM) are always followed by a non-linear activation which is memory-bound. Allowing non-linearity + GEMM fusion would probably increase throughput tremendously.
 
+## GEMM
+
+[1] Anatomy of High-Performance Matrix Multiplication (Revised)
+    Kazushige Goto, Robert A. Van de Geijn
+  - http://www.cs.utexas.edu/~flame/pubs/GotoTOMS_revision.pdf
+
+[2] Anatomy of High-Performance Many-Threaded Matrix Multiplication
+    Smith et al
+  - http://www.cs.utexas.edu/users/flame/pubs/blis3_ipdps14.pdf
+
+[3] Automating the Last-Mile for High Performance Dense Linear Algebra
+    Veras et al
+  - https://arxiv.org/pdf/1611.08035.pdf
+
+[4] GEMM: From Pure C to SSE Optimized Micro Kernels
+    Michael Lehn
+  - http://apfel.mathematik.uni-ulm.de/~lehn/sghpc/gemm/index.html
+
+
 ## Small GEMMs
 
 - https://github.com/hfp/libxsmm
-- High-Performance Matrix-Matrix Multiplications of
-Very Small Matrices
+- High-Performance Matrix-Matrix Multiplications of Very Small Matrices
     - https://hal.archives-ouvertes.fr/hal-01409286/document
+- Algorithms and Optimization Techniques for High-Performance Matrix-Matrix Multiplications of Very Small Matrices
+    - https://www.icl.utk.edu/files/publications/2018/icl-utk-1075-2018.pdf
+      includes Magma, MKL and libxsmm comparison
 - BLASFEO: basic linear algebra subroutines for embedded optimization
     - https://arxiv.org/pdf/1704.02457.pdf
     - https://github.com/giaf/blasfeo

@@ -106,6 +106,7 @@ Extra MxNxC temporary memory allocation and copying is needed. This is a problem
 
 ### kn2row and kn2col
 
+- (Low Memory Multi Channel COnvolution using General Matrix multiplication)[http://www.prime-project.org/wp-content/uploads/sites/206/2018/02/Talk-10-David-Gregg-Parallel-Multi-Channel-Convolution-using-General-Matrix-Multiplication.pdf]
 - https://arxiv.org/pdf/1704.04428.pdf
 - https://arxiv.org/pdf/1709.03395.pdf
     - contains on overview of GEMM-based convolutions including
