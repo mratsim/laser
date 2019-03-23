@@ -269,20 +269,16 @@ proc deallocTiles[T](tiles: Tiles[T]) =
   if not tiles.b_alloc_mem.isNil:
     deallocShared tiles.b_alloc_mem
 
-proc newTiles*(
-        ukernel: static MicroKernel,
-        T: typedesc,
-        M, N, K: Natural,
-        ): Tiles[T] =
-  # BLIS paper [2] section II Figure 2:
-  #   - kc * nr in L1 cache µkernel
-  #   - mc * kc in L2 cache Ã
-  #   - kc * nc in L3 cache ~B (no L3 in Xeon Phi ¯\_(ツ)_/¯)
-  new result, deallocTiles[T]
-  const
-    nr = ukernel.nr
-    mr = ukernel.mr
+func get_num_tiles*(dim_size, tile_size: int): int {.inline.} =
+  ## Get the number of tiles along a dimension depending on the tile size	
+  (dim_size + tile_size - 1) div tile_size
 
+func partitionMNK*(
+      ukernel: static MicroKernel,
+      T: typedesc,
+      M, N, K: Natural,
+    ): tuple[mc, nc, kc: int] =
+  
   result.nc = N # We don't partition over N
 
   # ## Panel sizes
@@ -308,13 +304,30 @@ proc newTiles*(
   #     by the TLB and (2) the L2 cache
   #     In practice mc is chosen so that A occupies about half the smaller of (1) and (2)
 
+
   # TODO: heuristics to compute the size
   result.mc = min( 768 div T.sizeof, M)
   result.kc = min(2048 div T.sizeof, K)
 
+proc newTiles*(
+        ukernel: static MicroKernel,
+        T: typedesc,
+        M, N, K: Natural,
+        ): Tiles[T] =
+  # BLIS paper [2] section II Figure 2:
+  #   - kc * nr in L1 cache µkernel
+  #   - mc * kc in L2 cache Ã
+  #   - kc * nc in L3 cache ~B (no L3 in Xeon Phi ¯\_(ツ)_/¯)
+  new result, deallocTiles[T]
+  const
+    nr = ukernel.nr
+    mr = ukernel.mr
+
+  (result.mc, result.nc, result.kc) = ukernel.partitionMNK(T, M, N, K)
+
   # Parallel config
   # Ic loop parallel means that each thread will share a panel B and pack a different A
-  result.ic_num_tasks = (M+result.mc-1) div result.mc
+  result.ic_num_tasks = get_num_tiles(M, result.mc)
 
   # Packing
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
