@@ -1,3 +1,9 @@
 [submodule "laser/third_party/cpuinfo"]
 	path = laser/third_party/cpuinfo
 	url = https://github.com/pytorch/cpuinfo
+[submodule "benchmarks/third_party/mkl-dnn"]
+	path = benchmarks/third_party/mkl-dnn
+	url = https://github.com/intel/mkl-dnn
+[submodule "benchmarks/third_party/Flops"]
+	path = benchmarks/third_party/Flops
+	url = https://github.com/Mysticial/Flops
