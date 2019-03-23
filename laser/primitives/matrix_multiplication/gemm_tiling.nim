@@ -269,6 +269,10 @@ proc deallocTiles[T](tiles: Tiles[T]) =
   if not tiles.b_alloc_mem.isNil:
     deallocShared tiles.b_alloc_mem
 
+func get_num_tiles*(dim_size, tile_size: int): int {.inline.} =
+  ## Get the number of tiles along a dimension depending on the tile size	
+  (dim_size + tile_size - 1) div tile_size
+
 proc newTiles*(
         ukernel: static MicroKernel,
         T: typedesc,
@@ -314,7 +318,7 @@ proc newTiles*(
 
   # Parallel config
   # Ic loop parallel means that each thread will share a panel B and pack a different A
-  result.ic_num_tasks = (M+result.mc-1) div result.mc
+  result.ic_num_tasks = get_num_tiles(M, result.mc)
 
   # Packing
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
