@@ -68,39 +68,37 @@ proc gebp_mkernel*[T; ukernel: static MicroKernel](
     MR = ukernel.extract_mr
     NR = ukernel.extract_nr
     PT = ukernel.extract_pt
-    grainsize = PT div NR
 
   # #####################################
   # 4. for jr = 0,...,nc−1 in steps of nr
-  for jr in countup(0, nc-1, NR):
-    omp_task("firstprivate(`jr`)"):
-      let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
+  for jr in `||`(0, nc-1, NR, "taskloop"):
+    let nr = min(nc - jr, NR)                        # C[ic:ic+mc, jc+jr:jc+jr+nr]
 
-      # ###################################
-      # 5. for ir = 0,...,m−1 in steps of mr
-      for ir in countup(0, mc-1, MR):
-        let mr = min(mc - ir, MR)
-        let c_aux = mcncC.stride(ir, jr)               # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
+    # ###################################
+    # 5. for ir = 0,...,m−1 in steps of mr
+    for ir in countup(0, mc-1, MR):
+      let mr = min(mc - ir, MR)
+      let c_aux = mcncC.stride(ir, jr)               # C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr]
 
-        let upanel_b = packB + jr*kc
-        prefetch(upanel_b, Read, ModerateTemporalLocality)
-        let upanel_a = packA + ir*kc
-        prefetch(upanel_a, Read, ModerateTemporalLocality)
-        
-        if nr == NR and mr == MR:
-          # General case
-          gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
-                  kc,                                  #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
-            alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
-            beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
-          )                                            #    βC[ic:ic+mc, jc:jc+nc]
-        else:
-          # Matrix edges
-          gebb_ukernel_edge[T, ukernel](               # GEBB microkernel + epilogue
-            mr, nr, kc,                                #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
-            alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
-            beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
-          )                                            #    βC[ic:ic+mc, jc:jc+nc]
+      let upanel_b = packB + jr*kc
+      prefetch(upanel_b, Read, ModerateTemporalLocality)
+      let upanel_a = packA + ir*kc
+      prefetch(upanel_a, Read, ModerateTemporalLocality)
+      
+      if nr == NR and mr == MR:
+        # General case
+        gebb_ukernel[T, ukernel](                    # GEBB microkernel + epilogue
+                kc,                                  #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
+          alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+          beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+        )                                            #    βC[ic:ic+mc, jc:jc+nc]
+      else:
+        # Matrix edges
+        gebb_ukernel_edge[T, ukernel](               # GEBB microkernel + epilogue
+          mr, nr, kc,                                #   C[ic+ir:ic+ir+mr, jc+jr:jc+jr+nr] =
+          alpha, upanel_a, upanel_b,                 #    αA[ic+ir:ic+ir+mr, pc:pc+kc] *
+          beta, c_aux                                #     B[pc:pc+kc, jc+jr:jc+jr+nr] +
+        )                                            #    βC[ic:ic+mc, jc:jc+nc]
 
 # ###########################################################################################
 #
