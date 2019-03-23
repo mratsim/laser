@@ -109,17 +109,17 @@ const X86_vecwidth_int: X86_FeatureMap = [
 ]
 
 # Registers constraints and micro-kernel tuning
-#   - To issue 2xFMAs in parallel we need to use 2x SIMD registers
+#   - To issue 2xFMAs in parallel we need to use 2x SIMD registers
 #   - We want to hold C of size MR * NR completely in SIMD registers as well
 #     as each value is reused k times during accumulation C[i, j] += A[i, k] * B[k, j]
 #   - We should have enough SIMD registers left to hold
-#     the corresponding sections of A and B (at least 4, 2xA and 2xB for FMAs)
+#     the corresponding sections of A and B (at least 4, 2xA and 2xB for FMAs)
 #
 # On x86-64 X SIMD registers that can issue 2xFMAs per cycle:
 #    - NbVecs is 2 minimum
 #    - RegsPerVec = 2 * NbVecs => 4 minimum (for A and for B)
 #    - NR = NbVecs * NbScalarsPerSIMD
-#    - C: MR*NR and uses MR*NbVecs SIMD registers 
+#    - C: MR*NR and uses MR*NbVecs SIMD registers 
 #    - MR*NbVecs + RegsPerVec <= X
 #       -> MR*NbVecs + 2 * NbVecs <= X
 #       -> (MR+2) * NbVecs <= X
@@ -127,11 +127,11 @@ const X86_vecwidth_int: X86_FeatureMap = [
 # Some solutions:
 #    - AVX with 16 registers:
 #          - MR = 6, NbVecs = 2
-#            FP32: 8xFP32 per SIMD --> NR = 2x8
+#            FP32: 8xFP32 per SIMD --> NR = 2x8
 #                  ukernel = 6x16
 #            FP64, ukernel = 6x8
 #          - MR = 2, NbVecs = 4
-#            FP32: 8xFP32 per SIMD --> NR = 4x8
+#            FP32: 8xFP32 per SIMD --> NR = 4x8
 #                  ukernel = 2x32
 #            FP64, ukernel = 2x16
 #    - AVX512 with 32 registers
@@ -269,11 +269,19 @@ proc deallocTiles[T](tiles: Tiles[T]) =
   if not tiles.b_alloc_mem.isNil:
     deallocShared tiles.b_alloc_mem
 
-func partitionMNK*(
-      ukernel: static MicroKernel,
-      T: typedesc,
-      M, N, K: Natural,
-    ): tuple[mc, nc, kc: int] =
+proc newTiles*(
+        ukernel: static MicroKernel,
+        T: typedesc,
+        M, N, K: Natural,
+        ): Tiles[T] =
+  # BLIS paper [2] section II Figure 2:
+  #   - kc * nr in L1 cache µkernel
+  #   - mc * kc in L2 cache Ã
+  #   - kc * nc in L3 cache ~B (no L3 in Xeon Phi ¯\_(ツ)_/¯)
+  new result, deallocTiles[T]
+  const
+    nr = ukernel.nr
+    mr = ukernel.mr
 
   result.nc = N # We don't partition over N
 
@@ -304,29 +312,9 @@ func partitionMNK*(
   result.mc = min( 768 div T.sizeof, M)
   result.kc = min(2048 div T.sizeof, K)
 
-func get_num_tiles*(dim_size, tile_size: int): int {.inline.} =
-  ## Get the number of tiles along a dimension depending on the tile size
-  (dim_size + tile_size - 1) div tile_size
-
-proc newTiles*(
-        ukernel: static MicroKernel,
-        T: typedesc,
-        M, N, K: Natural,
-        ): Tiles[T] =
-  # BLIS paper [2] section II Figure 2:
-  #   - kc * nr in L1 cache µkernel
-  #   - mc * kc in L2 cache Ã
-  #   - kc * nc in L3 cache ~B (no L3 in Xeon Phi ¯\_(ツ)_/¯)
-  new result, deallocTiles[T]
-  const
-    nr = ukernel.nr
-    mr = ukernel.mr
-
-  (result.mc, result.kc, result.nc) = ukernel.partitionMNK(T, M, N, K)
-
   # Parallel config
   # Ic loop parallel means that each thread will share a panel B and pack a different A
-  result.ic_num_tasks = get_num_tiles(M, result.mc)
+  result.ic_num_tasks = (M+result.mc-1) div result.mc
 
   # Packing
   # During packing the max size is unroll_stop*kc+kc*LR, LR = MR or NR
