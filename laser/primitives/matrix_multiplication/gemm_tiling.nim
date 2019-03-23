@@ -323,7 +323,10 @@ proc newTiles*(
     nr = ukernel.nr
     mr = ukernel.mr
 
-  (result.mc, result.kc, result.nc) = ukernel.partitionMNK(T, M, N, K)
+  # let (mc, kc, nc) = ukernel.partitionMNK(T, M, N, K)
+  result.mc = min( 768 div T.sizeof, M)
+  result.kc = min(2048 div T.sizeof, K)
+  result.nc = N
 
   # Parallel config
   # Ic loop parallel means that each thread will share a panel B and pack a different A
