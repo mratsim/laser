@@ -85,17 +85,12 @@ proc label(id: NimNode): NimNode =
 proc types(ids: NimNode): NimNode =
   ## Type section - "T: (uint16 or int16) or (uint32 or int32) or (uint§4 or int64)"
   assert ids[0].eqIdent "type"
-  assert ids.len >= 2
+  assert ids.len == 2
 
-  # 1. build (uint16 or int16) or (uint32 or int32) or (uint64 or int64)
+  # 1. build (uint64 or int64)
   result = (ident "uint" & $ids[1].intVal) or (ident "int" & $ids[1].intVal)
-  var i = 2
-  while i < ids.len:
-    result = result or
-      (ident "uint" & $ids[i].intVal) or (ident "int" & $ids[i].intVal)
-    inc i
 
-  # 2. Transform into "T: type((uint16 or int16) or (uint32 or int32) or (uint64 or int64))"
+  # 2. Transform into "T: type(uint64 or int64)"
   result = newIdentDefs(
     ident"T", nnkCall.newTree(
       bindSym"type", result
@@ -328,7 +323,7 @@ macro op_generator*(instructions: untyped): untyped =
         # 1. Iterate on the raw param
         for i, arg in params:
           if arg.kind == nnkCall:
-            # type(16, 32, 64) case
+            # type(64) case
             procParams.add types(arg)
           else:
             # dstXX, srcXX, immXX, adr, label case

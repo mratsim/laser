@@ -78,9 +78,10 @@ op_generator:
     [dst16]: [    0x66, 0xFF, modrm(Direct, opcode_ext = 0, rm = dst16)]
     [dst8]:  [          0xFE, modrm(Direct, opcode_ext = 0, rm = dst8)]
     ## Increment data at the address by 1. Data type must be specified.
-    [adr, type(16, 32, 64)]:
-      [rex(w=1), 0xFF, modrm(Indirect, opcode_ext = 0, rm = adr[0])]
-    [adr, type(8)]: [0xFE, modrm(Indirect, opcode_ext = 0, rm = adr[0])]
+    [adr, type(64)]: [rex(w=1), 0xFF, modrm(Indirect, opcode_ext = 0, rm = adr[0])]
+    [adr, type(32)]: [          0xFF, modrm(Indirect, opcode_ext = 0, rm = adr[0])]
+    [adr, type(16)]: [    0x66, 0xFF, modrm(Indirect, opcode_ext = 0, rm = adr[0])]
+    [adr, type(8)]:  [0xFE, modrm(Indirect, opcode_ext = 0, rm = adr[0])]
 
   op DEC:
     ## Increment register by 1. Carry flag is never updated.
@@ -89,7 +90,8 @@ op_generator:
     [dst16]: [    0x66, 0xFF, modrm(Direct, opcode_ext = 1, rm = dst16)]
     [dst8]:  [          0xFE, modrm(Direct, opcode_ext = 1, rm = dst8)]
     ## Increment data at the address by 1. Data type must be specified.
-    [adr, type(16, 32, 64)]:
-      [rex(w=1), 0xFF, modrm(Indirect, opcode_ext = 1, rm = adr[0])]
-    [adr, type(8)]: [0xFE, modrm(Indirect, opcode_ext = 1, rm = adr[0])]
+    [adr, type(64)]: [rex(w=1), 0xFF, modrm(Indirect, opcode_ext = 1, rm = adr[0])]
+    [adr, type(32)]: [          0xFF, modrm(Indirect, opcode_ext = 1, rm = adr[0])]
+    [adr, type(16)]: [    0x66, 0xFF, modrm(Indirect, opcode_ext = 1, rm = adr[0])]
+    [adr, type(8)]:  [0xFE, modrm(Indirect, opcode_ext = 1, rm = adr[0])]
 
