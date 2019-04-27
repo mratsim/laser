@@ -44,10 +44,10 @@ type Flag*[E: enum] = distinct cint
 
 func flag*[E: enum](e: varargs[E]): Flag[E] {.inline.} =
   ## Enum should only have power of 2 fields
-  static:
-    for val in E:
-      assert (ord(val) and (ord(val) - 1)) == 0, "Enum values should all be power of 2, found " &
-                                                  $val & " with value " & $ord(val) & "."
+  # static:
+  #   for val in E:
+  #     assert (ord(val) and (ord(val) - 1)) == 0, "Enum values should all be power of 2, found " &
+  #                                                 $val & " with value " & $ord(val) & "."
   var flags = 0
   for val in e:
     flags = flags or ord(val)
