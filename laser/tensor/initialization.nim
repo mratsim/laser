@@ -149,4 +149,3 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
         t.storage.raw_data[chunk_offset].addr,
         chunk_size * sizeof(T)
         )
-

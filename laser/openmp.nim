@@ -13,7 +13,7 @@ from strutils import toHex
 var mangling_rng {.compileTime.} = initRand(0x1337DEADBEEF)
 var current_suffix {.compileTime.} = ""
 
-proc omp_suffix*(genNew: static bool = false): static string =
+proc omp_suffix*(genNew: static bool = false): string {.compileTime.} =
   ## genNew:
   ##   if false, return the last suffix
   ##   else return a fresh one
