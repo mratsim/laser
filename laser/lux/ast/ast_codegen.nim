@@ -2,3 +2,125 @@
 # Copyright (c) 2018 Mamy André-Ratsimbazafy
 # Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
 # This file may not be copied, modified, or distributed except according to those terms.
+
+import
+  # Standard library
+  macros, tables,
+  # Internal
+  ./ast_definition,
+  ../platforms/[platform_common]
+
+proc codegen*(
+    ast: LuxNode,
+    arch: SimdArch,
+    params: seq[NimNode],
+    visited: var Table[LuxNode, NimNode],
+    stmts: var NimNode): NimNode =
+  ## Recursively walk the AST
+  ## Append the corresponding Nim AST for generic instructions
+  ## and returns a LVal, Output or expression
+  case ast.kind:
+    of Input:
+      return params[ast.symId]
+    of IntImm:
+      if arch == ArchGeneric:
+        return newLit(ast.intVal)
+      else:
+        return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
+    of FloatImm:
+      if arch == ArchGeneric:
+        return newLit(ast.floatVal)
+      else:
+        return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
+    of Output, LVal:
+      let sym = newIdentNode(ast.symLVal)
+      if ast in visited:
+        return sym
+      elif ast.prev_version.isNil:
+        visited[ast] = sym
+        return sym
+      else:
+        visited[ast] = sym
+        var blck = newStmtList()
+        let expression = codegen(ast.prev_version, arch, params, visited, blck)
+        stmts.add blck
+        if not(expression.kind == nnkIdent and eqIdent(sym, expression)):
+          stmts.add newAssignment(
+            newIdentNode(ast.symLVal),
+            expression
+          )
+        return newIdentNode(ast.symLVal)
+    of Assign:
+      if ast in visited:
+        return visited[ast]
+
+      # Workaround compileTime table not finding keys
+      # https://github.com/mratsim/compute-graph-optim/issues/1
+      for key in visited.keys():
+        if hash(key) == hash(ast):
+          {.warning: "Triggered compile-time table 'Key not found' workaround".}
+          return visited[key]
+
+      var varAssign = false
+
+      if ast.lhs notin visited and
+            ast.lhs.kind == LVal and
+            ast.lhs.prev_version.isNil and
+            ast.rhs notin visited:
+          varAssign = true
+
+      var rhsStmt = newStmtList()
+      let rhs = codegen(ast.rhs, arch, params, visited, rhsStmt)
+      stmts.add rhsStmt
+
+      var lhsStmt = newStmtList()
+      let lhs = codegen(ast.lhs, arch, params, visited, lhsStmt)
+      stmts.add lhsStmt
+
+      lhs.expectKind(nnkIdent)
+      if varAssign:
+        stmts.add newVarStmt(lhs, rhs)
+      else:
+        stmts.add newAssignment(lhs, rhs)
+      # visited[ast] = lhs # Already done
+      return lhs
+
+    of Add, Mul:
+      if ast in visited:
+        return visited[ast]
+
+      # Workaround compileTime table not finding keys
+      # https://github.com/mratsim/compute-graph-optim/issues/1
+      for key in visited.keys():
+        if hash(key) == hash(ast):
+          {.warning: "Triggered compile-time table 'Key not found' workaround".}
+          return visited[key]
+
+      var callStmt = nnkCall.newTree()
+      var lhsStmt = newStmtList()
+      var rhsStmt = newStmtList()
+
+      let lhs = codegen(ast.lhs, arch, params, visited, lhsStmt)
+      let rhs = codegen(ast.rhs, arch, params, visited, rhsStmt)
+
+      stmts.add lhsStmt
+      stmts.add rhsStmt
+
+      if arch == ArchGeneric:
+        case ast.kind
+        of Add: callStmt.add newidentNode"+"
+        of Mul: callStmt.add newidentNode"*"
+        else: raise newException(ValueError, "Unreachable code")
+      else:
+        case ast.kind
+        of Add: callStmt.add SimdTable[arch][simdAdd]
+        of Mul: callStmt.add SimdTable[arch][simdMul]
+        else: raise newException(ValueError, "Unreachable code")
+
+      callStmt.add lhs
+      callStmt.add rhs
+
+      let memloc = genSym(nskLet, "memloc_")
+      stmts.add newLetStmt(memloc, callStmt)
+      visited[ast] = memloc
+      return memloc

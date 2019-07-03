@@ -22,6 +22,7 @@ type
     simdType
 
   SimdArch* = enum
+    ArchGeneric,
     x86_SSE,
     # x86_SSE2,
     # x86_SSE4_1,
@@ -43,33 +44,33 @@ const VecWidth = [
 proc genSimdTableX86(): array[SimdArch, array[SimdPrimitives, NimNode]] =
 
   let sse: array[SimdPrimitives, NimNode] = [
-    simdSetZero:   newIdentNode"mm_setzero_ps",
-    simdBroadcast: newIdentNode"mm_set1_ps",
-    simdLoadA:     newIdentNode"mm_load_ps",
-    simdLoadU:     newIdentNode"mm_loadu_ps",
-    simdStoreA:    newIdentNode"mm_store_ps",
-    simdStoreU:    newIdentNode"mm_storeu_ps",
-    simdAdd:       newIdentNode"mm_add_ps",
-    simdMul:       newIdentNode"mm_mul_ps",
-    simdFma:       newIdentNode"sse_fma_fallback",
-    simdType:      newIdentNode"m128"
+    simdSetZero:   ident"mm_setzero_ps",
+    simdBroadcast: ident"mm_set1_ps",
+    simdLoadA:     ident"mm_load_ps",
+    simdLoadU:     ident"mm_loadu_ps",
+    simdStoreA:    ident"mm_store_ps",
+    simdStoreU:    ident"mm_storeu_ps",
+    simdAdd:       ident"mm_add_ps",
+    simdMul:       ident"mm_mul_ps",
+    simdFma:       ident"sse_fma_fallback",
+    simdType:      ident"m128"
   ]
 
   let avx: array[SimdPrimitives, NimNode] = [
-    simdSetZero:   newIdentNode"mm256_setzero_ps",
-    simdBroadcast: newIdentNode"mm256_set1_ps",
-    simdLoadA:     newIdentNode"mm256_load_ps",
-    simdLoadU:     newIdentNode"mm256_loadu_ps",
-    simdStoreA:    newIdentNode"mm256_store_ps",
-    simdStoreU:    newIdentNode"mm256_storeu_ps",
-    simdAdd:       newIdentNode"mm256_add_ps",
-    simdMul:       newIdentNode"mm256_mul_ps",
-    simdFma:       newIdentNode"avx_fma_fallback",
-    simdType:      newIdentNode"m256"
+    simdSetZero:   ident"mm256_setzero_ps",
+    simdBroadcast: ident"mm256_set1_ps",
+    simdLoadA:     ident"mm256_load_ps",
+    simdLoadU:     ident"mm256_loadu_ps",
+    simdStoreA:    ident"mm256_store_ps",
+    simdStoreU:    ident"mm256_storeu_ps",
+    simdAdd:       ident"mm256_add_ps",
+    simdMul:       ident"mm256_mul_ps",
+    simdFma:       ident"avx_fma_fallback",
+    simdType:      ident"m256"
   ]
 
   var avx_fma = avx
-  avx_fma[simdFma] = newIdentNode"mm256_fmadd_ps"
+  avx_fma[simdFma] = ident"mm256_fmadd_ps"
 
   result = [
     x86_SSE: sse,
