@@ -31,7 +31,7 @@ type
     # x86_AVX2,
     # x86_AVX512
 
-const VecWidth = [
+const SimdWidth* = [
   x86_SSE:     128 div 8,
   # x86_SSE2:    128 div 8,
   # x86_SSE4_1:  128 div 8,
@@ -39,6 +39,12 @@ const VecWidth = [
   x86_AVX_FMA: 256 div 8,
   # x86_AVX2:    256 div 8,
   # x86_AVX512:  512 div 8
+]
+
+const SimdAlignment* = [
+  x86_SSE:     16,
+  x86_AVX:     32,
+  x86_AVX_FMA: 32,
 ]
 
 proc genSimdTableX86(): array[SimdArch, array[SimdPrimitives, NimNode]] =

@@ -124,3 +124,47 @@ proc codegen*(
       stmts.add newLetStmt(memloc, callStmt)
       visited[ast] = memloc
       return memloc
+
+proc bodyGen(
+    genSimd: bool, arch: SimdArch,
+    io: varargs[LuxNode],
+    ids: seq[NimNode],
+    resultType: NimNode,
+    ): NimNode =
+  # Does topological ordering and dead-code elimination
+  result = newStmtList()
+  var visitedNodes = initTable[LuxNode, NimNode]()
+
+  for i, inOutVar in io:
+    if inOutVar.kind != Input:
+      if inOutVar.kind in {Output, LVal}:
+        let sym = codegen(inOutVar, arch, ids, visitedNodes, result)
+        sym.expectKind nnkIdent
+        if resultType.kind == nnkTupleTy:
+          result.add newAssignment(
+            nnkDotExpr.newTree(
+              newIdentNode"result",
+              ids[i]
+            ),
+            sym
+          )
+        else:
+          result.add newAssignment(
+            newIdentNode"result",
+            sym
+          )
+      else:
+        let expression = codegen(inOutVar, arch, ids, visitedNodes, result)
+        if resultType.kind == nnkTupleTy:
+          result.add newAssignment(
+            nnkDotExpr.newTree(
+              newIdentNode"result",
+              ids[i]
+            ),
+            expression
+          )
+        else:
+          result.add newAssignment(
+            newIdentNode"result",
+            expression
+          )
