@@ -52,12 +52,12 @@ type
 #
 # ###########################################
 
-var astNodeRng {.compileTime.} = initRand(0x42)
+var luxNodeRng {.compileTime.} = initRand(0x42)
   ## Workaround for having no UUID for LuxNodes
   ## at compile-time - https://github.com/nim-lang/RFCs/issues/131
 
 proc genHash(): Hash =
-  Hash astNodeRng.rand(high(int))
+  Hash luxNodeRng.rand(high(int))
 
 proc hash*(x: LuxNode): Hash {.inline.} =
   when nimvm:
@@ -89,13 +89,13 @@ proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
         ctHash: genHash(),
         kind: Mul,
         lhs: a,
-        rhs: LuxNode(kind: IntScalar, intVal: b)
+        rhs: LuxNode(kind: IntImm, intVal: b)
       )
   else:
     LuxNode(
         kind: Mul,
         lhs: a,
-        rhs: LuxNode(kind: IntScalar, intVal: b)
+        rhs: LuxNode(kind: IntImm, intVal: b)
       )
 
 proc `+=`*(a: var LuxNode, b: LuxNode) =

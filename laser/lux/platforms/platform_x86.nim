@@ -6,7 +6,10 @@
 # TODO: merge with laser/primitives/matrix_multiplication/gemm_tiling
 
 import
-  macros
+  # Standard library
+  macros,
+  # Internal
+  ../../simd
 
 type
   SimdPrimitives* = enum
@@ -47,38 +50,45 @@ const SimdAlignment* = [
   x86_AVX_FMA: 32,
 ]
 
+template sse_fma_fallback(a, b, c: m128): m128 =
+  mm_add_ps(mm_mul_ps(a, b), c)
+
+template avx_fma_fallback(a, b, c: m128): m128 =
+  mm256_add_ps(mm256_mul_ps(a, b), c)
+
 proc genSimdTableX86(): array[SimdArch, array[SimdPrimitives, NimNode]] =
 
   let sse: array[SimdPrimitives, NimNode] = [
-    simdSetZero:   ident"mm_setzero_ps",
-    simdBroadcast: ident"mm_set1_ps",
-    simdLoadA:     ident"mm_load_ps",
-    simdLoadU:     ident"mm_loadu_ps",
-    simdStoreA:    ident"mm_store_ps",
-    simdStoreU:    ident"mm_storeu_ps",
-    simdAdd:       ident"mm_add_ps",
-    simdMul:       ident"mm_mul_ps",
-    simdFma:       ident"sse_fma_fallback",
-    simdType:      ident"m128"
+    simdSetZero:   bindSym"mm_setzero_ps",
+    simdBroadcast: bindSym"mm_set1_ps",
+    simdLoadA:     bindSym"mm_load_ps",
+    simdLoadU:     bindSym"mm_loadu_ps",
+    simdStoreA:    bindSym"mm_store_ps",
+    simdStoreU:    bindSym"mm_storeu_ps",
+    simdAdd:       bindSym"mm_add_ps",
+    simdMul:       bindSym"mm_mul_ps",
+    simdFma:       bindSym"sse_fma_fallback",
+    simdType:      bindSym"m128"
   ]
 
   let avx: array[SimdPrimitives, NimNode] = [
-    simdSetZero:   ident"mm256_setzero_ps",
-    simdBroadcast: ident"mm256_set1_ps",
-    simdLoadA:     ident"mm256_load_ps",
-    simdLoadU:     ident"mm256_loadu_ps",
-    simdStoreA:    ident"mm256_store_ps",
-    simdStoreU:    ident"mm256_storeu_ps",
-    simdAdd:       ident"mm256_add_ps",
-    simdMul:       ident"mm256_mul_ps",
-    simdFma:       ident"avx_fma_fallback",
-    simdType:      ident"m256"
+    simdSetZero:   bindSym"mm256_setzero_ps",
+    simdBroadcast: bindSym"mm256_set1_ps",
+    simdLoadA:     bindSym"mm256_load_ps",
+    simdLoadU:     bindSym"mm256_loadu_ps",
+    simdStoreA:    bindSym"mm256_store_ps",
+    simdStoreU:    bindSym"mm256_storeu_ps",
+    simdAdd:       bindSym"mm256_add_ps",
+    simdMul:       bindSym"mm256_mul_ps",
+    simdFma:       bindSym"avx_fma_fallback",
+    simdType:      bindSym"m256"
   ]
 
   var avx_fma = avx
-  avx_fma[simdFma] = ident"mm256_fmadd_ps"
+  avx_fma[simdFma] = bindSym"mm256_fmadd_ps"
 
   result = [
+    ArchGeneric: default(array[SimdPrimitives, NimNode]),
     x86_SSE: sse,
     x86_AVX: avx,
     x86_AVX_FMA: avx_fma

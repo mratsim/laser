@@ -4,5 +4,5 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 when defined(i386) or defined(x86_64):
-  import ./platform_x86
+  import ./platforms/platform_x86
   export platform_x86

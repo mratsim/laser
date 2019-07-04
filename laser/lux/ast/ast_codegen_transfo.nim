@@ -3,7 +3,14 @@
 # Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
 # This file may not be copied, modified, or distributed except according to those terms.
 
-proc vectorize(
+import
+  # Standard library
+  macros,
+  # Internals
+  ../platforms,
+  ../../private/align_unroller
+
+proc vectorize*(
       funcName: NimNode,
       ptrs, simds: tuple[inParams, outParams: seq[NimNode]],
       len: NimNode,
@@ -177,7 +184,7 @@ proc vectorize(
   block: # Aligned part
     let idx = newIdentNode("idx_")
     result.add quote do:
-      let `unroll_stop` = round_down_power_of_2(
+      let `unroll_stop` = round_step_down(
         `len` - `idxPeeling`, `unroll_factor`)
 
     let (fcall, dst, dst_init, dst_assign) = elems(idx, simd = true)

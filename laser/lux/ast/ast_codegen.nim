@@ -8,7 +8,7 @@ import
   macros, tables,
   # Internal
   ./ast_definition,
-  ../platforms/[platform_common]
+  ../platforms
 
 proc codegen*(
     ast: LuxNode,
@@ -125,7 +125,7 @@ proc codegen*(
       visited[ast] = memloc
       return memloc
 
-proc bodyGen(
+proc bodyGen*(
     genSimd: bool, arch: SimdArch,
     io: varargs[LuxNode],
     ids: seq[NimNode],
