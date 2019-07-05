@@ -127,35 +127,36 @@ macro compile(arch: static SimdArch, io: static varargs[LuxNode], procDef: untyp
 
   # echo initParams.toStrLit()
 
+  # TODO Replace
   let seqT = nnkBracketExpr.newTree(
-    newIdentNode"seq", newIdentNode"float32"
+    ident"seq", ident"float32"
   )
 
   # We create the inner SIMD proc, specialized to a SIMD architecture
   # In the inner proc we shadow the original idents ids.
   let simdBody = bodyGen(
-    genSimd = true,
     arch = arch,
+    T = ident"float32",
     io = io,
     ids = ids,
     resultType = resultTy
   )
 
-  var simdProc =  procDef[0].replaceType(seqT, SimdTable[arch][simdType])
+  var simdProc =  procDef[0].replaceType(seqT, SimdMap(arch, ident"float32", simdType))
 
   simdProc[6] = simdBody   # Assign to proc body
   echo simdProc.toStrLit
 
   # We create the inner generic proc
   let genericBody = bodyGen(
-    genSimd = false,
     arch = ArchGeneric,
+    T = ident"float32",
     io = io,
     ids = ids,
     resultType = resultTy
   )
 
-  var genericProc = procDef[0].replaceType(seqT, newIdentNode"float32")
+  var genericProc = procDef[0].replaceType(seqT, ident"float32")
   genericProc[6] = genericBody   # Assign to proc body
   echo genericProc.toStrLit
 
@@ -166,14 +167,14 @@ macro compile(arch: static SimdArch, io: static varargs[LuxNode], procDef: untyp
         procDef[0][0],
         ptrs, simds,
         length,
-        arch, 4, 4    # We require 4 alignment as a hack to keep seq[T] and use unaligned load/store in code
+        arch, ident"float32" # We require 4 alignment as a hack to keep seq[T] and use unaligned load/store in code
       )
   else:
     vecBody = vectorize(
         procDef[0][0],
         ptrs, simds,
         length,
-        arch, 4, 8    # We require 4 alignment as a hack to keep seq[T] and use unaligned load/store in code
+        arch, ident"float32" # We require 4 alignment as a hack to keep seq[T] and use unaligned load/store in code
       )
 
   result = procDef.copyNimTree()

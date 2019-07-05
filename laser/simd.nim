@@ -97,6 +97,7 @@ when defined(i386) or defined(amd64):
   func mm_set1_pd*(a: float64): m128d {.importc: "_mm_set1_pd", x86.}
   func mm_load_pd*(aligned_mem_addr: ptr float64): m128d {.importc: "_mm_load_pd", x86.}
   func mm_loadu_pd*(mem_addr: ptr float64): m128d {.importc: "_mm_loadu_pd", x86.}
+  func mm_store_pd*(mem_addr: ptr float64, a: m128d) {.importc: "_mm_store_pd", x86.}
   func mm_storeu_pd*(mem_addr: ptr float64, a: m128d) {.importc: "_mm_storeu_pd", x86.}
   func mm_add_pd*(a, b: m128d): m128d {.importc: "_mm_add_pd", x86.}
   func mm_sub_pd*(a, b: m128d): m128d {.importc: "_mm_sub_pd", x86.}
@@ -174,7 +175,7 @@ when defined(i386) or defined(amd64):
     ## and store it in the lower part of destination (padded with zeroes)
 
   func mm_movemask_epi8*(a: m128i): int32 {.importc: "_mm_movemask_epi8", x86.}
-    ## Returns the most significant bit 
+    ## Returns the most significant bit
     ## of each 8-bit elements in `a`
 
   # ############################################################
@@ -244,10 +245,11 @@ when defined(i386) or defined(amd64):
   func mm256_set1_pd*(a: float64): m256d {.importc: "_mm256_set1_pd", x86.}
   func mm256_load_pd*(aligned_mem_addr: ptr float64): m256d {.importc: "_mm256_load_pd", x86.}
   func mm256_loadu_pd*(mem_addr: ptr float64): m256d {.importc: "_mm256_loadu_pd", x86.}
+  func mm256_store_pd*(mem_addr: ptr float64, a: m256d) {.importc: "_mm256_store_pd", x86.}
   func mm256_storeu_pd*(mem_addr: ptr float64, a: m256d) {.importc: "_mm256_storeu_pd", x86.}
   func mm256_add_pd*(a, b: m256d): m256d {.importc: "_mm256_add_pd", x86.}
   func mm256_mul_pd*(a, b: m256d): m256d {.importc: "_mm256_mul_pd", x86.}
-  
+
   # ############################################################
   #
   #                 AVX + FMA - float32/64 - packed
@@ -326,7 +328,7 @@ when defined(i386) or defined(amd64):
     ## This is an extended precision multiplication 32x32 -> 64
 
   func mm256_movemask_epi8*(a: m256i): int32 {.importc: "_mm256_movemask_epi8", x86.}
-    ## Returns the most significant bit 
+    ## Returns the most significant bit
     ## of each 8-bit elements in `a`
 
   func mm256_cmpgt_epi32*(a, b: m256i): m256i {.importc: "_mm256_cmpgt_epi32", x86.}
@@ -414,11 +416,11 @@ when defined(i386) or defined(amd64):
     ## Compare a greater than b
     ## Broadcast 32-bit integer a to all elements of dst using zeromask k
     ## (elements are zeroed out when the corresponding mask bit is not set).
-  
+
   func mm512_movm_epi32*(a: mmask16): m512i {.importc: "_mm512_movm_epi32", x86.}
 
   func mm512_movepi8_mask*(a: m512i): mmask64 {.importc: "_mm512_movepi8_mask", x86.}
-    ## Returns the most significant bit 
+    ## Returns the most significant bit
     ## of each 8-bit elements in `a`
 
   func mm512_srli_epi32*(a: m512i, count: int32): m512i {.importc: "_mm512_srli_epi32", x86.}

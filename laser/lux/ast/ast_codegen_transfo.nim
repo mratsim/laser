@@ -14,7 +14,7 @@ proc vectorize*(
       funcName: NimNode,
       ptrs, simds: tuple[inParams, outParams: seq[NimNode]],
       len: NimNode,
-      arch: SimdArch, alignNeeded, unroll_factor: int): NimNode =
+      arch: SimdArch, T: NimNode): NimNode =
   ## Vectorizing macro
   ## Apply a SIMD function on all elements of an array
   ## This deals with:
@@ -64,6 +64,9 @@ proc vectorize*(
   #     for i in unroll_stop ..< len:
   #       dst[i] = wrapped_func(src[i])
 
+  # TODO - no control over alignment
+  # let alignNeeded = SimdAlignment[arch]
+  let alignNeeded = 4
   template alignmentOffset(p: NimNode, idx: NimNode): untyped {.dirty.}=
     quote:
       cast[ByteAddress](`p`[`idx`].addr) and (`alignNeeded` - 1)
@@ -96,7 +99,7 @@ proc vectorize*(
         result.fcall.add elem
       else:
         result.fcall.add newCall(
-          SimdTable[arch][simdLoadU], # Hack: should be aligned but no control over alignment in seq[T]
+          SimdMap(arch, T, simdLoadU), # Hack: should be aligned but no control over alignment in seq[T]
           newCall(
             newidentNode"addr",
             elem
@@ -132,7 +135,7 @@ proc vectorize*(
               )
           )
           result.dst_assign.add newCall(
-            SimdTable[arch][simdStoreU], # Hack: should be aligned but no control over alignment in seq[T]
+            SimdMap(arch, T, simdStoreU), # Hack: should be aligned but no control over alignment in seq[T]
             newCall(
               newidentNode"addr",
               elem
@@ -147,12 +150,12 @@ proc vectorize*(
         let tmp = newIdentNode($ptrs.outParams[0] & "_simd")
         result.dst = tmp
         result.dst_assign.add newCall(
-          SimdTable[arch][simdStoreU], # Hack: should be aligned but no control over alignment in seq[T]
+          SimdMap(arch, T, simdStoreU), # Hack: should be aligned but no control over alignment in seq[T]
           elem,
           tmp
         )
 
-    dst_init[0].add SimdTable[arch][simdType]
+    dst_init[0].add SimdMap(arch, T, simdType)
     dst_init[0].add newEmptyNode()
 
     result.dst_init = dst_init
@@ -183,7 +186,9 @@ proc vectorize*(
   let unroll_stop = newIdentNode("unroll_stop_")
   block: # Aligned part
     let idx = newIdentNode("idx_")
+    let unroll_factor = ident"unroll_factor"
     result.add quote do:
+      const `unroll_factor` = elemsPerVector(SimdArch(`arch`), `T`)
       let `unroll_stop` = round_step_down(
         `len` - `idxPeeling`, `unroll_factor`)
 
@@ -201,7 +206,7 @@ proc vectorize*(
         unroll_stop,
         newLit 1
       ),
-      newLit unroll_factor
+      unroll_factor
     )
     if ptrs.outParams.len > 0:
       forStmt.add nnkStmtList.newTree(

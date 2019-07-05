@@ -20,10 +20,10 @@ type
     simdFma
     simdType
 
-template noop*(scalar: untyped): untyped =
+template noop(scalar: untyped): untyped =
   scalar
 
-template unreachable*(): untyped =
+template unreachable(): untyped =
   {.error: "Unreachable".}
 
 proc genericPrimitives*: array[SimdPrimitives, NimNode] =

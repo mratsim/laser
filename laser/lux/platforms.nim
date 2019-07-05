@@ -9,7 +9,7 @@ when defined(i386) or defined(x86_64):
   import ./platforms/platform_x86
 
 export SimdPrimitives
-export SimdArch, SimdAlignment, SimdTable
+export SimdArch, SimdAlignment, SimdMap
 
-func elemsPerVector*(arch: SimdArch, T: typedesc): int =
+func elemsPerVector*(arch: SimdArch, T: typedesc): int {.compileTime.}=
   SimdWidth[arch] div sizeof(T)

@@ -42,11 +42,16 @@ const SimdAlignment* = [
 template sse_fma_fallback(a, b, c: m128): m128 =
   mm_add_ps(mm_mul_ps(a, b), c)
 
-template avx_fma_fallback(a, b, c: m128): m128 =
+template avx_fma_fallback(a, b, c: m256): m256 =
   mm256_add_ps(mm256_mul_ps(a, b), c)
 
-proc genSimdTableX86(): array[SimdArch, array[SimdPrimitives, NimNode]] =
+template sse_fma_fallback(a, b, c: m128d): m128d =
+  mm_add_pd(mm_mul_pd(a, b), c)
 
+template avx_fma_fallback(a, b, c: m256d): m256d =
+  mm256_add_pd(mm256_mul_pd(a, b), c)
+
+proc simdX86Float32(): array[SimdArch, array[SimdPrimitives, NimNode]] =
   let sse = [
     simdSetZero:   bindSym"mm_setzero_ps",
     simdBroadcast: bindSym"mm_set1_ps",
@@ -83,4 +88,50 @@ proc genSimdTableX86(): array[SimdArch, array[SimdPrimitives, NimNode]] =
     x86_AVX_FMA: avx_fma
   ]
 
-let SimdTable*{.compileTime.} = genSimdTableX86()
+proc simdX86Float64(): array[SimdArch, array[SimdPrimitives, NimNode]] =
+  let sse = [
+    simdSetZero:   bindSym"mm_setzero_pd",
+    simdBroadcast: bindSym"mm_set1_pd",
+    simdLoadA:     bindSym"mm_load_pd",
+    simdLoadU:     bindSym"mm_loadu_pd",
+    simdStoreA:    bindSym"mm_store_pd",
+    simdStoreU:    bindSym"mm_storeu_pd",
+    simdAdd:       bindSym"mm_add_pd",
+    simdMul:       bindSym"mm_mul_pd",
+    simdFma:       bindSym"sse_fma_fallback",
+    simdType:      bindSym"m128d"
+  ]
+
+  let avx: array[SimdPrimitives, NimNode] = [
+    simdSetZero:   bindSym"mm256_setzero_pd",
+    simdBroadcast: bindSym"mm256_set1_pd",
+    simdLoadA:     bindSym"mm256_load_pd",
+    simdLoadU:     bindSym"mm256_loadu_pd",
+    simdStoreA:    bindSym"mm256_store_pd",
+    simdStoreU:    bindSym"mm256_storeu_pd",
+    simdAdd:       bindSym"mm256_add_pd",
+    simdMul:       bindSym"mm256_mul_pd",
+    simdFma:       bindSym"avx_fma_fallback",
+    simdType:      bindSym"m256d"
+  ]
+
+  var avx_fma = avx
+  avx_fma[simdFma] = bindSym"mm256_fmadd_pd"
+
+  result = [
+    ArchGeneric: genericPrimitives(),
+    x86_SSE: sse,
+    x86_AVX: avx,
+    x86_AVX_FMA: avx_fma
+  ]
+
+let MapX86Float32{.compileTime.} = simdX86Float32()
+let MapX86Float64{.compileTime.} = simdX86Float64()
+
+proc SimdMap*(arch: SimdArch, T: NimNode, p: SimdPrimitives): NimNode =
+  if T.eqIdent"float32":
+    result = MapX86Float32[arch][p]
+  elif T.eqIdent"float64":
+    result = MapX86Float64[arch][p]
+  else:
+    error "Unsupported type: \"" & $T & '\"'

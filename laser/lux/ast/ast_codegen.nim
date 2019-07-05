@@ -13,6 +13,7 @@ import
 proc codegen*(
     ast: LuxNode,
     arch: SimdArch,
+    T: NimNode,
     params: seq[NimNode],
     visited: var Table[Id, NimNode],
     stmts: var NimNode): NimNode =
@@ -23,9 +24,9 @@ proc codegen*(
     of Input:
       return params[ast.symId]
     of IntImm:
-      return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
+      return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.intVal))
     of FloatImm:
-      return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
+      return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.intVal))
     of Output, LVal:
       let sym = newIdentNode(ast.symLVal)
       if ast.id in visited:
@@ -36,7 +37,7 @@ proc codegen*(
       else:
         visited[ast.id] = sym
         var blck = newStmtList()
-        let expression = codegen(ast.prev_version, arch, params, visited, blck)
+        let expression = codegen(ast.prev_version, arch, T, params, visited, blck)
         stmts.add blck
         if not(expression.kind == nnkIdent and eqIdent(sym, expression)):
           stmts.add newAssignment(
@@ -57,11 +58,11 @@ proc codegen*(
           varAssign = true
 
       var rhsStmt = newStmtList()
-      let rhs = codegen(ast.rhs, arch, params, visited, rhsStmt)
+      let rhs = codegen(ast.rhs, arch, T, params, visited, rhsStmt)
       stmts.add rhsStmt
 
       var lhsStmt = newStmtList()
-      let lhs = codegen(ast.lhs, arch, params, visited, lhsStmt)
+      let lhs = codegen(ast.lhs, arch, T, params, visited, lhsStmt)
       stmts.add lhsStmt
 
       lhs.expectKind(nnkIdent)
@@ -80,15 +81,15 @@ proc codegen*(
       var lhsStmt = newStmtList()
       var rhsStmt = newStmtList()
 
-      let lhs = codegen(ast.lhs, arch, params, visited, lhsStmt)
-      let rhs = codegen(ast.rhs, arch, params, visited, rhsStmt)
+      let lhs = codegen(ast.lhs, arch, T, params, visited, lhsStmt)
+      let rhs = codegen(ast.rhs, arch, T, params, visited, rhsStmt)
 
       stmts.add lhsStmt
       stmts.add rhsStmt
 
       case ast.kind
-      of Add: callStmt.add SimdTable[arch][simdAdd]
-      of Mul: callStmt.add SimdTable[arch][simdMul]
+      of Add: callStmt.add SimdMap(arch, T, simdAdd)
+      of Mul: callStmt.add SimdMap(arch, T, simdMul)
       else: raise newException(ValueError, "Unreachable code")
 
       callStmt.add lhs
@@ -100,7 +101,8 @@ proc codegen*(
       return memloc
 
 proc bodyGen*(
-    genSimd: bool, arch: SimdArch,
+    arch: SimdArch,
+    T: NimNode,
     io: varargs[LuxNode],
     ids: seq[NimNode],
     resultType: NimNode,
@@ -112,7 +114,7 @@ proc bodyGen*(
   for i, inOutVar in io:
     if inOutVar.kind != Input:
       if inOutVar.kind in {Output, LVal}:
-        let sym = codegen(inOutVar, arch, ids, visitedNodes, result)
+        let sym = codegen(inOutVar, arch, T, ids, visitedNodes, result)
         sym.expectKind nnkIdent
         if resultType.kind == nnkTupleTy:
           result.add newAssignment(
@@ -128,7 +130,7 @@ proc bodyGen*(
             sym
           )
       else:
-        let expression = codegen(inOutVar, arch, ids, visitedNodes, result)
+        let expression = codegen(inOutVar, arch, T, ids, visitedNodes, result)
         if resultType.kind == nnkTupleTy:
           result.add newAssignment(
             nnkDotExpr.newTree(
