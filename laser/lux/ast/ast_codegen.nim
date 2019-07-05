@@ -14,7 +14,7 @@ proc codegen*(
     ast: LuxNode,
     arch: SimdArch,
     params: seq[NimNode],
-    visited: var Table[LuxNode, NimNode],
+    visited: var Table[Id, NimNode],
     stmts: var NimNode): NimNode =
   ## Recursively walk the AST
   ## Append the corresponding Nim AST for generic instructions
@@ -34,13 +34,13 @@ proc codegen*(
         return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
     of Output, LVal:
       let sym = newIdentNode(ast.symLVal)
-      if ast in visited:
+      if ast.id in visited:
         return sym
       elif ast.prev_version.isNil:
-        visited[ast] = sym
+        visited[ast.id] = sym
         return sym
       else:
-        visited[ast] = sym
+        visited[ast.id] = sym
         var blck = newStmtList()
         let expression = codegen(ast.prev_version, arch, params, visited, blck)
         stmts.add blck
@@ -51,22 +51,15 @@ proc codegen*(
           )
         return newIdentNode(ast.symLVal)
     of Assign:
-      if ast in visited:
-        return visited[ast]
-
-      # Workaround compileTime table not finding keys
-      # https://github.com/mratsim/compute-graph-optim/issues/1
-      for key in visited.keys():
-        if hash(key) == hash(ast):
-          {.warning: "Triggered compile-time table 'Key not found' workaround".}
-          return visited[key]
+      if ast.id in visited:
+        return visited[ast.id]
 
       var varAssign = false
 
-      if ast.lhs notin visited and
+      if ast.lhs.id notin visited and
             ast.lhs.kind == LVal and
             ast.lhs.prev_version.isNil and
-            ast.rhs notin visited:
+            ast.rhs.id notin visited:
           varAssign = true
 
       var rhsStmt = newStmtList()
@@ -86,15 +79,8 @@ proc codegen*(
       return lhs
 
     of Add, Mul:
-      if ast in visited:
-        return visited[ast]
-
-      # Workaround compileTime table not finding keys
-      # https://github.com/mratsim/compute-graph-optim/issues/1
-      for key in visited.keys():
-        if hash(key) == hash(ast):
-          {.warning: "Triggered compile-time table 'Key not found' workaround".}
-          return visited[key]
+      if ast.id in visited:
+        return visited[ast.id]
 
       var callStmt = nnkCall.newTree()
       var lhsStmt = newStmtList()
@@ -122,7 +108,7 @@ proc codegen*(
 
       let memloc = genSym(nskLet, "memloc_")
       stmts.add newLetStmt(memloc, callStmt)
-      visited[ast] = memloc
+      visited[ast.id] = memloc
       return memloc
 
 proc bodyGen*(
@@ -133,7 +119,7 @@ proc bodyGen*(
     ): NimNode =
   # Does topological ordering and dead-code elimination
   result = newStmtList()
-  var visitedNodes = initTable[LuxNode, NimNode]()
+  var visitedNodes = initTable[Id, NimNode]()
 
   for i, inOutVar in io:
     if inOutVar.kind != Input:

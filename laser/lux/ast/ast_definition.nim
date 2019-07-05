@@ -5,7 +5,7 @@
 
 import
   # Standard library
-  hashes, random, tables
+  random, tables
 
 # ###########################################
 #
@@ -29,7 +29,10 @@ type
     LVal        # Temporary allocated node
     Assign      # Assignment statement
 
+  Id* = int
+
   LuxNode* = ref object
+    id*: Id
     case kind*: LuxNodeKind
     of Input:
       symId*: int
@@ -44,8 +47,6 @@ type
     of Assign, Add, Mul:
       lhs*, rhs*: LuxNode
 
-    ctHash*: Hash                 # Compile-Time only Hash (TODO)
-
 # ###########################################
 #
 #         Routine definitions
@@ -56,37 +57,31 @@ var luxNodeRng {.compileTime.} = initRand(0x42)
   ## Workaround for having no UUID for LuxNodes
   ## at compile-time - https://github.com/nim-lang/RFCs/issues/131
 
-proc genHash(): Hash =
-  Hash luxNodeRng.rand(high(int))
-
-proc hash*(x: LuxNode): Hash {.inline.} =
-  when nimvm:
-    x.cthash
-  else: # Take its address
-    cast[Hash](x)
+proc genId(): int =
+  luxNodeRng.rand(high(int))
 
 proc input*(id: int): LuxNode =
   when nimvm:
-    LuxNode(ctHash: genHash(), kind: Input, symId: id)
+    LuxNode(id: genId(), kind: Input, symId: id)
   else:
     LuxNode(kind: Input, symId: id)
 
 proc `+`*(a, b: LuxNode): LuxNode =
   when nimvm:
-    LuxNode(ctHash: genHash(), kind: Add, lhs: a, rhs: b)
+    LuxNode(id: genId(), kind: Add, lhs: a, rhs: b)
   else:
     LuxNode(kind: Add, lhs: a, rhs: b)
 
 proc `*`*(a, b: LuxNode): LuxNode =
   when nimvm:
-    LuxNode(ctHash: genHash(), kind: Mul, lhs: a, rhs: b)
+    LuxNode(id: genId(), kind: Mul, lhs: a, rhs: b)
   else:
-    LuxNode(ctHash: genHash(), kind: Mul, lhs: a, rhs: b)
+    LuxNode(id: genId(), kind: Mul, lhs: a, rhs: b)
 
 proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
   when nimvm:
     LuxNode(
-        ctHash: genHash(),
+        id: genId(),
         kind: Mul,
         lhs: a,
         rhs: LuxNode(kind: IntImm, intVal: b)
@@ -102,17 +97,17 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
   assert a.kind notin {Input, IntImm, FloatImm}
   if a.kind notin {Output, LVal}:
     a = LuxNode(
-          ctHash: genHash(),
+          id: genId(),
           kind: LVal,
-          symLVal: "localvar__" & $a.ctHash, # Generate unique symbol
+          symLVal: "localvar__" & $a.id, # Generate unique symbol
           version: 1,
           prev_version: LuxNode(
-            cthash: a.ctHash,
+            id: a.id,
             kind: Assign,
             lhs: LuxNode(
-              ctHash: a.ctHash, # Keep the hash
+              id: a.id, # Keep the hash
               kind: LVal,
-              symLVal: "localvar__" & $a.ctHash, # Generate unique symbol
+              symLVal: "localvar__" & $a.id, # Generate unique symbol
               version: 0,
               prev_version: nil,
             ),
@@ -121,12 +116,12 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
     )
   if a.kind == Output:
     a = LuxNode(
-      ctHash: genHash(),
+      id: genId(),
       kind: Output,
       symLVal: a.symLVal, # Keep original unique symbol
       version: a.version + 1,
       prev_version: LuxNode(
-        ctHash: a.ctHash,
+        id: a.id,
         kind: Assign,
         lhs: a,
         rhs: a + b
@@ -134,12 +129,12 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
     )
   else:
     a = LuxNode(
-      ctHash: genHash(),
+      id: genId(),
       kind: LVal,
       symLVal: a.symLVal, # Keep original unique symbol
       version: a.version + 1,
       prev_version: LuxNode(
-        ctHash: a.ctHash,
+        id: a.id,
         kind: Assign,
         lhs: a,
         rhs: a + b
