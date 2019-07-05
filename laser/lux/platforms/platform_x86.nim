@@ -9,21 +9,10 @@ import
   # Standard library
   macros,
   # Internal
+  ./platform_common,
   ../../simd
 
 type
-  SimdPrimitives* = enum
-    simdSetZero
-    simdBroadcast
-    simdLoadA
-    simdLoadU
-    simdStoreA
-    simdStoreU
-    simdAdd
-    simdMul
-    simdFma
-    simdType
-
   SimdArch* = enum
     ArchGeneric,
     x86_SSE,
@@ -58,7 +47,7 @@ template avx_fma_fallback(a, b, c: m128): m128 =
 
 proc genSimdTableX86(): array[SimdArch, array[SimdPrimitives, NimNode]] =
 
-  let sse: array[SimdPrimitives, NimNode] = [
+  let sse = [
     simdSetZero:   bindSym"mm_setzero_ps",
     simdBroadcast: bindSym"mm_set1_ps",
     simdLoadA:     bindSym"mm_load_ps",
@@ -88,7 +77,7 @@ proc genSimdTableX86(): array[SimdArch, array[SimdPrimitives, NimNode]] =
   avx_fma[simdFma] = bindSym"mm256_fmadd_ps"
 
   result = [
-    ArchGeneric: default(array[SimdPrimitives, NimNode]),
+    ArchGeneric: genericPrimitives(),
     x86_SSE: sse,
     x86_AVX: avx,
     x86_AVX_FMA: avx_fma

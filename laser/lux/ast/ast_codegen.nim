@@ -23,15 +23,9 @@ proc codegen*(
     of Input:
       return params[ast.symId]
     of IntImm:
-      if arch == ArchGeneric:
-        return newLit(ast.intVal)
-      else:
-        return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
+      return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
     of FloatImm:
-      if arch == ArchGeneric:
-        return newLit(ast.floatVal)
-      else:
-        return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
+      return newCall(SimdTable[arch][simdBroadcast], newLit(ast.intVal))
     of Output, LVal:
       let sym = newIdentNode(ast.symLVal)
       if ast.id in visited:
@@ -92,16 +86,10 @@ proc codegen*(
       stmts.add lhsStmt
       stmts.add rhsStmt
 
-      if arch == ArchGeneric:
-        case ast.kind
-        of Add: callStmt.add newidentNode"+"
-        of Mul: callStmt.add newidentNode"*"
-        else: raise newException(ValueError, "Unreachable code")
-      else:
-        case ast.kind
-        of Add: callStmt.add SimdTable[arch][simdAdd]
-        of Mul: callStmt.add SimdTable[arch][simdMul]
-        else: raise newException(ValueError, "Unreachable code")
+      case ast.kind
+      of Add: callStmt.add SimdTable[arch][simdAdd]
+      of Mul: callStmt.add SimdTable[arch][simdMul]
+      else: raise newException(ValueError, "Unreachable code")
 
       callStmt.add lhs
       callStmt.add rhs
