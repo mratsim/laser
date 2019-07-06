@@ -30,3 +30,11 @@ proc replaceType*(ast: NimNode, to_replace: NimNode, replacements: NimNode): Nim
         rTree.add inspect(child)
       return rTree
   result = inspect(ast)
+
+proc ct*(ident: NimNode): NimNode =
+  nnkPragmaExpr.newTree(
+    ident,
+    nnkPragma.newTree(
+      ident"compileTime"
+    )
+  )

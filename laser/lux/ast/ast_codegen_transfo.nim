@@ -33,7 +33,7 @@ proc vecChecks(
     result.add quote do:
       doAssert `align0` == `align_i`
 
-proc elems(
+proc setupDstElems(
     funcName: NimNode,
     arch: SimdArch,
     T: NimNode,
@@ -113,14 +113,14 @@ proc elems(
 
   result.dst_init = dst_init
 
-  echo "###########"
-  echo result.fcall.toStrLit
-  echo "-----------"
-  echo result.dst.toStrLit
-  echo "-----------"
-  echo result.dst_init.toStrLit
-  echo "-----------"
-  echo result.dst_assign.toStrLit
+  # echo "###########"
+  # echo result.fcall.toStrLit
+  # echo "-----------"
+  # echo result.dst.toStrLit
+  # echo "-----------"
+  # echo result.dst_init.toStrLit
+  # echo "-----------"
+  # echo result.dst_assign.toStrLit
 
 proc vecPrologue*(
       funcName: NimNode,
@@ -140,7 +140,7 @@ proc vecPrologue*(
     newLit 0
   )
   var whileBody = newStmtList()
-  let (fcall, dst, _, _) = elems(funcName, arch, T, idx, ptrs, simd = false)
+  let (fcall, dst, _, _) = setupDstElems(funcName, arch, T, idx, ptrs, simd = false)
 
   whileBody.add newLetStmt(idx, idxPeeling)
   if ptrs.outParams.len > 0:
@@ -170,7 +170,7 @@ proc vecKernel*(
     let `unroll_stop` = round_step_down(
       `len` - `idxPeeling`, `unroll_factor`)
 
-  let (fcall, dst, dst_init, dst_assign) = elems(funcName, arch, T, idx, ptrs, simd = true)
+  let (fcall, dst, dst_init, dst_assign) = setupDstElems(funcName, arch, T, idx, ptrs, simd = true)
   if ptrs.outParams.len > 0:
     result.add dst_init
 
@@ -213,7 +213,7 @@ proc vecEpilogue*(
       unroll_stop,
       len
     )
-  let (fcall, dst, _, _) = elems(funcName, arch, T, idx, ptrs, simd = false)
+  let (fcall, dst, _, _) = setupDstElems(funcName, arch, T, idx, ptrs, simd = false)
   if ptrs.outParams.len > 0:
     forStmt.add newAssignment(dst, fcall)
   else:

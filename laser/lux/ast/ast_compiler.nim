@@ -80,7 +80,25 @@ proc initParams(
 
         result.simds.outParams.add newIdentNode($ident & "_simd")
 
-macro compile(arch: static SimdArch, io: static varargs[LuxNode], procDef: untyped): untyped =
+proc symbolicExecStmt(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outputSyms, stmts: var NimNode) =
+  # Allocate inputs
+  for i, in_ident in inputSyms:
+    stmts.add newLetStmt(
+      ct(in_ident),
+      newCall("input", newLit i)
+    )
+
+  # Call the AST routine
+  let call = newCall(ast, inputSyms)
+  if not hasOut: # Case 1: no result
+    stmts.add call
+  else:
+    outputSyms = ct(genSym(nskLet, "callResult_"))
+    stmts.add newLetStmt(
+      outputSyms, call
+    )
+
+macro compile(io: static varargs[LuxNode], procDef: untyped): untyped =
   # Note: io must be an array - https://github.com/nim-lang/Nim/issues/10691
 
   # compile([a, b, c, bar, baz, buzz]):
@@ -134,21 +152,21 @@ macro compile(arch: static SimdArch, io: static varargs[LuxNode], procDef: untyp
 
   # We create the inner SIMD proc, specialized to a SIMD architecture
   # In the inner proc we shadow the original idents ids.
-  let simdBody = bodyGen(
-    arch = arch,
+  let simdOverload = bodyGen(
+    arch = x86_SSE,
     T = ident"float32",
     io = io,
     ids = ids,
     resultType = resultTy
   )
 
-  var simdProc =  procDef[0].replaceType(seqT, SimdMap(arch, ident"float32", simdType))
+  var simdProc =  procDef[0].replaceType(seqT, SimdMap(x86_SSE, ident"float32", simdType))
 
-  simdProc[6] = simdBody   # Assign to proc body
-  echo simdProc.toStrLit
+  simdProc[6] = simdOverload   # Assign to proc body
+  # echo simdProc.toStrLit
 
   # We create the inner generic proc
-  let genericBody = bodyGen(
+  let genericOverload = bodyGen(
     arch = ArchGeneric,
     T = ident"float32",
     io = io,
@@ -157,25 +175,17 @@ macro compile(arch: static SimdArch, io: static varargs[LuxNode], procDef: untyp
   )
 
   var genericProc = procDef[0].replaceType(seqT, ident"float32")
-  genericProc[6] = genericBody   # Assign to proc body
-  echo genericProc.toStrLit
+  genericProc[6] = genericOverload   # Assign to proc body
+  # echo genericProc.toStrLit
 
   # We vectorize the inner proc to apply to an contiguous array
   var vecBody: NimNode
-  if arch == x86_SSE:
-    vecBody = vectorize(
-        procDef[0][0],
-        ptrs, simds,
-        length,
-        arch, ident"float32" # We require 4 alignment as a hack to keep seq[T] and use unaligned load/store in code
-      )
-  else:
-    vecBody = vectorize(
-        procDef[0][0],
-        ptrs, simds,
-        length,
-        arch, ident"float32" # We require 4 alignment as a hack to keep seq[T] and use unaligned load/store in code
-      )
+  vecBody = vectorize(
+      procDef[0][0],
+      ptrs, simds,
+      length,
+      x86_SSE, ident"float32" # We require 4 alignment as a hack to keep seq[T] and use unaligned load/store in code
+    )
 
   result = procDef.copyNimTree()
   let resBody = newStmtList()
@@ -185,9 +195,11 @@ macro compile(arch: static SimdArch, io: static varargs[LuxNode], procDef: untyp
   resBody.add vecBody
   result[0][6] = resBody
 
-  # echo result.toStrLit
+  echo result.toStrLit
 
 macro generate*(ast_routine: typed, signature: untyped): untyped =
+  result = newStmtList()
+
   let formalParams = signature[0][3]
   let ast = ast_routine.resolveASToverload(formalParams)
 
@@ -196,57 +208,27 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
   sig.expectKind(nnkFormalParams)
 
   # Get all inputs
-  var inputs: seq[NimNode]
+  var inputSyms: seq[NimNode]
   for idx_identdef in 1 ..< sig.len:
     let identdef = sig[idx_identdef]
     doAssert identdef[^2].eqIdent"LuxNode"
     identdef[^1].expectKind(nnkEmpty)
     for idx_ident in 0 .. identdef.len-3:
-      inputs.add genSym(nskLet, $identdef[idx_ident] & "_")
+      inputSyms.add genSym(nskLet, $identdef[idx_ident] & "_")
 
-  # Allocate inputs
-  result = newStmtList()
-  proc ct(ident: NimNode): NimNode =
-    nnkPragmaExpr.newTree(
-      ident,
-      nnkPragma.newTree(
-        ident"compileTime"
-      )
-    )
-
-  for i, in_ident in inputs:
-    result.add newLetStmt(
-      ct(in_ident),
-      newCall("input", newLit i)
-    )
-
-  # Call the AST routine
-  let call = newCall(ast, inputs)
-  var callAssign: NimNode
-  case sig[0].kind
-  of nnkEmpty: # Case 1: no result
-    result.add call
-  # Compile-time tuple destructuring is bugged - https://github.com/nim-lang/Nim/issues/11634
-  # of nnkTupleTy: # Case 2: tuple result
-  #   callAssign = nnkVarTuple.newTree()
-  #   for identdef in sig[0]:
-  #     doAssert identdef[^2].eqIdent"LuxNode"
-  #     identdef[^1].expectKind(nnkEmpty)
-  #     for idx_ident in 0 .. identdef.len-3:
-  #       callAssign.add ct(identdef[idx_ident])
-  #   callAssign.add newEmptyNode()
-  #   callAssign.add call
-  #   result.add nnkLetSection.newTree(
-  #     callAssign
-  #   )
-  else: # Case 3: single return value
-    callAssign = ct(genSym(nskLet, "callResult_"))
-    result.add newLetStmt(
-      callAssign, call
+  # Symbolic execution statement
+  var outputSyms: NimNode
+  var symExecStmt = newStmtList()
+  symbolicExecStmt(
+      ast,
+      inputSyms,
+      hasOut = sig[0].kind != nnkEmpty,
+      outputSyms,
+      symExecStmt
     )
 
   # Collect all the input/output idents
-  var io = inputs
+  var io = inputSyms
   case sig[0].kind
   of nnkEmpty:
     discard
@@ -255,14 +237,16 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
     for identdef in sig[0]:
       for idx_ident in 0 .. identdef.len-3:
         io.add nnkBracketExpr.newTree(
-          callAssign[0],
+          outputSyms[0],
           newLit idx
         )
         inc idx
   else:
-    io.add callAssign
+    io.add outputSyms
 
+  # Call the compilation macro
+  result.add symExecStmt
   result.add quote do:
-    compile(x86_SSE, `io`, `signature`)
+    compile(`io`, `signature`)
 
   echo result.toStrlit
