@@ -14,18 +14,6 @@ import
 
 withCompilerOptimHints()
 
-proc newTensor*[T](shape: varargs[int]): Tensor[T] =
-  var size: int
-  initTensorMetadata(result, size, shape)
-  allocCpuStorage(result.storage, size)
-  setZero(result, check_contiguous = false)
-
-proc newTensor*[T](shape: Metadata): Tensor[T] =
-  var size: int
-  initTensorMetadata(result, size, shape)
-  allocCpuStorage(result.storage, size)
-  setZero(result, check_contiguous = false)
-
 proc randomTensor*[T](shape: openarray[int], valrange: Slice[T]): Tensor[T] =
   var size: int
   initTensorMetadata(result, size, shape)

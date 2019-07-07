@@ -149,3 +149,15 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
         t.storage.raw_buffer[chunk_offset].addr,
         chunk_size * sizeof(T)
         )
+
+proc newTensor*[T](shape: varargs[int]): Tensor[T] =
+  var size: int
+  initTensorMetadata(result, size, shape)
+  allocCpuStorage(result.storage, size)
+  setZero(result, check_contiguous = false)
+
+proc newTensor*[T](shape: Metadata): Tensor[T] =
+  var size: int
+  initTensorMetadata(result, size, shape)
+  allocCpuStorage(result.storage, size)
+  setZero(result, check_contiguous = false)

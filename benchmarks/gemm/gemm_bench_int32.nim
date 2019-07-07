@@ -191,7 +191,7 @@ when isMainModule:
     let b = newSeqWith(K*N, int32 rand(100))
 
     discard benchSimpleTiling(a, b, NbSamples)
-    discard benchArraymancerFallback(a, b, NbSamples)
+    # discard benchArraymancerFallback(a, b, NbSamples)
     discard benchLaserGEMM(a, b, NbSamples)
     # discard benchMkldnnRef(a, b, NbSamples)
 

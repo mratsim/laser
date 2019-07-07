@@ -31,7 +31,7 @@ template dispatch(
       func_call
       return
     else:
-      return func_call 
+      return func_call
 
   when defined(i386) or defined(amd64):
     when T is float32:
@@ -89,7 +89,7 @@ proc gemm_prepackB_impl[T; ukernel: static MicroKernel](
         M, N, K: int,
         vB: MatrixView[T]
       ) =
-  
+
   let (MC, NC, KC) = ukernel.partitionMNK(T, M, N, K)
   let pc_num_iter = get_num_tiles(K, KC)
   let upanelB_size = KC * round_step_up(NC, ukernel.nr)
@@ -106,8 +106,8 @@ proc gemm_prepackB_impl[T; ukernel: static MicroKernel](
     pack_B_kc_nc[T, ukernel](
       packB,
       kc, NC, kcncB
-    ) 
-  
+    )
+
 proc gemm_prepackB*[T](
         dst_packedB: ptr (T or UncheckedArray[T]),
         M, N, K: int,
@@ -170,7 +170,7 @@ proc gemm_prepackA_impl[T; ukernel: static MicroKernel](
         M, N, K: int,
         vA: MatrixView[T]
       ) =
-  
+
   let (MC, NC, KC) = ukernel.partitionMNK(T, M, N, K)
   const MR = ukernel.mr
 
@@ -231,12 +231,12 @@ proc gemm_packed_impl[T](
     ) =
 
   withCompilerOptimHints()
-  
+
   const
     MR = ukernel.mr
     NR = ukernel.nr
     PT = ukernel.pt
-  
+
   let
     parallelize = M*N*K > PT*PT*PT
 
@@ -302,13 +302,6 @@ when isMainModule:
   import
     ../../tensor/[allocator, datatypes, initialization],
     strformat
-
-  proc newTensor*[T](shape: varargs[int]): Tensor[T] =
-    # Needed for alignment
-    var size: int
-    initTensorMetadata(result, size, shape)
-    allocCpuStorage(result.storage, size)
-    setZero(result, check_contiguous = false)
 
   proc toPtr*[T](t: Tensor[T]): ptr T =
     cast[ptr T](t.unsafe_raw_data)
@@ -427,7 +420,7 @@ when isMainModule:
 
     let ab = [[ 1,-8,-20, -6],
               [27, 7, 34,-19]]
-    
+
     pack_and_test(a, b, ab)
 
   block:
@@ -448,7 +441,7 @@ when isMainModule:
               [ 57, 42,23,15],
               [102, 94,34, 0],
               [ 66, 43,39,15]]
-    
+
     pack_and_test(a, b, ab)
 
   block:
@@ -467,7 +460,7 @@ when isMainModule:
 
     let ab = [[27,37],
               [14,23]]
-    
+
     pack_and_test(a, b, ab)
 
   block:

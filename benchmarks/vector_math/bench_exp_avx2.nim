@@ -14,18 +14,6 @@ import
 
 withCompilerOptimHints()
 
-proc newTensor*[T](shape: varargs[int]): Tensor[T] =
-  var size: int
-  initTensorMetadata(result, size, shape)
-  allocCpuStorage(result.storage, size)
-  setZero(result, check_contiguous = false)
-
-proc newTensor*[T](shape: Metadata): Tensor[T] =
-  var size: int
-  initTensorMetadata(result, size, shape)
-  allocCpuStorage(result.storage, size)
-  setZero(result, check_contiguous = false)
-
 proc randomTensor*[T](shape: openarray[int], valrange: Slice[T]): Tensor[T] =
   var size: int
   initTensorMetadata(result, size, shape)
@@ -47,7 +35,7 @@ func getIndex[T](t: Tensor[T], idx: varargs[int]): int =
 
 func `[]`*[T](t: Tensor[T], idx: varargs[int]): T {.inline.}=
   ## Index tensor
-  t.storage.raw_data[t.getIndex(idx)]
+  t.storage.raw_buffer[t.getIndex(idx)]
 
 # ##########################################
 # Benchmarking tools
@@ -120,7 +108,7 @@ proc benchBaseline(a: Tensor[float32], nb_samples: int) =
   do:
     # Main work
     for i in 0 ..< a.size:
-      output.storage.raw_data[i] = exp(a.storage.raw_data[i])
+      output.storage.raw_buffer[i] = exp(a.storage.raw_buffer[i])
 
 template vectorize(
       wrapped_func,
@@ -147,7 +135,7 @@ proc benchSSEMathfun(a: Tensor[float32], nb_samples: int) =
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    sse_mathfun_exp_ps(output.storage.raw_data, a.storage.raw_data, a.size)
+    sse_mathfun_exp_ps(output.storage.raw_buffer, a.storage.raw_buffer, a.size)
 
 {.compile: "lib_sse_exp.c".}
 proc fast_exp_sse(x: m128): m128 {.importc.}
@@ -160,7 +148,7 @@ proc benchSSE_fast_exp_sse(a: Tensor[float32], nb_samples: int) =
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    fast_exp_sse(output.storage.raw_data, a.storage.raw_data, a.size)
+    fast_exp_sse(output.storage.raw_buffer, a.storage.raw_buffer, a.size)
 
 proc avx2_fmath_exp_ps(x: m256): m256 {.importcpp: "fmath::exp_ps256(@)", header: cSourcesPath & "lib_fmath.hpp".}
 vectorize(avx2_fmath_exp_ps, avx2_fmath_exp_ps, mm256_load_ps, mm256_store_ps, 8)
@@ -172,7 +160,7 @@ proc benchAVX2_fmath(a: Tensor[float32], nb_samples: int) =
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    avx2_fmath_exp_ps(output.storage.raw_data, a.storage.raw_data, a.size)
+    avx2_fmath_exp_ps(output.storage.raw_buffer, a.storage.raw_buffer, a.size)
 
 {.compile: "lib_minimax.c".}
 proc avx2_fma_minimax_exp(x: m256): m256 {.importc: "faster_more_accurate_exp_avx2".}
@@ -185,7 +173,7 @@ proc benchAVX2_FMA_minimax(a: Tensor[float32], nb_samples: int) =
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    avx2_fma_minimax_exp(output.storage.raw_data, a.storage.raw_data, a.size)
+    avx2_fma_minimax_exp(output.storage.raw_buffer, a.storage.raw_buffer, a.size)
 
 proc avx2_mathfun_exp256_ps(x: m256): m256 {.
     importc: "exp256_ps",
@@ -200,7 +188,7 @@ proc benchAVX2_mathfun(a: Tensor[float32], nb_samples: int) =
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    avx2_mathfun_exp256_ps(output.storage.raw_data, a.storage.raw_data, a.size)
+    avx2_mathfun_exp256_ps(output.storage.raw_buffer, a.storage.raw_buffer, a.size)
 
 proc fma_schraudolph_exp(x: m256): m256 {.
     importc: "_mm256_expfaster_ps",
@@ -215,7 +203,7 @@ proc benchSchraudolph_approx(a: Tensor[float32], nb_samples: int) =
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    fma_schraudolph_exp(output.storage.raw_data, a.storage.raw_data, a.size)
+    fma_schraudolph_exp(output.storage.raw_buffer, a.storage.raw_buffer, a.size)
 
 proc simd_math_prims_exp(x: float32): float32 {.
     importc: "expapprox",
@@ -230,7 +218,7 @@ proc benchSimdMathPrims(a: Tensor[float32], nb_samples: int) =
   do:
     # Main work
     for i in 0 ..< a.size:
-      output.storage.raw_data[i] = simd_math_prims_exp(a.storage.raw_data[i])
+      output.storage.raw_buffer[i] = simd_math_prims_exp(a.storage.raw_buffer[i])
 
 import ../../laser/primitives/simd_math/exp_log_avx2
 vectorize(exp, exp_float32x8_avx2, mm256_load_ps, mm256_store_ps, 8)
@@ -242,7 +230,7 @@ proc benchProdImplAVX2(a: Tensor[float32], nb_samples: int) =
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    exp_float32x8_avx2(output.storage.raw_data, a.storage.raw_data, a.size)
+    exp_float32x8_avx2(output.storage.raw_buffer, a.storage.raw_buffer, a.size)
 
 import ../../laser/primitives/simd_math/exp_log_avx512
 vectorize(exp, exp_float32x16_avx512, mm512_load_ps, mm512_store_ps, 16)
@@ -254,7 +242,7 @@ proc benchProdImplAVX512(a: Tensor[float32], nb_samples: int) =
     output.setZero() # We zero memory between computation
   do:
     # Main work
-    exp_float32x16_avx512(output.storage.raw_data, a.storage.raw_data, a.size)
+    exp_float32x16_avx512(output.storage.raw_buffer, a.storage.raw_buffer, a.size)
 
 # ###########################################
 
