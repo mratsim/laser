@@ -40,7 +40,7 @@ when isMainModule:
     var baz = foo * 3
     var buzz = baz
 
-    buzz += a * 1000
+    buzz += a * 10000
     baz += b
     buzz += b
 

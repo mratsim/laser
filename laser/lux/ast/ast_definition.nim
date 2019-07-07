@@ -209,6 +209,8 @@ proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
 
 proc `+=`*(a: var LuxNode, b: LuxNode) =
   assert a.kind notin {InTensor, IntImm, FloatImm}
+
+  # If LHS does not have a memory location, attribute one
   if a.kind notin {MutTensor, LValTensor}:
     a = LuxNode(
           id: genId(), lineInfo: instantiationInfo(),
@@ -228,7 +230,9 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
             rhs: a
           )
     )
-  elif a.kind == MutTensor:
+
+  # Then update it
+  if a.kind == MutTensor:
     a = LuxNode(
       id: genId(), lineInfo: instantiationInfo(),
       kind: MutTensor,
@@ -248,7 +252,7 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
       symLVal: a.symLVal, # Keep original unique symbol
       version: a.version + 1,
       prev_version: LuxNode(
-        id: a.id,
+        id: a.id, lineinfo: a.lineinfo,
         kind: Assign,
         lhs: a,
         rhs: a + b
