@@ -145,11 +145,6 @@ macro compile(io: static varargs[LuxNode], procDef: untyped): untyped =
 
   # echo initParams.toStrLit()
 
-  # TODO Replace
-  let seqT = nnkBracketExpr.newTree(
-    ident"seq", ident"float32"
-  )
-
   # We create the inner SIMD proc, specialized to a SIMD architecture
   # In the inner proc we shadow the original idents ids.
   let simdOverload = bodyGen(
@@ -160,7 +155,10 @@ macro compile(io: static varargs[LuxNode], procDef: untyped): untyped =
     resultType = resultTy
   )
 
-  var simdProc =  procDef[0].replaceType(seqT, SimdMap(x86_SSE, ident"float32", simdType))
+  var simdProc = procDef[0].liftTypes(
+    containerIdent = "seq",
+    remapping = func(typeNode: NimNode): NimNode {.gcsafe, locks: 0.} = {.noSideEffect.}: SimdMap(x86_SSE, typeNode, simdType)
+  )
 
   simdProc[6] = simdOverload   # Assign to proc body
   # echo simdProc.toStrLit
@@ -174,7 +172,7 @@ macro compile(io: static varargs[LuxNode], procDef: untyped): untyped =
     resultType = resultTy
   )
 
-  var genericProc = procDef[0].replaceType(seqT, ident"float32")
+  var genericProc = procDef[0].liftTypes(containerIdent = "seq")
   genericProc[6] = genericOverload   # Assign to proc body
   # echo genericProc.toStrLit
 

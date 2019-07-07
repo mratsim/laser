@@ -26,7 +26,7 @@ proc codegen*(
     of IntImm:
       return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.intVal))
     of FloatImm:
-      return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.intVal))
+      return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.floatVal))
     of Output, LVal:
       let sym = newIdentNode(ast.symLVal)
       if ast.id in visited:
