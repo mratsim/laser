@@ -91,10 +91,16 @@ type
     ##      In the future, LLVM IR or MLIR will be generated instead at runtime.
 
     # Scalar invariants
-    IntImm      # Integer immediate (known at compile-time)
-    FloatImm    # Float immediate (known at compile-time)
-    # IntParam    # Integer environment parameter (known at run-time, invariant during function execution)
-    # FloatParam  # Float environment parameter (known at run-time, invariant during function execution)
+    IntImm        # Integer immediate (known at compile-time)
+    FloatImm      # Float immediate (known at compile-time)
+    IntParam      # Integer environment parameter (known at run-time, invariant during function execution)
+    FloatParam    # Float environment parameter (known at run-time, invariant during function execution)
+
+    # Mutable scalars
+    IntMut
+    FloatMut
+    IntLVal
+    FloatLVal
 
     # Scalar expressions
     Add         # Addition
@@ -105,16 +111,17 @@ type
     MutTensor   # Mutable output tensor node
     LValTensor  # Temporary allocated node
 
-    # # Tensor access and properties
-    # Access      # Tensor access
-    # Shape       # Tensor shape
+    # Tensor access and properties
+    Access      # Tensor access
+    Shape       # Tensor shape
 
     # Scalar statements
     Assign      # Assignment statement
 
-    # # Affine statements
-    # AffineFor   # Affine for loop
-    # AffineIf    # Affine if
+    # Affine statements
+    AffineFor   # Affine for loop
+    AffineIf    # Affine if
+    Domain      # Iteration Domain
 
     # Affine statements:
     # - for/if constraints are a linear expression of
@@ -139,10 +146,11 @@ type
     id*: Id
     lineInfo*: tuple[filename: string, line: int, column: int]
     case kind*: LuxNodeKind
-    of InTensor:
+    of InTensor, IntParam, FloatParam:
+      ast*: LuxNode               # If nil, it uses symId
       symId*: int
-    of MutTensor, LValTensor:
-      symLval*: string
+    of MutTensor, LValTensor, IntMut, FloatMut, IntLVal, FloatLVal:
+      symLval*: string            # TODO MutTensor should probably use symId
       version*: int
       prev_version*: LuxNode      # Persistent data structure
     of IntImm:
@@ -151,6 +159,34 @@ type
       floatVal*: float
     of Assign, Add, Mul:
       lhs*, rhs*: LuxNode
+    of Access:
+      tensorView*: LuxNode
+      domains*: seq[LuxNode]
+    of Shape:
+      tensor*: LuxNode
+      axis*: int
+    of Domain, AffineFor:
+      domain*: IDom
+    of AffineIf:
+      constraint*: LuxNode
+
+  ScheduleKind* = enum
+    ScReduce
+    ScParallel
+    ScVectorize
+    ScUnroll
+    ScStoreLoc
+    ScComputeLoc
+    ScOrder
+    # Directly modifies AST
+    # ScFuse
+    # ScTile
+    # ScSplit / Distribute
+    # ScInterchange
+    # ScSkew
+    # ScShift
+
+
 
 # ###########################################
 #
