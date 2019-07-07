@@ -11,16 +11,22 @@ import
   ../../private/align_unroller
 
 proc alignmentOffset(arch: SimdArch, p: NimNode, idx: NimNode): NimNode =
-  # TODO - no control over alignment
-  # let alignNeeded = SimdAlignment[arch]
-  let alignNeeded = 4
+  let alignNeeded = SimdAlignment[arch]
   quote:
-    cast[ByteAddress](`p`[`idx`].addr) and (`alignNeeded` - 1)
+    cast[ByteAddress](`p`) and (`alignNeeded` - 1)
 
 proc vecChecks(
         arch: SimdArch,
         ptrs: tuple[inParams, outParams: seq[NimNode]],
       ): NimNode =
+
+  # TODO: we probably need those checks at runtime to avoid failure
+  # or only allow vectorization where alignment is provable:
+  #   - from infering from previous allocation
+  #   - when iterating over a single tensor
+  # Otherwise always use unaligned loads
+
+  # TODO: check contiguous
 
   result = newStmtList()
   let align0 = arch.alignmentOffset(ptrs.inParams[0], newLit 0)
@@ -52,7 +58,7 @@ proc setupDstElems(
       result.fcall.add elem
     else:
       result.fcall.add newCall(
-        SimdMap(arch, T, simdLoadU), # Hack: should be aligned but no control over alignment in seq[T]
+        SimdMap(arch, T, simdLoadA),
         newCall(
           newidentNode"addr",
           elem
@@ -88,7 +94,7 @@ proc setupDstElems(
           )
         )
         result.dst_assign.add newCall(
-          SimdMap(arch, T, simdStoreU), # Hack: should be aligned but no control over alignment in seq[T]
+          SimdMap(arch, T, simdStoreA),
           newCall(
             newidentNode"addr",
             elem
@@ -103,7 +109,7 @@ proc setupDstElems(
       let tmp = newIdentNode($ptrs.outParams[0] & "_simd")
       result.dst = tmp
       result.dst_assign.add newCall(
-        SimdMap(arch, T, simdStoreU), # Hack: should be aligned but no control over alignment in seq[T]
+        SimdMap(arch, T, simdStoreA),
         elem,
         tmp
       )

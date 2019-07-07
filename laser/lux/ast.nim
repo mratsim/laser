@@ -14,9 +14,23 @@ import
 # ###########################
 
 when isMainModule:
+  import
+    sequtils,
+    ../tensor/[datatypes, allocator, initialization]
 
+  proc toTensor[T](s: seq[T]): Tensor[T] =
+    var size: int
+    initTensorMetadata(result, size, [s.len])
+    allocCpuStorage(result.storage, size)
+    result.copyFromRaw(s[0].unsafeAddr, s.len)
+
+  proc `$`[T](t: Tensor[T]): string =
+    var tmp = newSeq[T](t.size)
+    copyMem(tmp[0].addr, cast[ptr T](t.unsafe_raw_data), t.size * sizeof(T))
+    result = $tmp
+
+  # We intentionally have a tricky non-canonical function signature
   proc foobar(a: LuxNode, b, c: LuxNode): tuple[bar: LuxNode, baz, buzz: LuxNode] =
-
     let foo = a + b + c
 
     # Don't use in-place updates
@@ -39,25 +53,17 @@ when isMainModule:
     discard
 
   generate foobar:
-    proc foobar(a: seq[float32], b, c: seq[float32]): tuple[bar: seq[float32], baz, buzz: seq[float32]]
+    proc foobar(a: Tensor[float32], b, c: Tensor[float32]): tuple[bar: Tensor[float32], baz, buzz: Tensor[float32]]
 
   generate foobar:
-    proc foobar(a: seq[float64], b, c: seq[float64]): tuple[bar: seq[float64], baz, buzz: seq[float64]]
-
-  # Note to use aligned store, SSE requires 16-byte alignment and AVX 32-byte alignment
-  # Unfortunately there is no way with normal seq to specify that (pending destructors)
-  # As a hack, we use the unaligned load and store simd, and a required alignment of 4,
-  # in practice we define our own tensor type
-  # with aligned allocator
-
-  import sequtils
+    proc foobar(a: Tensor[float64], b, c: Tensor[float64]): tuple[bar: Tensor[float64], baz, buzz: Tensor[float64]]
 
   block: # float32
     let
       len = 10
-      u = newSeqWith(len, 1'f32)
-      v = newSeqWith(len, 2'f32)
-      w = newSeqWith(len, 3'f32)
+      u = newSeqWith(len, 1'f32).toTensor()
+      v = newSeqWith(len, 2'f32).toTensor()
+      w = newSeqWith(len, 3'f32).toTensor()
 
     let (pim, pam, poum) = foobar(u, v, w)
 
@@ -68,9 +74,9 @@ when isMainModule:
   block: # float64
     let
       len = 10
-      u = newSeqWith(len, 1'f64)
-      v = newSeqWith(len, 2'f64)
-      w = newSeqWith(len, 3'f64)
+      u = newSeqWith(len, 1'f64).toTensor()
+      v = newSeqWith(len, 2'f64).toTensor()
+      w = newSeqWith(len, 3'f64).toTensor()
 
     let (pim, pam, poum) = foobar(u, v, w)
 

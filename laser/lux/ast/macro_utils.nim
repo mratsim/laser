@@ -6,40 +6,9 @@
 import
   macros
 
-proc replaceType*(ast: NimNode, to_replace: NimNode, replacements: NimNode): NimNode =
-  # Args:
-  #   - The full syntax tree
-  #   - replacement type
-  #   - type to replace
-  proc inspect(node: NimNode): NimNode =
-    case node.kind:
-    of {nnkIdent, nnkSym}: return node
-    of nnkEmpty: return node
-    of nnkLiterals: return node
-    of nnkIdentDefs:
-      let i = node.len - 2 # Type position
-      if node[i] == to_replace:
-        result = node.copyNimTree()
-        result[i] = replacements
-        return
-      else:
-        return node
-    else:
-      var rTree = node.kind.newTree()
-      for child in node:
-        rTree.add inspect(child)
-      return rTree
-  result = inspect(ast)
-
-proc ct*(ident: NimNode): NimNode =
-  nnkPragmaExpr.newTree(
-    ident,
-    nnkPragma.newTree(
-      ident"compileTime"
-    )
-  )
-
 {.experimental: "dynamicBindSym".}
+from ../../tensor/datatypes import Tensor
+
 proc isType*(x: NimNode, t: string): bool =
   ## Compile-time type checking
 
@@ -51,6 +20,14 @@ proc isType*(x: NimNode, t: string): bool =
     return sameType(bindSym(x[0]), bindSym(t))
   else:
     return sameType(bindSym(x), bindSym(t))
+
+proc ct*(ident: NimNode): NimNode =
+  nnkPragmaExpr.newTree(
+    ident,
+    nnkPragma.newTree(
+      ident"compileTime"
+    )
+  )
 
 proc liftTypes*(
         ast: NimNode,

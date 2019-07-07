@@ -23,7 +23,8 @@ type
     # x86_AVX2,
     # x86_AVX512
 
-const SimdWidth* = [
+const SimdWidth*:array[SimdArch, int] = [
+  ArchGeneric:   0,
   x86_SSE:     128 div 8,
   # x86_SSE2:    128 div 8,
   # x86_SSE4_1:  128 div 8,
@@ -33,7 +34,8 @@ const SimdWidth* = [
   # x86_AVX512:  512 div 8
 ]
 
-const SimdAlignment* = [
+const SimdAlignment*:array[SimdArch, int] = [
+  ArchGeneric:  0,
   x86_SSE:     16,
   x86_AVX:     32,
   x86_AVX_FMA: 32,

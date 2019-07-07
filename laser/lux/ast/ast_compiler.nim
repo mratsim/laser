@@ -29,13 +29,9 @@ proc initParams(
   # Start with non-result
   # We work at simd vector level
   result.initStmt = newStmtList()
-  let type0 = newCall(
-    newIdentNode"type",
-    nnkBracketExpr.newTree(
-      procDef[0][3][1][0],
-      newLit 0
-    )
-  )
+
+  var shape0: NimNode
+  var len0: NimNode
 
   for i in 1 ..< procDef[0][3].len: # Proc formal params
     let iddefs = procDef[0][3][i]
@@ -43,33 +39,38 @@ proc initParams(
       # Ident
       let ident = iddefs[j]
       result.ids.add ident
+
       # Ident base type (without seq)
-      if iddefs[^2].isType"seq":
-        result.ids_baseType.add iddefs[^2][1]
-      else:
+      if not iddefs[^2].isType"Tensor":
         result.ids_baseType.add iddefs[^2]
-
-      # Raw ptr
-      let raw_ptr = newIdentNode($ident & "_raw_ptr")
-      result.ptrs.inParams.add raw_ptr
-
-      # Init statement and iteration length
-      if j == 0:
-        result.length = quote do: `ident`.len
       else:
-        let len0 = result.length
-        result.initStmt.add quote do:
-          assert `len0` == `ident`.len
-      result.initStmt.add quote do:
-        let `raw_ptr` = cast[ptr UncheckedArray[`type0`]](`ident`[0].unsafeAddr)
+        result.ids_baseType.add iddefs[^2][1]
+        # If Tensor take pointers
 
-      # SIMD ident
-      result.simds.inParams.add newIdentNode($ident & "_simd")
+        # Raw ptr
+        let raw_ptr = newIdentNode($ident & "_raw_ptr")
+        result.ptrs.inParams.add raw_ptr
+
+        # Init statement and iteration length
+        if len0.isNil:
+          len0 = ident"iter_len"
+          shape0 = ident"shape0"
+          result.initStmt.add quote do:
+            let `shape0` = `ident`.shape
+            let `len0` = `ident`.size()
+          result.length = len0
+        else:
+          let len0 = result.length
+          result.initStmt.add quote do:
+            assert `len0` == `ident`.size()
+        result.initStmt.add quote do:
+          let `raw_ptr` = `ident`.unsafe_raw_data()
+
+        # SIMD ident
+        result.simds.inParams.add newIdentNode($ident & "_simd")
 
   # Now add the result idents
   # We work at simd vector level
-  let len0 = result.length
-
   if resultType.kind == nnkEmpty:
     discard
   elif resultType.kind == nnkTupleTy:
@@ -80,26 +81,27 @@ proc initParams(
         let ident = iddefs[j]
         result.ids.add ident
         # Ident base type (without seq)
-        if iddefs[^2].isType"seq":
-          result.ids_baseType.add iddefs[^2][1]
-        else:
+        if not iddefs[^2].isType"Tensor":
           result.ids_baseType.add iddefs[^2]
+        else:
+          let baseType = iddefs[^2][1]
+          result.ids_baseType.add baseType
 
-        # Raw ptr
-        let raw_ptr = newIdentNode($ident & "_raw_ptr")
-        result.ptrs.outParams.add raw_ptr
+          # Raw ptr
+          let raw_ptr = newIdentNode($ident & "_raw_ptr")
+          result.ptrs.outParams.add raw_ptr
 
-        # Init statement
-        let res = nnkDotExpr.newTree(
-                    newIdentNode"result",
-                    iddefs[j]
-                  )
-        result.initStmt.add quote do:
-          `res` = newSeq[`type0`](`len0`)
-          let `raw_ptr` = cast[ptr UncheckedArray[`type0`]](`res`[0].unsafeAddr)
+          # Init statement
+          let res = nnkDotExpr.newTree(
+                      newIdentNode"result",
+                      iddefs[j]
+                    )
+          result.initStmt.add quote do:
+            `res` = newTensor[`baseType`](`shape0`)
+            let `raw_ptr` = `res`.unsafe_raw_data()
 
-        # SIMD ident
-        result.simds.outParams.add newIdentNode($ident & "_simd")
+          # SIMD ident
+          result.simds.outParams.add newIdentNode($ident & "_simd")
 
 proc symbolicExecStmt(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outputSyms, stmts: var NimNode) =
   # Allocate inputs
@@ -166,8 +168,8 @@ macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
 
   # echo initParams.toStrLit()
 
-  # We create an inner generic proc on the base type (without seq[T])
-  var genericProc = procDef[0].liftTypes(containerIdent = "seq")
+  # We create an inner generic proc on the base type (without Tensor[T])
+  var genericProc = procDef[0].liftTypes(containerIdent = "Tensor")
 
   # We create the inner generic proc
   let genericOverload = bodyGen(
@@ -192,7 +194,7 @@ macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   )
 
   var simdProc = procDef[0].liftTypes(
-    containerIdent = "seq",
+    containerIdent = "Tensor",
     remapping = func(typeNode: NimNode): NimNode {.gcsafe, locks: 0.} = {.noSideEffect.}: SimdMap(x86_SSE, typeNode, simdType)
   )
 

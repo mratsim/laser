@@ -101,11 +101,11 @@ macro raw_data_unaligned*(body: untyped): untyped =
       {.noRewrite.}: unsafe_raw_data(x, false)
     body
 
-func `[]`*[T](v: RawImmutableView[T], idx: int): T {.inline.}=
+template `[]`*[T](v: RawImmutableView[T], idx: int): T =
   distinctBase(type v)(v)[idx]
 
-func `[]`*[T](v: RawMutableView[T], idx: int): var T {.inline.}=
+template `[]`*[T](v: RawMutableView[T], idx: int): var T =
   distinctBase(type v)(v)[idx]
 
-func `[]=`*[T](v: RawMutableView[T], idx: int, val: T) {.inline.}=
+template `[]=`*[T](v: RawMutableView[T], idx: int, val: T) =
   distinctBase(type v)(v)[idx] = val
