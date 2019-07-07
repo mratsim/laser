@@ -11,7 +11,7 @@ import
 
 proc `$`*(ast: LuxNode): string =
   proc inspect(ast: LuxNode, indent: int): string =
-    result.add '\n' & repeat(' ', indent) & $ast.kind & " (id: " & $hash(ast) & ')'
+    result.add '\n' & repeat(' ', indent) & $ast.kind & " (id: " & $ast.id & ')'
     let indent = indent + 2
     case ast.kind
     of Input:
