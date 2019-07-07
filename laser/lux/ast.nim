@@ -41,6 +41,9 @@ when isMainModule:
   generate foobar:
     proc foobar(a: seq[float32], b, c: seq[float32]): tuple[bar: seq[float32], baz, buzz: seq[float32]]
 
+  generate foobar:
+    proc foobar(a: seq[float64], b, c: seq[float64]): tuple[bar: seq[float64], baz, buzz: seq[float64]]
+
   # Note to use aligned store, SSE requires 16-byte alignment and AVX 32-byte alignment
   # Unfortunately there is no way with normal seq to specify that (pending destructors)
   # As a hack, we use the unaligned load and store simd, and a required alignment of 4,
@@ -49,14 +52,28 @@ when isMainModule:
 
   import sequtils
 
-  let
-    len = 10
-    u = newSeqWith(len, 1'f32)
-    v = newSeqWith(len, 2'f32)
-    w = newSeqWith(len, 3'f32)
+  block: # float32
+    let
+      len = 10
+      u = newSeqWith(len, 1'f32)
+      v = newSeqWith(len, 2'f32)
+      w = newSeqWith(len, 3'f32)
 
-  let (pim, pam, poum) = foobar(u, v, w)
+    let (pim, pam, poum) = foobar(u, v, w)
 
-  echo pim  # 12
-  echo pam  # 20
-  echo poum # 10020
+    echo pim  # 12
+    echo pam  # 20
+    echo poum # 10020
+
+  block: # float64
+    let
+      len = 10
+      u = newSeqWith(len, 1'f64)
+      v = newSeqWith(len, 2'f64)
+      w = newSeqWith(len, 3'f64)
+
+    let (pim, pam, poum) = foobar(u, v, w)
+
+    echo pim  # 12
+    echo pam  # 20
+    echo poum # 10020

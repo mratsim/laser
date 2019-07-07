@@ -20,7 +20,7 @@ proc initParams(
        procDef,
        resultType: NimNode
        ): tuple[
-            ids: seq[NimNode],
+            ids, ids_baseType: seq[NimNode],
             ptrs, simds: tuple[inParams, outParams: seq[NimNode]],
             length: NimNode,
             initStmt: NimNode
@@ -40,11 +40,21 @@ proc initParams(
   for i in 1 ..< procDef[0][3].len: # Proc formal params
     let iddefs = procDef[0][3][i]
     for j in 0 ..< iddefs.len - 2:
+      # Ident
       let ident = iddefs[j]
       result.ids.add ident
+      # Ident base type (without seq)
+      if iddefs[^2].kind == nnkBracketExpr and
+            iddefs[^2][0].eqIdent"seq":
+        result.ids_baseType.add iddefs[^2][1]
+      else:
+        result.ids_baseType.add iddefs[^2]
+
+      # Raw ptr
       let raw_ptr = newIdentNode($ident & "_raw_ptr")
       result.ptrs.inParams.add raw_ptr
 
+      # Init statement and iteration length
       if j == 0:
         result.length = quote do: `ident`.len
       else:
@@ -53,6 +63,8 @@ proc initParams(
           assert `len0` == `ident`.len
       result.initStmt.add quote do:
         let `raw_ptr` = cast[ptr UncheckedArray[`type0`]](`ident`[0].unsafeAddr)
+
+      # SIMD ident
       result.simds.inParams.add newIdentNode($ident & "_simd")
 
   # Now add the result idents
@@ -65,11 +77,21 @@ proc initParams(
     for i in 0 ..< resultType.len:
       let iddefs = resultType[i]
       for j in 0 ..< iddefs.len - 2:
+        # Ident
         let ident = iddefs[j]
         result.ids.add ident
+        # Ident base type (without seq)
+        if iddefs[^2].kind == nnkBracketExpr and
+              iddefs[^2][0].eqIdent"seq":
+          result.ids_baseType.add iddefs[^2][1]
+        else:
+          result.ids_baseType.add iddefs[^2]
+
+        # Raw ptr
         let raw_ptr = newIdentNode($ident & "_raw_ptr")
         result.ptrs.outParams.add raw_ptr
 
+        # Init statement
         let res = nnkDotExpr.newTree(
                     newIdentNode"result",
                     iddefs[j]
@@ -78,6 +100,7 @@ proc initParams(
           `res` = newSeq[`type0`](`len0`)
           let `raw_ptr` = cast[ptr UncheckedArray[`type0`]](`res`[0].unsafeAddr)
 
+        # SIMD ident
         result.simds.outParams.add newIdentNode($ident & "_simd")
 
 proc symbolicExecStmt(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outputSyms, stmts: var NimNode) =
@@ -98,8 +121,8 @@ proc symbolicExecStmt(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outpu
       outputSyms, call
     )
 
-macro compile(io: static varargs[LuxNode], procDef: untyped): untyped =
-  # Note: io must be an array - https://github.com/nim-lang/Nim/issues/10691
+macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
+  # Note: io_ast must be an array - https://github.com/nim-lang/Nim/issues/10691
 
   # compile([a, b, c, bar, baz, buzz]):
   #   proc foobar[T](a, b, c: T): tuple[bar, baz, buzz: T]
@@ -141,17 +164,32 @@ macro compile(io: static varargs[LuxNode], procDef: untyped): untyped =
   procDef[0][6].expectKind(nnkEmpty)
 
   let resultTy = procDef[0][3][0]
-  let (ids, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
+  let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
 
   # echo initParams.toStrLit()
+
+  # We create an inner generic proc on the base type (without seq[T])
+  var genericProc = procDef[0].liftTypes(containerIdent = "seq")
+
+  # We create the inner generic proc
+  let genericOverload = bodyGen(
+    arch = ArchGeneric,
+    io_ast = io_ast,
+    ids = ids,
+    ids_baseType = ids_baseType,
+    resultType = resultTy
+  )
+
+  genericProc[6] = genericOverload   # Assign to proc body
+  # echo genericProc.toStrLit
 
   # We create the inner SIMD proc, specialized to a SIMD architecture
   # In the inner proc we shadow the original idents ids.
   let simdOverload = bodyGen(
     arch = x86_SSE,
-    T = ident"float32",
-    io = io,
+    io_ast = io_ast,
     ids = ids,
+    ids_baseType = ids_baseType,
     resultType = resultTy
   )
 
@@ -163,26 +201,13 @@ macro compile(io: static varargs[LuxNode], procDef: untyped): untyped =
   simdProc[6] = simdOverload   # Assign to proc body
   # echo simdProc.toStrLit
 
-  # We create the inner generic proc
-  let genericOverload = bodyGen(
-    arch = ArchGeneric,
-    T = ident"float32",
-    io = io,
-    ids = ids,
-    resultType = resultTy
-  )
-
-  var genericProc = procDef[0].liftTypes(containerIdent = "seq")
-  genericProc[6] = genericOverload   # Assign to proc body
-  # echo genericProc.toStrLit
-
   # We vectorize the inner proc to apply to an contiguous array
   var vecBody: NimNode
   vecBody = vectorize(
       procDef[0][0],
       ptrs, simds,
       length,
-      x86_SSE, ident"float32" # We require 4 alignment as a hack to keep seq[T] and use unaligned load/store in code
+      x86_SSE, ids_baseType[0] # TODO, only use the inner loop
     )
 
   result = procDef.copyNimTree()
@@ -196,6 +221,8 @@ macro compile(io: static varargs[LuxNode], procDef: untyped): untyped =
   echo result.toStrLit
 
 macro generate*(ast_routine: typed, signature: untyped): untyped =
+  # TODO: remove the need for ast_routine for symbol resolution
+
   result = newStmtList()
 
   let formalParams = signature[0][3]
