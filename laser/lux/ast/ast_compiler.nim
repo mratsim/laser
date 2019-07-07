@@ -225,6 +225,7 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
 
   result = newStmtList()
 
+  # TODO: canonicalize signature
   let formalParams = signature[0][3]
   let ast = ast_routine.resolveASToverload(formalParams)
 
