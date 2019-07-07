@@ -5,8 +5,10 @@
 
 const LASER_MAXRANK*{.intdefine.} = 6
   # On x86-64, a cache line can contain 8 int64. Hence for best performance
-  # MAXRANK should be at most 8 on x86_64 machines
-  # Unless, you want to index using int32 which limits dimensions
+  # MAXRANK should be at most 7 on x86_64 machines.
+  # The extra int is used to store the real rank.
+  #
+  # Alternatively, you may index using int32 which limits dimensions
   # tensor dimensions to 2 billions elements.
 
 type DynamicStackArray*[T] = object

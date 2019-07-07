@@ -39,6 +39,19 @@ proc ct*(ident: NimNode): NimNode =
     )
   )
 
+{.experimental: "dynamicBindSym".}
+proc isType*(x: NimNode, t: string): bool =
+  ## Compile-time type checking
+
+  # We cannot instantiate a fully typed container
+  # https://github.com/nim-lang/Nim/issues/6785
+  # and https://github.com/nim-lang/RFCs/issues/44
+
+  if x.kind == nnkBracketExpr:
+    return sameType(bindSym(x[0]), bindSym(t))
+  else:
+    return sameType(bindSym(x), bindSym(t))
+
 proc liftTypes*(
         ast: NimNode,
         containerIdent: string,
@@ -55,11 +68,9 @@ proc liftTypes*(
     of nnkEmpty: return node
     of nnkLiterals: return node
     of nnkIdentDefs:
-      let i = node.len - 2 # Type position
-      if node[i].kind == nnkBracketExpr and
-            node[i][0].eqIdent(containerIdent):
+      if node[^2].isType(containerIdent):
         result = node.copyNimTree()
-        result[i] = remapping(node[i][1])
+        result[^2] = remapping(node[^2][1])
         return
       else:
         return node

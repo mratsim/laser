@@ -44,8 +44,7 @@ proc initParams(
       let ident = iddefs[j]
       result.ids.add ident
       # Ident base type (without seq)
-      if iddefs[^2].kind == nnkBracketExpr and
-            iddefs[^2][0].eqIdent"seq":
+      if iddefs[^2].isType"seq":
         result.ids_baseType.add iddefs[^2][1]
       else:
         result.ids_baseType.add iddefs[^2]
@@ -81,8 +80,7 @@ proc initParams(
         let ident = iddefs[j]
         result.ids.add ident
         # Ident base type (without seq)
-        if iddefs[^2].kind == nnkBracketExpr and
-              iddefs[^2][0].eqIdent"seq":
+        if iddefs[^2].isType"seq":
           result.ids_baseType.add iddefs[^2][1]
         else:
           result.ids_baseType.add iddefs[^2]

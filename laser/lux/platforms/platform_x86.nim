@@ -134,4 +134,4 @@ proc SimdMap*(arch: SimdArch, T: NimNode, p: SimdPrimitives): NimNode =
   elif T.eqIdent"float64":
     result = MapX86Float64[arch][p]
   else:
-    error "Unsupported type: \"" & $T & '\"'
+    error "Unsupported type: \"" & T.repr & '\"'
