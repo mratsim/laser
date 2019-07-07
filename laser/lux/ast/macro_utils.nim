@@ -33,7 +33,7 @@ proc liftTypes*(
         ast: NimNode,
         containerIdent: string,
         remapping = proc(x: NimNode): NimNode = x): NimNode =
-  # Input:
+  # InTensor:
   #   - A type signature
   #   - A container ident, for example "seq" or "Tensor"
   #     non-container will stay as-is, to allow multiplication of a container by a constant for example

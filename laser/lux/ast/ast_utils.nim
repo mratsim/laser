@@ -14,9 +14,9 @@ proc `$`*(ast: LuxNode): string =
     result.add '\n' & repeat(' ', indent) & $ast.kind & " (id: " & $ast.id & ')'
     let indent = indent + 2
     case ast.kind
-    of Input:
+    of InTensor:
       result.add '\n' & repeat(' ', indent) & "paramId \"" & $ast.symId & "\""
-    of Output, LVal:
+    of MutTensor, LValTensor:
       result.add '\n' & repeat(' ', indent) & "symLVal \"" & ast.symLVal & "\""
       result.add '\n' & repeat(' ', indent) & "version \"" & $ast.version & "\""
       if ast.prev_version.isNil:

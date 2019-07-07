@@ -40,6 +40,7 @@ proc initParams(
       let ident = iddefs[j]
       result.ids.add ident
 
+      # TODO - support var Tensor
       # Ident base type (without seq)
       if not iddefs[^2].isType"Tensor":
         result.ids_baseType.add iddefs[^2]

@@ -14,8 +14,8 @@ import
 # ###########################################
 
 type
-  Domain* = object
-    ## Represents an iteration or a reduction domain
+  IDom* = object
+    ## Represents an iteration domain
     ## Example: "for i in 0 ..< 10:"
     ## would be Domain(symbol: "i", start: 0, stop: 10, step: 1)
     ##
@@ -90,17 +90,48 @@ type
     ##   6. Nim AST will be generated from the low-level Lux AST at compile-time.
     ##      In the future, LLVM IR or MLIR will be generated instead at runtime.
 
-    # Expressions
-    IntImm      # Integer immediate
-    FloatImm    # Float immediate
-    Add         # Elementwise add
-    Mul         # Elementwise mul
+    # Scalar invariants
+    IntImm      # Integer immediate (known at compile-time)
+    FloatImm    # Float immediate (known at compile-time)
+    # IntParam    # Integer environment parameter (known at run-time, invariant during function execution)
+    # FloatParam  # Float environment parameter (known at run-time, invariant during function execution)
 
-    # Symbols
-    Input       # Input tensor node
-    Output      # Mutable output tensor node
-    LVal        # Temporary allocated node
+    # Scalar expressions
+    Add         # Addition
+    Mul         # Multiplication
+
+    # Tensor Symbols
+    InTensor    # InTensor tensor node
+    MutTensor   # Mutable output tensor node
+    LValTensor  # Temporary allocated node
+
+    # # Tensor access and properties
+    # Access      # Tensor access
+    # Shape       # Tensor shape
+
+    # Scalar statements
     Assign      # Assignment statement
+
+    # # Affine statements
+    # AffineFor   # Affine for loop
+    # AffineIf    # Affine if
+
+    # Affine statements:
+    # - for/if constraints are a linear expression of
+    #   the function invariants and the iterator indices.
+    #   with i and j iterator indices and M, N invariants,
+    #   Here is an overview of affine/non-affine conditions:
+    #   - for i in 0 ..< 10    is valid
+    #   - for i in 0 ..< N     is valid
+    #   - for i in j ..< 2j+10 is valid
+    #   - for i in j ..< M*N   is valid
+    #   - for i in j ..< j*j   is invalid, as it's quadratic (j is not an invariant)
+    #   - if 2*i - 3*j == 0    is valid
+    #   - if i*j < 20          is invalid, as it's quadratic
+    #
+    # Note: We may extend to "if" affine modulo
+    #       which will make it a quasi-affine statement.
+    #       A non-unit step in the for-loop is quasi-affine.
 
   Id* = int
 
@@ -108,9 +139,9 @@ type
     id*: Id
     lineInfo*: tuple[filename: string, line: int, column: int]
     case kind*: LuxNodeKind
-    of Input:
+    of InTensor:
       symId*: int
-    of Output, LVal:
+    of MutTensor, LValTensor:
       symLval*: string
       version*: int
       prev_version*: LuxNode      # Persistent data structure
@@ -138,10 +169,10 @@ proc input*(id: int): LuxNode =
   when nimvm:
     LuxNode(
       id: genId(), lineInfo: instantiationInfo(),
-      kind: Input, symId: id
+      kind: InTensor, symId: id
     )
   else: # TODO: runtime ID
-    LuxNode(kind: Input, symId: id)
+    LuxNode(kind: InTensor, symId: id)
 
 proc `+`*(a, b: LuxNode): LuxNode =
   when nimvm:
@@ -177,11 +208,11 @@ proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
       )
 
 proc `+=`*(a: var LuxNode, b: LuxNode) =
-  assert a.kind notin {Input, IntImm, FloatImm}
-  if a.kind notin {Output, LVal}:
+  assert a.kind notin {InTensor, IntImm, FloatImm}
+  if a.kind notin {MutTensor, LValTensor}:
     a = LuxNode(
           id: genId(), lineInfo: instantiationInfo(),
-          kind: LVal,
+          kind: LValTensor,
           symLVal: "localvar__" & $a.id, # Generate unique symbol
           version: 1,
           prev_version: LuxNode(
@@ -189,7 +220,7 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
             kind: Assign,
             lhs: LuxNode(
               id: a.id, lineInfo: a.lineinfo, # Keep the hash
-              kind: LVal,
+              kind: LValTensor,
               symLVal: "localvar__" & $a.id, # Generate unique symbol
               version: 0,
               prev_version: nil,
@@ -197,10 +228,10 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
             rhs: a
           )
     )
-  if a.kind == Output:
+  elif a.kind == MutTensor:
     a = LuxNode(
       id: genId(), lineInfo: instantiationInfo(),
-      kind: Output,
+      kind: MutTensor,
       symLVal: a.symLVal, # Keep original unique symbol
       version: a.version + 1,
       prev_version: LuxNode(
@@ -213,7 +244,7 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
   else:
     a = LuxNode(
       id: genId(), lineinfo: instantiationInfo(),
-      kind: LVal,
+      kind: LValTensor,
       symLVal: a.symLVal, # Keep original unique symbol
       version: a.version + 1,
       prev_version: LuxNode(

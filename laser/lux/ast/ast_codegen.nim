@@ -19,15 +19,15 @@ proc codegen*(
     stmts: var NimNode): NimNode =
   ## Recursively walk the AST
   ## Append the corresponding Nim AST for generic instructions
-  ## and returns a LVal, Output or expression
+  ## and returns a LValTensor, MutTensor or expression
   case ast.kind:
-    of Input:
+    of InTensor:
       return params[ast.symId]
     of IntImm:
       return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.intVal))
     of FloatImm:
       return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.floatVal))
-    of Output, LVal:
+    of MutTensor, LValTensor:
       let sym = newIdentNode(ast.symLVal)
       if ast.id in visited:
         return sym
@@ -52,7 +52,7 @@ proc codegen*(
       var varAssign = false
 
       if ast.lhs.id notin visited and
-            ast.lhs.kind == LVal and
+            ast.lhs.kind == LValTensor and
             ast.lhs.prev_version.isNil and
             ast.rhs.id notin visited:
           varAssign = true
@@ -112,8 +112,8 @@ proc bodyGen*(
   var visitedNodes = initTable[Id, NimNode]()
 
   for i, inOutVar in io_ast:
-    if inOutVar.kind != Input:
-      if inOutVar.kind in {Output, LVal}:
+    if inOutVar.kind != InTensor:
+      if inOutVar.kind in {MutTensor, LValTensor}:
         let sym = codegen(inOutVar, arch, ids_baseType[i], ids, visitedNodes, result)
         sym.expectKind nnkIdent
         if resultType.kind == nnkTupleTy:
@@ -144,3 +144,4 @@ proc bodyGen*(
             newIdentNode"result",
             expression
           )
+  # TODO: support var Tensor.
