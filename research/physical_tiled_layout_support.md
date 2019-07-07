@@ -3,6 +3,8 @@
 Some accelerators like TPU or libraries like MKL-DNN
 supports tiled layout with significantly improved performance.
 
+GEMM prepacking also uses a tiled/swizzled layout.
+
 ## References
 
 - [MKL-DNN Understanding Memory Format](https://intel.github.io/mkl-dnn/understanding_memory_formats.html) and [corresponding paper](https://arxiv.org/pdf/1602.06709v1.pdf).
