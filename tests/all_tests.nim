@@ -4,4 +4,5 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
+  ./test_tensor_immutability,
   ./test_x86_reductions
