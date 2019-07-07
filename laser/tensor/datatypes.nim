@@ -23,11 +23,11 @@ type
 
   CpuStorage*{.shallow.}[T] = ref object # Total heap: 25 bytes = 1 cache-line
     when supportsCopyMem(T):
-      raw_data*: ptr UncheckedArray[T]   # 8 bytes
+      raw_buffer*: ptr UncheckedArray[T] # 8 bytes
       memalloc*: pointer                 # 8 bytes
       memowner*: bool                    # 1 byte
     else: # Tensors of strings, other ref types or non-trivial destructors
-      raw_data*: seq[T]                  # 8 bytes (16 for seq v2 backed by destructors?)
+      raw_buffer*: seq[T]                # 8 bytes (16 for seq v2 backed by destructors?)
 
 func rank*(t: Tensor): range[0 .. LASER_MAXRANK] {.inline.} =
   t.shape.len
@@ -66,12 +66,12 @@ template unsafe_raw_data_impl() {.dirty.} =
   when T.supportsCopyMem:
     withCompilerOptimHints()
     when aligned:
-      let raw_pointer{.restrict.} = assume_aligned t.storage.raw_data
+      let raw_pointer{.restrict.} = assume_aligned t.storage.raw_buffer
     else:
-      let raw_pointer{.restrict.} = t.storage.raw_data
+      let raw_pointer{.restrict.} = t.storage.raw_buffer
     result = cast[type result](raw_pointer[t.offset].addr)
   else:
-    result = cast[type result](t.storage.raw_data[t.offset].addr)
+    result = cast[type result](t.storage.raw_buffer[t.offset].addr)
 
 func unsafe_raw_data*[T](t: Tensor[T], aligned: static bool = true): RawImmutableView[T] {.inline.} =
   ## Unsafe: the pointer can outlive the input tensor

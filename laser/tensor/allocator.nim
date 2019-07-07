@@ -23,7 +23,7 @@ proc allocCpuStorage*[T](storage: var CpuStorage[T], size: int) =
     new(storage, finalizer[T])
     storage.memalloc = allocShared0(sizeof(T) * size + LASER_MEM_ALIGN - 1)
     storage.memowner = true
-    storage.raw_data = align_raw_data(T, storage.memalloc)
+    storage.raw_buffer = align_raw_data(T, storage.memalloc)
   else: # Always 0-initialize Tensors of seq, strings, ref types and types with non-trivial destructors
     new(storage)
-    newSeq[T](storage.raw_data, size)
+    newSeq[T](storage.raw_buffer, size)

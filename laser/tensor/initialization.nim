@@ -57,8 +57,8 @@ proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
             size, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_GRAIN_SIZE * 4):
         copyMem(
-          dst.storage.raw_data[chunk_offset],
-          src.storage.raw_data[chunk_offset],
+          dst.storage.raw_buffer[chunk_offset],
+          src.storage.raw_buffer[chunk_offset],
           chunk_size * sizeof(T)
           )
     else:
@@ -93,8 +93,8 @@ proc copyFrom*[T](dst: var Tensor[T], src: Tensor[T]) =
             src.size, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_GRAIN_SIZE * 4):
         copyMem(
-          dst.storage.raw_data[chunk_offset].addr,
-          src.storage.raw_data[chunk_offset].unsafeAddr,
+          dst.storage.raw_buffer[chunk_offset].addr,
+          src.storage.raw_buffer[chunk_offset].unsafeAddr,
           chunk_size * sizeof(T)
           )
     else:
@@ -117,7 +117,7 @@ proc copyFromRaw*[T](dst: var Tensor[T], buffer: ptr T, len: Natural) =
             len, chunk_offset, chunk_size,
             OMP_MEMORY_BOUND_GRAIN_SIZE * 4):
         copyMem(
-          dst.storage.raw_data[chunk_offset].addr,
+          dst.storage.raw_buffer[chunk_offset].addr,
           buf[chunk_offset].unsafeAddr,
           chunk_size * sizeof(T)
           )
@@ -140,12 +140,12 @@ proc setZero*[T](t: var Tensor[T], check_contiguous: static bool = true) =
       raise newException(ValueError, "Input tensor is not contiguous.")
 
   when not T.supportsCopyMem:
-    t.storage.raw_data.reset()
+    t.storage.raw_buffer.reset()
   else:
     omp_parallel_chunks(
           t.size, chunk_offset, chunk_size,
           OMP_MEMORY_BOUND_GRAIN_SIZE * 4):
       zeroMem(
-        t.storage.raw_data[chunk_offset].addr,
+        t.storage.raw_buffer[chunk_offset].addr,
         chunk_size * sizeof(T)
         )
