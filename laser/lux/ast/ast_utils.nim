@@ -7,7 +7,7 @@ import
   # standard library
   strutils,
   # internal
-  ./ast_definition
+  ./ast_types
 
 proc `$`*(ast: LuxNode): string =
   proc inspect(ast: LuxNode, indent: int): string =
@@ -27,7 +27,8 @@ proc `$`*(ast: LuxNode): string =
       result.add '\n' & repeat(' ', indent) & $ast.intVal
     of FloatImm:
       result.add '\n' & repeat(' ', indent) & $ast.floatVal
-    of Assign, Add, Mul:
+    of BinOp:
+      result.add repeat(' ', indent) & inspect(ast.binOpKind, indent)
       result.add repeat(' ', indent) & inspect(ast.lhs, indent)
       result.add repeat(' ', indent) & inspect(ast.rhs, indent)
 

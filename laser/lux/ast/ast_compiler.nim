@@ -8,7 +8,7 @@ import
   macros,
   # Internal
   ../platforms,
-  ./ast_definition,
+  ./ast_types,
   ./ast_sigmatch,
   ./ast_codegen,
   ./ast_codegen_transfo,

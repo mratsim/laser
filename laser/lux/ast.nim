@@ -5,7 +5,9 @@
 
 import
   ./ast/ast_compiler,
-  ./ast/ast_definition
+  ./ast/ast_primitives
+
+from ./ast/ast_types import LuxNode
 
 # ###########################
 #

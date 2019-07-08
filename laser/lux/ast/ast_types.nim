@@ -3,9 +3,59 @@
 # Distributed under the Apache v2 License (license terms are at http://www.apache.org/licenses/LICENSE-2.0).
 # This file may not be copied, modified, or distributed except according to those terms.
 
-import
-  # Standard library
-  random, tables
+# ###########################################
+#
+#                    Design
+#
+# ###########################################
+
+# Lux is a DSL embedded in Nim. At the moment it is implemented as macro
+# and run at compile-time. It has been designed so that the front-end can be
+# trivially re-used at runtime and only a JIT backend would be needed for
+# run-time code generation.
+# In the future, it may also become a pluggable Nim compiler plugin with a DLL.
+#
+# At a high-level Lux works on symbolic functions
+# that represent computation to be done on tensors elements and scalars.
+#
+# The set of high-level functions can be extended and composed
+# by users and libraries (shallow embeddings).
+#
+# Those functions use elemental operations represented as a data type (deep embedding):
+#   - Tensor indexing
+#   - Addition, multiplication, ...
+#   - sin, cos, exp, log, ...
+# to build an AST tree.
+#
+# We assume that those elemental operations can be composed efficiently
+# and that we do not need to implement a coarse-grained operators
+# to reach state-of-the art performance (for example matrix multiplication or convolution operator).
+#
+# To this endeavour the DSL is complemented with a schedule language,
+# that expresses the loop transformations used in handwritten high-performance-computing kernels
+# like: parallelization, vectorization, tiling, prefetching or unrolling ...
+#
+# I.e. the DSL is functional, extensible and composable
+#
+# ## Implementation details
+#
+# The AST uses sum types. Due to the compile-time requirement it does not
+# use generics as generic macros arguments don't work and methods/inheritance does
+# not work at compile-time.
+#
+# Furthermore several tree traversal or DSL abstractions are not possible
+# as they would require generic AST nodes:
+# - a common tree traversal technique in functional language is catamorphism
+#   which decouples the tree traversal from the operation applied to the tree node
+#   i.e. a `map` on a tree.
+# - An advanced AST design technique is object algebra which encodes the expression tree
+#   in the generic type of the AST nodes
+# - Another is tagless final which expresses "nodes" as functions over a generic type T
+#   that corresponds to an interpreter which can be "eval", "prettyprint", "compile"
+#
+# i.e. this is not possible:
+#   macro doSomething[T](io: static varargs[LuxNode[T]]):
+#     proc matmul(C: var Tensor[float32], A, B: Tensor[float32])
 
 # ###########################################
 #
@@ -23,8 +73,20 @@ type
     ## We usually steps from 0 to N with N the dimension of a tensor axis.
     ## This might change as Nim is inclusive and polyhedral representation
     ## uses inclusive constraints.
-    symbol: string
-    start, stop, step: LuxNode
+    symbol*: string
+    start*, stop*, step*: LuxNode
+
+  UnaryOpKind* = enum
+    Ln
+    Exp
+
+  BinaryOpKind* = enum
+    Add
+    Mul
+
+  TernaryOpKind* = enum
+    FusedMultiplyAdd
+    Select
 
   LuxNodeKind* = enum
     ## Computation Graph / Abstract Syntax Tree nodes
@@ -35,8 +97,8 @@ type
     ## A function definition uses Lux nodes.
     ##
     ## The function definition mixes iteration domains, tensor accesses and operations.
-    ## It symbolically represent the computation done with a syntax
-    ## similar to Einstein summation and implicit for-loops, depending on indices used.
+    ## It symbolically represents the computation done with a syntax
+    ## similar to Einstein summation and implicit for-loops that are inferred from the indices used.
     ##
     ## For example a matrix multiplication would be:
     ##   C[i, j] := A[i, k] * B[k, j]
@@ -90,6 +152,12 @@ type
     ##   6. Nim AST will be generated from the low-level Lux AST at compile-time.
     ##      In the future, LLVM IR or MLIR will be generated instead at runtime.
 
+    # ############################################
+    #
+    #             High-level AST
+    #
+    # ############################################
+
     # Scalar invariants
     IntImm        # Integer immediate (known at compile-time)
     FloatImm      # Float immediate (known at compile-time)
@@ -102,9 +170,8 @@ type
     IntLVal
     FloatLVal
 
-    # Scalar expressions
-    Add         # Addition
-    Mul         # Multiplication
+    # Scalar expressions built-ins
+    BinOp       # Built-in binary operations
 
     # Tensor Symbols
     InTensor    # InTensor tensor node
@@ -117,6 +184,18 @@ type
 
     # Scalar statements
     Assign      # Assignment statement
+
+    # TODO: booleans
+    #       We probably can restrict to BoolParam
+    #       for function inputs
+    #       Boolean expressions for select/IfElifElse
+    #       would be supported (but not storable in a lvalue)
+
+    # ############################################
+    #
+    #             Mid-level AST
+    #
+    # ############################################
 
     # Affine statements
     AffineFor   # Affine for loop
@@ -136,9 +215,23 @@ type
     #   - if 2*i - 3*j == 0    is valid
     #   - if i*j < 20          is invalid, as it's quadratic
     #
-    # Note: We may extend to "if" affine modulo
+    # Note: We may extend to "if" with modulo and division by a runtime invariant
     #       which will make it a quasi-affine statement.
-    #       A non-unit step in the for-loop is quasi-affine.
+    #       - A non-unit step in the for-loop is quasi-affine.
+    #       - This will also allows branching depending of
+    #         fraction if CPU/GPU charatectristics like cache or TLB size
+
+    # ############################################
+    #
+    #             Low-level AST
+    #
+    # ############################################
+
+    # ISA runtime characteristics
+    CpuInfo     # CPUInfo function call
+
+    # Control-Flow
+    IfElifElse  # Restrict to function invariants?
 
   Id* = int
 
@@ -157,7 +250,10 @@ type
       intVal*: int
     of FloatImm:
       floatVal*: float
-    of Assign, Add, Mul:
+    of Assign:
+      lval*, rval*: LuxNode
+    of BinOp:
+      binOpKind*: BinaryOpKind
       lhs*, rhs*: LuxNode
     of Access:
       tensorView*: LuxNode
@@ -169,6 +265,14 @@ type
       domain*: IDom
     of AffineIf:
       constraint*: LuxNode
+    of CpuInfo:
+      # Extern function call
+      # Only supports proc with no arguments
+      # as it is only needed for CPUInfo
+      symFunc*: string
+    of IfElifElse:
+      # Represent if f0: .. elif f1: .. elif ... else:
+      ifBranches*: seq[LuxNode]
 
   ScheduleKind* = enum
     ScReduce
@@ -178,6 +282,9 @@ type
     ScStoreLoc
     ScComputeLoc
     ScOrder
+    ScPrefetch
+    ScPipeline # Interleaves N successive loops to avoid pipeline stalls
+               # Create extra accumulators for reductions
     # Directly modifies AST
     # ScFuse
     # ScTile
@@ -187,110 +294,7 @@ type
     # ScShift
 
 
-
-# ###########################################
-#
-#         Routine definitions
-#
-# ###########################################
-
-var luxNodeRng {.compileTime.} = initRand(0x42)
-  ## Workaround for having no UUID for LuxNodes
-  ## at compile-time - https://github.com/nim-lang/RFCs/issues/131
-
-proc genId(): int =
-  luxNodeRng.rand(high(int))
-
-proc input*(id: int): LuxNode =
-  when nimvm:
-    LuxNode(
-      id: genId(), lineInfo: instantiationInfo(),
-      kind: InTensor, symId: id
-    )
-  else: # TODO: runtime ID
-    LuxNode(kind: InTensor, symId: id)
-
-proc `+`*(a, b: LuxNode): LuxNode =
-  when nimvm:
-    LuxNode(
-      id: genId(), lineInfo: instantiationInfo(),
-      kind: Add, lhs: a, rhs: b
-    )
-  else: # TODO: runtime ID
-    LuxNode(kind: Add, lhs: a, rhs: b)
-
-proc `*`*(a, b: LuxNode): LuxNode =
-  when nimvm:
-    LuxNode(
-      id: genId(), lineInfo: instantiationInfo(),
-      kind: Mul, lhs: a, rhs: b
-    )
-  else:
-    LuxNode(id: genId(), kind: Mul, lhs: a, rhs: b)
-
-proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
-  when nimvm:
-    LuxNode(
-        id: genId(), lineInfo: instantiationInfo(),
-        kind: Mul,
-        lhs: a,
-        rhs: LuxNode(kind: IntImm, intVal: b)
-      )
-  else:
-    LuxNode(
-        kind: Mul,
-        lhs: a,
-        rhs: LuxNode(kind: IntImm, intVal: b)
-      )
-
-proc `+=`*(a: var LuxNode, b: LuxNode) =
-  assert a.kind notin {InTensor, IntImm, FloatImm}
-
-  # If LHS does not have a memory location, attribute one
-  if a.kind notin {MutTensor, LValTensor}:
-    a = LuxNode(
-          id: genId(), lineInfo: instantiationInfo(),
-          kind: LValTensor,
-          symLVal: "localvar__" & $a.id, # Generate unique symbol
-          version: 1,
-          prev_version: LuxNode(
-            id: a.id, lineInfo: a.lineinfo,
-            kind: Assign,
-            lhs: LuxNode(
-              id: a.id, lineInfo: a.lineinfo, # Keep the hash
-              kind: LValTensor,
-              symLVal: "localvar__" & $a.id, # Generate unique symbol
-              version: 0,
-              prev_version: nil,
-            ),
-            rhs: a
-          )
-    )
-
-  # Then update it
-  if a.kind == MutTensor:
-    a = LuxNode(
-      id: genId(), lineInfo: instantiationInfo(),
-      kind: MutTensor,
-      symLVal: a.symLVal, # Keep original unique symbol
-      version: a.version + 1,
-      prev_version: LuxNode(
-        id: a.id, lineinfo: a.lineinfo,
-        kind: Assign,
-        lhs: a,
-        rhs: a + b
-      )
-    )
-  else:
-    a = LuxNode(
-      id: genId(), lineinfo: instantiationInfo(),
-      kind: LValTensor,
-      symLVal: a.symLVal, # Keep original unique symbol
-      version: a.version + 1,
-      prev_version: LuxNode(
-        id: a.id, lineinfo: a.lineinfo,
-        kind: Assign,
-        lhs: a,
-        rhs: a + b
-      )
-    )
+# TODO: Statistics and logs
+# - loop transforms
+# - emitted instructions
+# ...
