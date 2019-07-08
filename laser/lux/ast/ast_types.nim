@@ -81,10 +81,12 @@ type
     Exp
 
   BinaryOpKind* = enum
+    # Must return a scalar for scalar expr check
     Add
     Mul
 
   TernaryOpKind* = enum
+    # Must return a scalar for scalar expr check
     FusedMultiplyAdd
     Select
 
@@ -237,7 +239,10 @@ type
 
   LuxNode* = ref object
     id*: Id
-    lineInfo*: tuple[filename: string, line: int, column: int]
+
+    # lineInfo*: tuple[filename: string, line: int, column: int]
+    # Need logging alternative to instiationInfo - https://github.com/nim-lang/Nim/issues/11689
+
     case kind*: LuxNodeKind
     of InTensor, IntParam, FloatParam:
       ast*: LuxNode               # If nil, it uses symId

@@ -15,78 +15,91 @@ import
 #
 # ###########################################
 
-var luxNodeRng {.compileTime.} = initRand(0x42)
+var luxNodeRngCT {.compileTime.} = initRand(0x42)
   ## Workaround for having no UUID for LuxNodes
   ## at compile-time - https://github.com/nim-lang/RFCs/issues/131
 
-proc genId(): int =
-  luxNodeRng.rand(high(int))
+var luxNodeRngRT = initRand(0x42)
+  ## Runtime ID
 
-proc input*(id: int): LuxNode =
+proc genId(): int =
   when nimvm:
-    LuxNode(
-      id: genId(), lineInfo: instantiationInfo(),
-      kind: InTensor, symId: id
+    luxNodeRngCT.rand(high(int))
+  else:
+    luxNodeRngRT.rand(high(int))
+
+const ScalarExpr = {
+            IntImm, FloatImm, IntParam, FloatParam,
+            IntMut, FloatMut, IntLVal, FloatLVal,
+            BinOp,
+            Access, Shape, Domain
+          }
+
+func checkScalarExpr(targetOp: string, input: LuxNode) =
+  # TODO - mapping LuxNode -> corresponding function
+  # for better errors as LuxNode are "low-level"
+  if input.kind notin ScalarExpr:
+    raise newException(
+      ValueError,
+      "Invalid scalar expression \"" & $input.kind & "\"\n" &
+      "Only the following LuxNodes are allowed:\n    " & $ScalarExpr &
+      "\nfor building a \"" & targetOp & "\" function."
+      # "\nOrigin: " & $node.lineInfo
     )
-  else: # TODO: runtime ID
-    LuxNode(kind: InTensor, symId: id)
+
+func checkMutable(node: LuxNode) =
+  # TODO
+  discard
+
+proc input*(paramId: int): LuxNode =
+  LuxNode(
+    id: genId(), # lineInfo: instantiationInfo(),
+    kind: InTensor, symId: paramId
+  )
 
 proc `+`*(a, b: LuxNode): LuxNode =
-  when nimvm:
-    LuxNode(
-      id: genId(), lineInfo: instantiationInfo(),
-      kind: BinOp, binOpKind: Add,
-      lhs: a, rhs: b
-    )
-  else: # TODO: runtime ID
-    LuxNode(
-      kind: BinOp, binOpKind: Add,
-      lhs: a, rhs: b
-    )
+  checkScalarExpr("Add", a)
+  checkScalarExpr("Add", b)
+  LuxNode(
+    id: genId(), # lineInfo: instantiationInfo(),
+    kind: BinOp, binOpKind: Add,
+    lhs: a, rhs: b
+  )
 
 proc `*`*(a, b: LuxNode): LuxNode =
-  when nimvm:
-    LuxNode(
-      id: genId(), lineInfo: instantiationInfo(),
-      kind: BinOp, binOpKind: Mul,
-      lhs: a, rhs: b
-    )
-  else: # TODO: runtime ID
-    LuxNode(
-      kind: BinOp, binOpKind: Mul,
-      lhs: a, rhs: b
-    )
+  checkScalarExpr("Mul", a)
+  checkScalarExpr("Mul", b)
+  LuxNode(
+    id: genId(), # lineInfo: instantiationInfo(),
+    kind: BinOp, binOpKind: Mul,
+    lhs: a, rhs: b
+  )
 
 proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
-  when nimvm:
-    LuxNode(
-        id: genId(), lineInfo: instantiationInfo(),
-        kind: BinOp, binOpKind: Mul,
-        lhs: a,
-        rhs: LuxNode(kind: IntImm, intVal: b)
-      )
-  else: # TODO: runtime ID
-    LuxNode(
-        kind: BinOp, binOpKind: Mul,
-        lhs: a,
-        rhs: LuxNode(kind: IntImm, intVal: b)
-      )
+  checkScalarExpr("Mul", a)
+  LuxNode(
+      id: genId(), # lineInfo: instantiationInfo(),
+      kind: BinOp, binOpKind: Mul,
+      lhs: a,
+      rhs: LuxNode(kind: IntImm, intVal: b)
+    )
 
 proc `+=`*(a: var LuxNode, b: LuxNode) =
-  assert a.kind notin {InTensor, IntImm, FloatImm}
+  checkScalarExpr("In-place addition", b)
+  checkMutable(a)
 
   # If LHS does not have a memory location, attribute one
   if a.kind notin {MutTensor, LValTensor}:
     a = LuxNode(
-          id: genId(), lineInfo: instantiationInfo(),
+          id: genId(), # lineInfo: instantiationInfo(),
           kind: LValTensor,
           symLVal: "localvar__" & $a.id, # Generate unique symbol
           version: 1,
           prev_version: LuxNode(
-            id: a.id, lineInfo: a.lineinfo,
+            id: a.id, # lineInfo: a.lineinfo,
             kind: Assign,
             lval: LuxNode(
-              id: a.id, lineInfo: a.lineinfo, # Keep the hash
+              id: a.id, # lineInfo: a.lineinfo, # Keep the hash
               kind: LValTensor,
               symLVal: "localvar__" & $a.id, # Generate unique symbol
               version: 0,
@@ -99,12 +112,12 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
   # Then update it
   if a.kind == MutTensor:
     a = LuxNode(
-      id: genId(), lineInfo: instantiationInfo(),
+      id: genId(), # lineInfo: instantiationInfo(),
       kind: MutTensor,
       symLVal: a.symLVal, # Keep original unique symbol
       version: a.version + 1,
       prev_version: LuxNode(
-        id: a.id, lineinfo: a.lineinfo,
+        id: a.id, # lineinfo: a.lineinfo,
         kind: Assign,
         lval: a,
         rval: a + b
@@ -112,12 +125,12 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
     )
   else:
     a = LuxNode(
-      id: genId(), lineinfo: instantiationInfo(),
+      id: genId(), # lineinfo: instantiationInfo(),
       kind: LValTensor,
       symLVal: a.symLVal, # Keep original unique symbol
       version: a.version + 1,
       prev_version: LuxNode(
-        id: a.id, lineinfo: a.lineinfo,
+        id: a.id, # lineinfo: a.lineinfo,
         kind: Assign,
         lval: a,
         rval: a + b
