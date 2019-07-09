@@ -11,6 +11,12 @@ import
   ../core/lux_core_helpers,
   ../utils/macro_utils
 
+# ###########################################
+#
+#              Symbolic execution
+#
+# ###########################################
+
 proc inputTensor(paramId: int): LuxNode =
   LuxNode(
     id: genId(),

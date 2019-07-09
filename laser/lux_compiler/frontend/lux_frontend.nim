@@ -14,6 +14,12 @@ import
 
 from ../backend/lux_backend import compile
 
+# ###########################################
+#
+#           Lux Compiler Frontend
+#
+# ###########################################
+
 macro generate*(ast_routine: typed, signature: untyped): untyped =
   ## Lux Compiler frontend
   ##

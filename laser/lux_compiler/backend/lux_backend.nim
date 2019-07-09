@@ -7,8 +7,20 @@ import
   # Standard library
   macros,
   # Internal
-  ../core/[lux_types, lux_print],
-  ../utils/macro_utils
+  ../core/lux_types,
+  ../utils/macro_utils,
+  # Debug
+  ../core/lux_print
+
+# ###########################################
+#
+#            Compiler backend
+#
+# ###########################################
+
+# Progressively lowers the computation graph AST to
+# a low-level AST.
+# This is then translated to Nim AST
 
 proc initParams(
        procDef,

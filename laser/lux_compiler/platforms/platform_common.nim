@@ -7,6 +7,12 @@ import
   # Standard library
   macros
 
+# ###########################################
+#
+#    Stub SIMD for non-vectorized codegen
+#
+# ###########################################
+
 type
   SimdPrimitives* = enum
     simdSetZero

@@ -9,6 +9,12 @@ import
   # internal
   ../core/lux_types
 
+# ###########################################
+#
+#              Pretty Printer
+#
+# ###########################################
+
 proc `$`*(ast: LuxNode): string =
   proc inspect(ast: LuxNode, indent: int): string =
 

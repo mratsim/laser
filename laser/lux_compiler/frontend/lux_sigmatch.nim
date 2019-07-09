@@ -7,6 +7,12 @@ import
   # Standard library
   macros
 
+# ###########################################
+#
+#            Signature matching
+#
+# ###########################################
+
 proc matchAST(overload, signature: NimNode): bool =
   proc inspect(overload, signature: NimNode, match: var bool) =
     # echo "overload: ", overload.kind, " - match status: ", match

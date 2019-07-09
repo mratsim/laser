@@ -7,8 +7,16 @@ import
   # Standard library
   macros, tables,
   # Internal
-  ./ast_types,
+  ../core/lux_types,
   ../platforms
+
+# ###########################################
+#
+#            Code generator
+#
+# ###########################################
+
+# Generates low-level Nim code from Lux AST
 
 proc codegen*(
     ast: LuxNode,

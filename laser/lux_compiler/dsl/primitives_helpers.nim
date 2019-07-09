@@ -11,6 +11,12 @@ import
 
 export lux_types, lux_core_helpers
 
+# ###########################################
+#
+#       Helpers for the base DSL routines
+#
+# ###########################################
+
 proc assign*(lhs, rhs: LuxNode): LuxNode =
   # Generate the Assign node
   # This also scans the domain /loop nest needed
