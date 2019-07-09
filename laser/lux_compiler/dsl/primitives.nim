@@ -7,8 +7,10 @@ import
   # Standard library
   macros,
   # Internal
-  ./ast_types, ./ast_primitives_helpers,
-  ../../private/ast_utils
+  ./primitives_helpers,
+  ../../private/ast_utils,
+  # Debug
+  ../core/lux_print
 
 # ###########################################
 #
@@ -120,8 +122,6 @@ proc at(t: var LuxNode, indices: varargs[LuxNode]): var LuxNode =
       indices: @indices
   )
   return t
-
-import ast_print
 
 proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
   ## Mutate a tensor element

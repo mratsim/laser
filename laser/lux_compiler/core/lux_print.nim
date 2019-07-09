@@ -7,7 +7,7 @@ import
   # standard library
   strutils,
   # internal
-  ./ast_types
+  ../core/lux_types
 
 proc `$`*(ast: LuxNode): string =
   proc inspect(ast: LuxNode, indent: int): string =

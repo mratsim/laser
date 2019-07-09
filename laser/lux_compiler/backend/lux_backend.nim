@@ -7,15 +7,8 @@ import
   # Standard library
   macros,
   # Internal
-  ../platforms,
-  ./ast_types,
-  ./ast_sigmatch,
-  ./ast_codegen,
-  ./ast_codegen_transfo,
-  ./ast_primitives_helpers,
-  ./macro_utils
-
-# TODO: Do we need both compile and generate?
+  ../core/[lux_types, lux_print],
+  ../utils/macro_utils
 
 proc initParams(
        procDef,
@@ -105,26 +98,7 @@ proc initParams(
           # SIMD ident
           result.simds.outParams.add newIdentNode($ident & "_simd")
 
-proc symbolicExecStmt(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outputSyms, stmts: var NimNode) =
-  # Allocate inputs
-  for i, in_ident in inputSyms:
-    stmts.add newLetStmt(
-      ct(in_ident),
-      newCall(bindSym"inputTensor", newLit i)
-    )
-
-  # Call the AST routine
-  let call = newCall(ast, inputSyms)
-  if not hasOut: # Case 1: no result
-    stmts.add call
-  else:
-    outputSyms = ct(genSym(nskLet, "callResult_"))
-    stmts.add newLetStmt(
-      outputSyms, call
-    )
-
-import ./ast_print
-macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
+macro compile*(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   ## Lux Compiler backend
   ## Accept an array of AST representing the computation
   ## and generate specialized code from it
@@ -227,75 +201,3 @@ macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   # result[0][6] = resBody
 
   # echo result.toStrLit
-
-macro generate*(ast_routine: typed, signature: untyped): untyped =
-  ## Lux Compiler frontend
-  ##
-  ## It will symbolically execute an ast_routine of LuxNodes
-  ## that represent the computation to be done.
-  ##
-  ## The symbolic execution will create a computation graph,
-  ## that will then be passed to the compiler backend.
-  ##
-  ## The compiler backend will be called to generate a new proc
-  ## that matches the desired signature.
-  ##
-  ## The procs generated are specialized (they cannot be generic)
-  ## but the same base ast_routine can be reused to generate all
-  ## the desired specialized procs.
-
-  # TODO: remove the need for ast_routine for symbol resolution
-
-  result = newStmtList()
-
-  # TODO: canonicalize signature
-  let formalParams = signature[0][3]
-  let ast = ast_routine.resolveASToverload(formalParams)
-
-  # Get the routine signature
-  let sig = ast.getImpl[3]
-  sig.expectKind(nnkFormalParams)
-
-  # Get all inputs
-  var inputSyms: seq[NimNode]
-  for idx_identdef in 1 ..< sig.len:
-    let identdef = sig[idx_identdef]
-    doAssert identdef[^2].eqIdent"LuxNode"
-    identdef[^1].expectKind(nnkEmpty)
-    for idx_ident in 0 .. identdef.len-3:
-      inputSyms.add genSym(nskLet, $identdef[idx_ident] & "_")
-
-  # Symbolic execution statement
-  var outputSyms: NimNode
-  var symExecStmt = newStmtList()
-  symbolicExecStmt(
-      ast,
-      inputSyms,
-      hasOut = sig[0].kind != nnkEmpty,
-      outputSyms,
-      symExecStmt
-    )
-
-  # Collect all the input/output idents
-  var io = inputSyms
-  case sig[0].kind
-  of nnkEmpty:
-    discard
-  of nnkTupleTy:
-    var idx = 0
-    for identdef in sig[0]:
-      for idx_ident in 0 .. identdef.len-3:
-        io.add nnkBracketExpr.newTree(
-          outputSyms[0],
-          newLit idx
-        )
-        inc idx
-  else:
-    io.add outputSyms
-
-  # Call the compilation macro
-  result.add symExecStmt
-  result.add quote do:
-    compile(`io`, `signature`)
-
-  # echo result.toStrlit

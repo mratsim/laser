@@ -4,10 +4,10 @@
 # This file may not be copied, modified, or distributed except according to those terms.
 
 import
-  ./ast/ast_compiler,
-  ./ast/ast_primitives
+  ./frontend/lux_frontend,
+  ./dsl/primitives
 
-from ./ast/ast_types import LuxNode
+from ./core/lux_types import LuxNode
 
 # ###########################
 #
