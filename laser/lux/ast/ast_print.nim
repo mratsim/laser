@@ -11,6 +11,11 @@ import
 
 proc `$`*(ast: LuxNode): string =
   proc inspect(ast: LuxNode, indent: int): string =
+
+    if ast.kind == Domain:
+      # TODO support domain expression like i+1
+      return ast.symDomain
+
     result.add '\n' & repeat(' ', indent) & $ast.kind & " (id: " & $ast.id & ')'
     let indent = indent + 2
     case ast.kind
@@ -22,14 +27,25 @@ proc `$`*(ast: LuxNode): string =
       if ast.prev_version.isNil:
         result.add '\n' & repeat(' ', indent) & "prev_version: nil"
       else:
-        result.add repeat(' ', indent) & inspect(ast.prev_version, indent)
+        result.add repeat(' ', indent) & "⮢⮢⮢" &
+          inspect(ast.prev_version, indent)
     of IntImm:
       result.add '\n' & repeat(' ', indent) & $ast.intVal
     of FloatImm:
       result.add '\n' & repeat(' ', indent) & $ast.floatVal
     of BinOp:
-      result.add repeat(' ', indent) & inspect(ast.binOpKind, indent)
+      result.add '\n' &  repeat(' ', indent) & $ast.binOpKind
       result.add repeat(' ', indent) & inspect(ast.lhs, indent)
       result.add repeat(' ', indent) & inspect(ast.rhs, indent)
+    of Access, MutAccess:
+      result.add '\n' &  repeat(' ', indent) & "indices " & $ast.indices
+      result.add repeat(' ', indent) & inspect(ast.tensorView, indent)
+    of Assign:
+      result.add repeat(' ', indent) & inspect(ast.lval, indent)
+      result.add repeat(' ', indent) & inspect(ast.rval, indent)
+    else:
+      raise newException(
+        ValueError, "Pretty Printer for \"" &
+                    $ast.kind & "\" is not implemented")
 
   result = inspect(ast, 0)

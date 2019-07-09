@@ -5,9 +5,10 @@
 
 import
   # Standard library
-  random,
+  macros,
   # Internal
-  ./ast_types
+  ./ast_types, ./ast_primitives_helpers,
+  ../../private/ast_utils
 
 # ###########################################
 #
@@ -15,53 +16,25 @@ import
 #
 # ###########################################
 
-var luxNodeRngCT {.compileTime.} = initRand(0x42)
-  ## Workaround for having no UUID for LuxNodes
-  ## at compile-time - https://github.com/nim-lang/RFCs/issues/131
-
-var luxNodeRngRT = initRand(0x42)
-  ## Runtime ID
-
-proc genId(): int =
-  when nimvm:
-    luxNodeRngCT.rand(high(int))
-  else:
-    luxNodeRngRT.rand(high(int))
-
-const ScalarExpr = {
-            IntImm, FloatImm, IntParam, FloatParam,
-            IntMut, FloatMut, IntLVal, FloatLVal,
-            BinOp,
-            Access, Shape, Domain
-          }
-
-func checkScalarExpr(targetOp: string, input: LuxNode) =
-  # TODO - mapping LuxNode -> corresponding function
-  # for better errors as LuxNode are "low-level"
-  if input.kind notin ScalarExpr:
-    raise newException(
-      ValueError,
-      "Invalid scalar expression \"" & $input.kind & "\"\n" &
-      "Only the following LuxNodes are allowed:\n    " & $ScalarExpr &
-      "\nfor building a \"" & targetOp & "\" function."
-      # "\nOrigin: " & $node.lineInfo
+template newLuxMutTensor*(t: untyped) =
+  t = LuxNode(
+      id: genId(),
+      kind: MutTensor,
+      symLVal: t.astToStr
     )
 
-func checkMutable(node: LuxNode) =
-  # TODO
-  discard
-
-proc input*(paramId: int): LuxNode =
-  LuxNode(
-    id: genId(), # lineInfo: instantiationInfo(),
-    kind: InTensor, symId: paramId
-  )
+template newLuxIterDomain*(index: untyped) =
+  index = LuxNode(
+      id: genId(),
+      kind: Domain,
+      symDomain: index.astToStr
+    )
 
 proc `+`*(a, b: LuxNode): LuxNode =
   checkScalarExpr("Add", a)
   checkScalarExpr("Add", b)
   LuxNode(
-    id: genId(), # lineInfo: instantiationInfo(),
+    id: genId(),
     kind: BinOp, binOpKind: Add,
     lhs: a, rhs: b
   )
@@ -70,7 +43,7 @@ proc `*`*(a, b: LuxNode): LuxNode =
   checkScalarExpr("Mul", a)
   checkScalarExpr("Mul", b)
   LuxNode(
-    id: genId(), # lineInfo: instantiationInfo(),
+    id: genId(),
     kind: BinOp, binOpKind: Mul,
     lhs: a, rhs: b
   )
@@ -78,7 +51,7 @@ proc `*`*(a, b: LuxNode): LuxNode =
 proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
   checkScalarExpr("Mul", a)
   LuxNode(
-      id: genId(), # lineInfo: instantiationInfo(),
+      id: genId(),
       kind: BinOp, binOpKind: Mul,
       lhs: a,
       rhs: LuxNode(kind: IntImm, intVal: b)
@@ -90,49 +63,132 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
 
   # If LHS does not have a memory location, attribute one
   if a.kind notin {MutTensor, LValTensor}:
-    a = LuxNode(
-          id: genId(), # lineInfo: instantiationInfo(),
-          kind: LValTensor,
-          symLVal: "localvar__" & $a.id, # Generate unique symbol
-          version: 1,
-          prev_version: LuxNode(
-            id: a.id, # lineInfo: a.lineinfo,
-            kind: Assign,
-            lval: LuxNode(
-              id: a.id, # lineInfo: a.lineinfo, # Keep the hash
-              kind: LValTensor,
-              symLVal: "localvar__" & $a.id, # Generate unique symbol
-              version: 0,
-              prev_version: nil,
-            ),
-            rval: a
-          )
-    )
+    lvalify(a)
 
   # Then update it
-  if a.kind == MutTensor:
+  if a.kind == LValTensor:
     a = LuxNode(
-      id: genId(), # lineInfo: instantiationInfo(),
-      kind: MutTensor,
-      symLVal: a.symLVal, # Keep original unique symbol
+      id: genId(),
+      kind: LValTensor,
+      symLVal: a.symLVal,
       version: a.version + 1,
-      prev_version: LuxNode(
-        id: a.id, # lineinfo: a.lineinfo,
-        kind: Assign,
-        lval: a,
-        rval: a + b
+      prev_version: assign(
+        lhs = a,
+        rhs = a + b
       )
     )
   else:
     a = LuxNode(
-      id: genId(), # lineinfo: instantiationInfo(),
-      kind: LValTensor,
-      symLVal: a.symLVal, # Keep original unique symbol
+      id: genId(),
+      kind: MutTensor,
+      symLVal: a.symLVal,
       version: a.version + 1,
-      prev_version: LuxNode(
-        id: a.id, # lineinfo: a.lineinfo,
-        kind: Assign,
-        lval: a,
-        rval: a + b
+      prev_version: assign(
+        lhs = a,
+        rhs = a + b
       )
     )
+
+proc at(t: LuxNode, indices: varargs[LuxNode]): LuxNode =
+  ## Access a tensor
+  ## For example
+  ##   - A[i, j, k] on a rank 3 tensor
+  ##   - A[0, i+j] on a rank 2 tensor (matrix)
+
+  checkTensor(t)
+  LuxNode(
+      id: genId(),
+      kind: Access,
+      tensorView: t,
+      indices: @indices
+  )
+
+proc at(t: var LuxNode, indices: varargs[LuxNode]): var LuxNode =
+  ## Access a tensor, returns a mutable element
+  ## For example
+  ##   - A[i, j, k] on a rank 3 tensor
+  ##   - A[0, i+j] on a rank 2 tensor (matrix)
+  ##
+  ## Used for A[i, j] += foo(i, j)
+
+  checkTensor(t)
+  checkMutable(t)
+  t = LuxNode(
+      id: genId(),
+      kind: MutAccess,
+      tensorView: t,
+      indices: @indices
+  )
+  return t
+
+import ast_print
+
+proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
+  ## Mutate a tensor element
+  ## at specified indices
+  ##
+  ## For example
+  ##   - A[i, j, k] on a rank 3 tensor
+  ##   - A[0, i+j] on a rank 2 tensor (matrix)
+  ##
+  ## Used for A[i, j] = foo(i, j)
+
+  checkTensor(t)
+  checkMutable(t)
+
+  # If LHS does not have a memory location, attribute one
+  if t.kind notin {MutTensor, LValTensor}:
+    lvalify(t)
+
+  # Then update it
+  if t.kind == LValTensor:
+    t = LuxNode(
+      id: genId(),
+      kind: LValTensor,
+      symLVal: t.symLVal,
+      version: t.version + 1,
+      prev_version: assign(
+        LuxNode(
+          id: genId(),
+          kind: MutAccess,
+          tensorView: t,
+          indices: @indices
+        ),
+        expression
+      )
+    )
+  else:
+    t = LuxNode(
+      id: genId(),
+      kind: MutTensor,
+      symLVal: t.symLVal,
+      version: t.version + 1,
+      prev_version: assign(
+        LuxNode(
+          id: genId(),
+          kind: MutAccess,
+          tensorView: t,
+          indices: @indices
+        ),
+        expression
+      )
+    )
+    echo t
+
+macro `[]`*(t: LuxNode, indices: varargs[untyped]): untyped =
+  # TODO
+  # Handle the "_" joker for whole dimension
+  result = newCall(bindSym"at", t)
+  indices.copyChildrenTo result
+
+macro `[]=`*(t: var LuxNode, indicesAndExpr: varargs[untyped]): untyped =
+  # Handle varargs[untyped] consume everything
+  var indices = indicesAndExpr
+  let expression = indices.pop()
+
+  # TODO
+  # Handle the "_" joker for whole dimension
+
+  result = newCall(bindSym"at_mut", t)
+  indices.copyChildrenTo result
+  result.add expression

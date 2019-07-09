@@ -51,6 +51,7 @@ proc codegen*(
 
       var varAssign = false
 
+      # TODO rework to use unique LVal variable
       if ast.lval.id notin visited and
             ast.lval.kind == LValTensor and
             ast.lval.prev_version.isNil and
@@ -96,10 +97,10 @@ proc codegen*(
       callStmt.add lhs
       callStmt.add rhs
 
-      let memloc = genSym(nskLet, "memloc_")
-      stmts.add newLetStmt(memloc, callStmt)
-      visited[ast.id] = memloc
-      return memloc
+      let op = genSym(nskLet, "op_")
+      stmts.add newLetStmt(op, callStmt)
+      visited[ast.id] = op
+      return op
 
     else:
       raise newException(ValueError, "Unsupported code generation")

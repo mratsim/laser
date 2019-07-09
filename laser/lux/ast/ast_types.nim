@@ -56,6 +56,13 @@
 # i.e. this is not possible:
 #   macro doSomething[T](io: static varargs[LuxNode[T]]):
 #     proc matmul(C: var Tensor[float32], A, B: Tensor[float32])
+#
+# Particular feature:
+#   Computation graph engines and autograds (and symbolic execution engines?)
+#   are traditionally using a context (which can be a hidden global in some ML framework)
+#   to record all the computation done, also called Tape, Trace or Wengert list.
+#   In Lux there is no context, all computations needed for the results are carried
+#   by the results and dead code eliminated by construction.
 
 # ###########################################
 #
@@ -64,18 +71,6 @@
 # ###########################################
 
 type
-  IDom* = object
-    ## Represents an iteration domain
-    ## Example: "for i in 0 ..< 10:"
-    ## would be Domain(symbol: "i", start: 0, stop: 10, step: 1)
-    ##
-    ## Stop is exclusive.
-    ## We usually steps from 0 to N with N the dimension of a tensor axis.
-    ## This might change as Nim is inclusive and polyhedral representation
-    ## uses inclusive constraints.
-    symbol*: string
-    start*, stop*, step*: LuxNode
-
   UnaryOpKind* = enum
     Ln
     Exp
@@ -87,8 +82,8 @@ type
 
   TernaryOpKind* = enum
     # Must return a scalar for scalar expr check
-    FusedMultiplyAdd
-    Select
+    Fma # FusedMultiplyAdd
+    Mux # Multiplexer / Selector for example max(x, 0) == mux(x>0, x, 0)
 
   LuxNodeKind* = enum
     ## Computation Graph / Abstract Syntax Tree nodes
@@ -186,12 +181,7 @@ type
 
     # Scalar statements
     Assign      # Assignment statement
-
-    # TODO: booleans
-    #       We probably can restrict to BoolParam
-    #       for function inputs
-    #       Boolean expressions for select/IfElifElse
-    #       would be supported (but not storable in a lvalue)
+    MutAccess   # `[]=` assignment
 
     # ############################################
     #
@@ -240,9 +230,6 @@ type
   LuxNode* = ref object
     id*: Id
 
-    # lineInfo*: tuple[filename: string, line: int, column: int]
-    # Need logging alternative to instiationInfo - https://github.com/nim-lang/Nim/issues/11689
-
     case kind*: LuxNodeKind
     of InTensor, IntParam, FloatParam:
       ast*: LuxNode               # If nil, it uses symId
@@ -257,17 +244,33 @@ type
       floatVal*: float
     of Assign:
       lval*, rval*: LuxNode
+      domains*: seq[LuxNode]      # Nested loops needed to construct this assignment
     of BinOp:
       binOpKind*: BinaryOpKind
       lhs*, rhs*: LuxNode
-    of Access:
+    of Access, MutAccess:
       tensorView*: LuxNode
-      domains*: seq[LuxNode]
+      indices*: seq[LuxNode]
     of Shape:
       tensor*: LuxNode
       axis*: int
-    of Domain, AffineFor:
-      domain*: IDom
+    of Domain:
+      # Domain represents an iteration domain.
+      # During execution its value corresponds to the iteration index value
+      #
+      # Example: "for i in 0 ..< 10:"
+      # would be Domain(symbol: "i", start: 0, stop: 10, step: 1)
+      # and will be replaced by the value of "i" at run-time
+      #
+      # Stop is exclusive.
+      # We usually steps from 0 to N with N the dimension of a tensor axis.
+      # This might change as Nim is inclusive and polyhedral representation
+      # uses inclusive constraints.
+      symDomain*: string
+      start*, stop*, step*: LuxNode
+    of AffineFor:
+      # Represent a for loop
+      domain*: LuxNode
     of AffineIf:
       constraint*: LuxNode
     of CpuInfo:
@@ -298,8 +301,21 @@ type
     # ScSkew
     # ScShift
 
+# ###########################################
+#
+#                   TODO
+#
+# ###########################################
 
-# TODO: Statistics and logs
-# - loop transforms
-# - emitted instructions
-# ...
+# ## User-facing
+# - Support "ptr T" container
+# - lineinfo debug - https://github.com/nim-lang/Nim/issues/11689
+# - Compilation statistics on parallelization/vectorization/fusion, ...
+# - Compilation logs
+# - Booleans:
+#     - invariant parameters
+#     - tensors for masking
+#
+# ## Internal
+# - Track alignment
+# - Track contiguity/striding

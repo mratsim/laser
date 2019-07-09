@@ -33,55 +33,20 @@ when isMainModule:
 
   # We intentionally have a tricky non-canonical function signature
   proc foobar(a: LuxNode, b, c: LuxNode): tuple[bar: LuxNode, baz, buzz: LuxNode] =
-    let foo = a + b + c
 
-    # Don't use in-place updates
+    # Domain
+    var i: LuxNode
+    newLuxIterDomain(i)
+
+    # Avoid in-place update of implicit result
     # https://github.com/nim-lang/Nim/issues/11637
-    let bar = foo * 2
+    var bar: LuxNode
+    newLuxMutTensor(bar)
 
-    var baz = foo * 3
-    var buzz = baz
+    bar[i] = a[i] + b[i] + c[i]
 
-    buzz += a * 10000
-    baz += b
-    buzz += b
-
+    # Update result
     result.bar = bar
-    result.baz = baz
-    result.buzz = buzz
-
-  proc foobar(a: int, b, c: int): tuple[bar, baz, buzz: int] =
-    echo "Overloaded proc to test bindings"
-    discard
 
   generate foobar:
     proc foobar(a: Tensor[float32], b, c: Tensor[float32]): tuple[bar: Tensor[float32], baz, buzz: Tensor[float32]]
-
-  generate foobar:
-    proc foobar(a: Tensor[float64], b, c: Tensor[float64]): tuple[bar: Tensor[float64], baz, buzz: Tensor[float64]]
-
-  block: # float32
-    let
-      len = 10
-      u = newSeqWith(len, 1'f32).toTensor()
-      v = newSeqWith(len, 2'f32).toTensor()
-      w = newSeqWith(len, 3'f32).toTensor()
-
-    let (pim, pam, poum) = foobar(u, v, w)
-
-    echo pim  # 12
-    echo pam  # 20
-    echo poum # 10020
-
-  block: # float64
-    let
-      len = 10
-      u = newSeqWith(len, 1'f64).toTensor()
-      v = newSeqWith(len, 2'f64).toTensor()
-      w = newSeqWith(len, 3'f64).toTensor()
-
-    let (pim, pam, poum) = foobar(u, v, w)
-
-    echo pim  # 12
-    echo pam  # 20
-    echo poum # 10020

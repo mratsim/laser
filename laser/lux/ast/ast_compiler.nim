@@ -12,6 +12,7 @@ import
   ./ast_sigmatch,
   ./ast_codegen,
   ./ast_codegen_transfo,
+  ./ast_primitives_helpers,
   ./macro_utils
 
 # TODO: Do we need both compile and generate?
@@ -109,7 +110,7 @@ proc symbolicExecStmt(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outpu
   for i, in_ident in inputSyms:
     stmts.add newLetStmt(
       ct(in_ident),
-      newCall("input", newLit i)
+      newCall(bindSym"inputTensor", newLit i)
     )
 
   # Call the AST routine
@@ -122,7 +123,12 @@ proc symbolicExecStmt(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outpu
       outputSyms, call
     )
 
+import ./ast_print
 macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
+  ## Lux Compiler backend
+  ## Accept an array of AST representing the computation
+  ## and generate specialized code from it
+
   # Note: io_ast must be an array - https://github.com/nim-lang/Nim/issues/10691
 
   # compile([a, b, c, bar, baz, buzz]):
@@ -167,61 +173,77 @@ macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   let resultTy = procDef[0][3][0]
   let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
 
-  # echo initParams.toStrLit()
+  # Sanity check on AST produced
+  echo io_ast
 
-  # We create an inner generic proc on the base type (without Tensor[T])
-  var genericProc = procDef[0].liftTypes(containerIdent = "Tensor")
+  # # We create an inner generic proc on the base type (without Tensor[T])
+  # var genericProc = procDef[0].liftTypes(containerIdent = "Tensor")
 
-  # We create the inner generic proc
-  let genericOverload = bodyGen(
-    arch = ArchGeneric,
-    io_ast = io_ast,
-    ids = ids,
-    ids_baseType = ids_baseType,
-    resultType = resultTy
-  )
+  # # We create the inner generic proc
+  # let genericOverload = bodyGen(
+  #   arch = ArchGeneric,
+  #   io_ast = io_ast,
+  #   ids = ids,
+  #   ids_baseType = ids_baseType,
+  #   resultType = resultTy
+  # )
 
-  genericProc[6] = genericOverload   # Assign to proc body
-  # echo genericProc.toStrLit
+  # genericProc[6] = genericOverload   # Assign to proc body
+  # # echo genericProc.toStrLit
 
-  # We create the inner SIMD proc, specialized to a SIMD architecture
-  # In the inner proc we shadow the original idents ids.
-  let simdOverload = bodyGen(
-    arch = x86_SSE,
-    io_ast = io_ast,
-    ids = ids,
-    ids_baseType = ids_baseType,
-    resultType = resultTy
-  )
+  # # We create the inner SIMD proc, specialized to a SIMD architecture
+  # # In the inner proc we shadow the original idents ids.
+  # let simdOverload = bodyGen(
+  #   arch = x86_SSE,
+  #   io_ast = io_ast,
+  #   ids = ids,
+  #   ids_baseType = ids_baseType,
+  #   resultType = resultTy
+  # )
 
-  var simdProc = procDef[0].liftTypes(
-    containerIdent = "Tensor",
-    remapping = func(typeNode: NimNode): NimNode {.gcsafe, locks: 0.} = {.noSideEffect.}: SimdMap(x86_SSE, typeNode, simdType)
-  )
+  # var simdProc = procDef[0].liftTypes(
+  #   containerIdent = "Tensor",
+  #   remapping = func(typeNode: NimNode): NimNode {.gcsafe, locks: 0.} = {.noSideEffect.}: SimdMap(x86_SSE, typeNode, simdType)
+  # )
 
-  simdProc[6] = simdOverload   # Assign to proc body
-  # echo simdProc.toStrLit
+  # simdProc[6] = simdOverload   # Assign to proc body
+  # # echo simdProc.toStrLit
 
-  # We vectorize the inner proc to apply to an contiguous array
-  var vecBody: NimNode
-  vecBody = vectorize(
-      procDef[0][0],
-      ptrs, simds,
-      length,
-      x86_SSE, ids_baseType[0] # TODO, only use the inner loop
-    )
+  # # We vectorize the inner proc to apply to an contiguous array
+  # var vecBody: NimNode
+  # vecBody = vectorize(
+  #     procDef[0][0],
+  #     ptrs, simds,
+  #     length,
+  #     x86_SSE, ids_baseType[0] # TODO, only use the inner loop
+  #   )
 
-  result = procDef.copyNimTree()
-  let resBody = newStmtList()
-  resBody.add initParams
-  resBody.add genericProc
-  resBody.add simdProc
-  resBody.add vecBody
-  result[0][6] = resBody
+  # result = procDef.copyNimTree()
+  # let resBody = newStmtList()
+  # resBody.add initParams
+  # resBody.add genericProc
+  # resBody.add simdProc
+  # resBody.add vecBody
+  # result[0][6] = resBody
 
-  echo result.toStrLit
+  # echo result.toStrLit
 
 macro generate*(ast_routine: typed, signature: untyped): untyped =
+  ## Lux Compiler frontend
+  ##
+  ## It will symbolically execute an ast_routine of LuxNodes
+  ## that represent the computation to be done.
+  ##
+  ## The symbolic execution will create a computation graph,
+  ## that will then be passed to the compiler backend.
+  ##
+  ## The compiler backend will be called to generate a new proc
+  ## that matches the desired signature.
+  ##
+  ## The procs generated are specialized (they cannot be generic)
+  ## but the same base ast_routine can be reused to generate all
+  ## the desired specialized procs.
+
   # TODO: remove the need for ast_routine for symbol resolution
 
   result = newStmtList()
@@ -276,4 +298,4 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
   result.add quote do:
     compile(`io`, `signature`)
 
-  echo result.toStrlit
+  # echo result.toStrlit
