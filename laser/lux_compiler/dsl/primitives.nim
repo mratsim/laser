@@ -14,7 +14,7 @@ import
 
 # ###########################################
 #
-#         Lux Primitive Routines
+#         Lux DSL Primitive Routines
 #
 # ###########################################
 
@@ -67,29 +67,19 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
   if a.kind notin {MutTensor, LValTensor}:
     lvalify(a)
 
-  # Then update it
-  if a.kind == LValTensor:
-    a = LuxNode(
-      id: genId(),
-      kind: LValTensor,
-      symLVal: a.symLVal,
-      version: a.version + 1,
-      prev_version: assign(
-        lhs = a,
-        rhs = a + b
-      )
-    )
-  else:
-    a = LuxNode(
-      id: genId(),
-      kind: MutTensor,
-      symLVal: a.symLVal,
-      version: a.version + 1,
-      prev_version: assign(
-        lhs = a,
-        rhs = a + b
-      )
-    )
+  # Then create the new node
+  var upd_a = LuxNode(id: genId())
+  upd_a.kind = a.kind
+  upd_a.symLVal = a.symLVal
+  upd_a.version = a.version + 1
+  upd_a.prev_version = assign(
+    lhs = a,
+    rhs = a + b
+  )
+
+  # And swap it
+  a = upd_a
+
 
 proc at(t: LuxNode, indices: varargs[LuxNode]): LuxNode =
   ## Access a tensor
