@@ -7,6 +7,12 @@ import
   # Standard library
   macros
 
+# ###########################################
+#
+#            Signature matching
+#
+# ###########################################
+
 proc matchAST(overload, signature: NimNode): bool =
   proc inspect(overload, signature: NimNode, match: var bool) =
     # echo "overload: ", overload.kind, " - match status: ", match
@@ -37,8 +43,8 @@ proc matchAST(overload, signature: NimNode): bool =
 
 proc resolveASToverload*(overloads, formalParams: NimNode): NimNode =
   if overloads.kind == nnkSym:
-    result = overloads.getImpl()
-    result[3].expectKind nnkFormalParams
+    result = overloads
+    result.getImpl[3].expectKind nnkFormalParams
     return
   else:
     overloads.expectKind(nnkClosedSymChoice)

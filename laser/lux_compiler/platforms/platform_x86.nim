@@ -12,6 +12,12 @@ import
   ./platform_common,
   ../../simd
 
+# ###########################################
+#
+#    SIMD configuration for x86 and x86_64
+#
+# ###########################################
+
 type
   SimdArch* = enum
     ArchGeneric,

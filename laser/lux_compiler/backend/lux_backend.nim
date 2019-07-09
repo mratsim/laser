@@ -7,14 +7,20 @@ import
   # Standard library
   macros,
   # Internal
-  ../platforms,
-  ./ast_definition,
-  ./ast_sigmatch,
-  ./ast_codegen,
-  ./ast_codegen_transfo,
-  ./macro_utils
+  ../core/lux_types,
+  ../utils/macro_utils,
+  # Debug
+  ../core/lux_print
 
-# TODO: Do we need both compile and generate?
+# ###########################################
+#
+#            Compiler backend
+#
+# ###########################################
+
+# Progressively lowers the computation graph AST to
+# a low-level AST.
+# This is then translated to Nim AST
 
 proc initParams(
        procDef,
@@ -104,25 +110,11 @@ proc initParams(
           # SIMD ident
           result.simds.outParams.add newIdentNode($ident & "_simd")
 
-proc symbolicExecStmt(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outputSyms, stmts: var NimNode) =
-  # Allocate inputs
-  for i, in_ident in inputSyms:
-    stmts.add newLetStmt(
-      ct(in_ident),
-      newCall("input", newLit i)
-    )
+macro compile*(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
+  ## Lux Compiler backend
+  ## Accept an array of AST representing the computation
+  ## and generate specialized code from it
 
-  # Call the AST routine
-  let call = newCall(ast, inputSyms)
-  if not hasOut: # Case 1: no result
-    stmts.add call
-  else:
-    outputSyms = ct(genSym(nskLet, "callResult_"))
-    stmts.add newLetStmt(
-      outputSyms, call
-    )
-
-macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   # Note: io_ast must be an array - https://github.com/nim-lang/Nim/issues/10691
 
   # compile([a, b, c, bar, baz, buzz]):
@@ -167,113 +159,57 @@ macro compile(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   let resultTy = procDef[0][3][0]
   let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
 
-  # echo initParams.toStrLit()
+  # Sanity check on AST produced
+  echo io_ast
 
-  # We create an inner generic proc on the base type (without Tensor[T])
-  var genericProc = procDef[0].liftTypes(containerIdent = "Tensor")
+  # # We create an inner generic proc on the base type (without Tensor[T])
+  # var genericProc = procDef[0].liftTypes(containerIdent = "Tensor")
 
-  # We create the inner generic proc
-  let genericOverload = bodyGen(
-    arch = ArchGeneric,
-    io_ast = io_ast,
-    ids = ids,
-    ids_baseType = ids_baseType,
-    resultType = resultTy
-  )
+  # # We create the inner generic proc
+  # let genericOverload = bodyGen(
+  #   arch = ArchGeneric,
+  #   io_ast = io_ast,
+  #   ids = ids,
+  #   ids_baseType = ids_baseType,
+  #   resultType = resultTy
+  # )
 
-  genericProc[6] = genericOverload   # Assign to proc body
-  # echo genericProc.toStrLit
+  # genericProc[6] = genericOverload   # Assign to proc body
+  # # echo genericProc.toStrLit
 
-  # We create the inner SIMD proc, specialized to a SIMD architecture
-  # In the inner proc we shadow the original idents ids.
-  let simdOverload = bodyGen(
-    arch = x86_SSE,
-    io_ast = io_ast,
-    ids = ids,
-    ids_baseType = ids_baseType,
-    resultType = resultTy
-  )
+  # # We create the inner SIMD proc, specialized to a SIMD architecture
+  # # In the inner proc we shadow the original idents ids.
+  # let simdOverload = bodyGen(
+  #   arch = x86_SSE,
+  #   io_ast = io_ast,
+  #   ids = ids,
+  #   ids_baseType = ids_baseType,
+  #   resultType = resultTy
+  # )
 
-  var simdProc = procDef[0].liftTypes(
-    containerIdent = "Tensor",
-    remapping = func(typeNode: NimNode): NimNode {.gcsafe, locks: 0.} = {.noSideEffect.}: SimdMap(x86_SSE, typeNode, simdType)
-  )
+  # var simdProc = procDef[0].liftTypes(
+  #   containerIdent = "Tensor",
+  #   remapping = func(typeNode: NimNode): NimNode {.gcsafe, locks: 0.} = {.noSideEffect.}: SimdMap(x86_SSE, typeNode, simdType)
+  # )
 
-  simdProc[6] = simdOverload   # Assign to proc body
-  # echo simdProc.toStrLit
+  # simdProc[6] = simdOverload   # Assign to proc body
+  # # echo simdProc.toStrLit
 
-  # We vectorize the inner proc to apply to an contiguous array
-  var vecBody: NimNode
-  vecBody = vectorize(
-      procDef[0][0],
-      ptrs, simds,
-      length,
-      x86_SSE, ids_baseType[0] # TODO, only use the inner loop
-    )
+  # # We vectorize the inner proc to apply to an contiguous array
+  # var vecBody: NimNode
+  # vecBody = vectorize(
+  #     procDef[0][0],
+  #     ptrs, simds,
+  #     length,
+  #     x86_SSE, ids_baseType[0] # TODO, only use the inner loop
+  #   )
 
-  result = procDef.copyNimTree()
-  let resBody = newStmtList()
-  resBody.add initParams
-  resBody.add genericProc
-  resBody.add simdProc
-  resBody.add vecBody
-  result[0][6] = resBody
+  # result = procDef.copyNimTree()
+  # let resBody = newStmtList()
+  # resBody.add initParams
+  # resBody.add genericProc
+  # resBody.add simdProc
+  # resBody.add vecBody
+  # result[0][6] = resBody
 
-  echo result.toStrLit
-
-macro generate*(ast_routine: typed, signature: untyped): untyped =
-  # TODO: remove the need for ast_routine for symbol resolution
-
-  result = newStmtList()
-
-  # TODO: canonicalize signature
-  let formalParams = signature[0][3]
-  let ast = ast_routine.resolveASToverload(formalParams)
-
-  # Get the routine signature
-  let sig = ast.getImpl[3]
-  sig.expectKind(nnkFormalParams)
-
-  # Get all inputs
-  var inputSyms: seq[NimNode]
-  for idx_identdef in 1 ..< sig.len:
-    let identdef = sig[idx_identdef]
-    doAssert identdef[^2].eqIdent"LuxNode"
-    identdef[^1].expectKind(nnkEmpty)
-    for idx_ident in 0 .. identdef.len-3:
-      inputSyms.add genSym(nskLet, $identdef[idx_ident] & "_")
-
-  # Symbolic execution statement
-  var outputSyms: NimNode
-  var symExecStmt = newStmtList()
-  symbolicExecStmt(
-      ast,
-      inputSyms,
-      hasOut = sig[0].kind != nnkEmpty,
-      outputSyms,
-      symExecStmt
-    )
-
-  # Collect all the input/output idents
-  var io = inputSyms
-  case sig[0].kind
-  of nnkEmpty:
-    discard
-  of nnkTupleTy:
-    var idx = 0
-    for identdef in sig[0]:
-      for idx_ident in 0 .. identdef.len-3:
-        io.add nnkBracketExpr.newTree(
-          outputSyms[0],
-          newLit idx
-        )
-        inc idx
-  else:
-    io.add outputSyms
-
-  # Call the compilation macro
-  result.add symExecStmt
-  result.add quote do:
-    compile(`io`, `signature`)
-
-  echo result.toStrlit
+  # echo result.toStrLit

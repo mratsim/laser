@@ -7,8 +7,16 @@ import
   # Standard library
   macros, tables,
   # Internal
-  ./ast_definition,
+  ../core/lux_types,
   ../platforms
+
+# ###########################################
+#
+#            Code generator
+#
+# ###########################################
+
+# Generates low-level Nim code from Lux AST
 
 proc codegen*(
     ast: LuxNode,
@@ -51,29 +59,31 @@ proc codegen*(
 
       var varAssign = false
 
-      if ast.lhs.id notin visited and
-            ast.lhs.kind == LValTensor and
-            ast.lhs.prev_version.isNil and
-            ast.rhs.id notin visited:
+      # TODO rework to use unique LVal variable
+      if ast.lval.id notin visited and
+            ast.lval.kind == LValTensor and
+            ast.lval.prev_version.isNil and
+            ast.rval.id notin visited:
           varAssign = true
 
-      var rhsStmt = newStmtList()
-      let rhs = codegen(ast.rhs, arch, T, params, visited, rhsStmt)
-      stmts.add rhsStmt
+      var rvalStmt = newStmtList()
+      let rval = codegen(ast.rval, arch, T, params, visited, rvalStmt)
+      stmts.add rvalStmt
 
-      var lhsStmt = newStmtList()
-      let lhs = codegen(ast.lhs, arch, T, params, visited, lhsStmt)
-      stmts.add lhsStmt
+      var lvalStmt = newStmtList()
+      let lval = codegen(ast.lval, arch, T, params, visited, lvalStmt)
+      # "visited[ast.id] = lhs" is stored
+      stmts.add lvalStmt
 
-      lhs.expectKind(nnkIdent)
+      lval.expectKind(nnkIdent)
       if varAssign:
-        stmts.add newVarStmt(lhs, rhs)
+        stmts.add newVarStmt(lval, rval)
       else:
-        stmts.add newAssignment(lhs, rhs)
-      # visited[ast] = lhs # Already done
-      return lhs
+        stmts.add newAssignment(lval, rval)
+      # visited[ast.id] = lhs # Already done
+      return lval
 
-    of Add, Mul:
+    of BinOp:
       if ast.id in visited:
         return visited[ast.id]
 
@@ -87,18 +97,21 @@ proc codegen*(
       stmts.add lhsStmt
       stmts.add rhsStmt
 
-      case ast.kind
+      case ast.binOpKind
       of Add: callStmt.add SimdMap(arch, T, simdAdd)
       of Mul: callStmt.add SimdMap(arch, T, simdMul)
-      else: raise newException(ValueError, "Unreachable code")
+      # else: raise newException(ValueError, "Unreachable code")
 
       callStmt.add lhs
       callStmt.add rhs
 
-      let memloc = genSym(nskLet, "memloc_")
-      stmts.add newLetStmt(memloc, callStmt)
-      visited[ast.id] = memloc
-      return memloc
+      let op = genSym(nskLet, "op_")
+      stmts.add newLetStmt(op, callStmt)
+      visited[ast.id] = op
+      return op
+
+    else:
+      raise newException(ValueError, "Unsupported code generation")
 
 proc bodyGen*(
       arch: SimdArch,
