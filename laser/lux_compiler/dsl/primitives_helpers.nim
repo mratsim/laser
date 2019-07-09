@@ -5,7 +5,7 @@
 
 import
   # Standard library
-  random,
+  random, sets, hashes, sequtils,
   # Internal
   ../core/[lux_types, lux_core_helpers]
 
@@ -17,16 +17,54 @@ export lux_types, lux_core_helpers
 #
 # ###########################################
 
+proc hash(node: LuxNode): Hash =
+  # Use of hash is restricted to the OrderedSet used in this module.
+  # In other modules like codegen, we want to index via node ID.
+  # as 2 ASTs can have the same node ID, if one is the expression
+  # and the other is the variable it has been assigned to.
+  node.id
+
+proc searchDomains*(node: LuxNode, domainsFound: var OrderedSet[LuxNode]) =
+  case node.kind
+  of LValTensor, IntMut, FloatMut, IntLVal, FloatLVal:
+    node.prev_version.searchDomains(domainsFound)
+  of BinOp:
+    node.lhs.searchDomains(domainsFound)
+    node.rhs.searchDomains(domainsFound)
+  of Access, MutAccess:
+    for idx in node.indices:
+      # We need to handle A[i+j, 0] access
+      idx.searchDomains(domainsFound)
+  of Domain:
+    domainsFound.incl node
+  else:
+    discard
+
+  # Assign - we reach another assignment, i.e. managed in another loop
+  # AffineFor - We are already looping, we don't want double loop
+  # AffineIf - If loop index constraint, only make sense when accompanied by affine for
+
 proc assign*(lhs, rhs: LuxNode): LuxNode =
-  # Generate the Assign node
-  # This also scans the domain /loop nest needed
-  # to generate the assignment
+  ## Generate the Assign node
+  ## This also scans the domain / loop nest needed
+  ## to generate the assignment.
+  ##
+  ## Iteration domains are ordered from outermost to innermost
+  ## for the LHS.
+  ## And approximatively this way as well for the RHS.
+
+  var lhsDom = initOrderedSet[LuxNode](initialSize = 8)
+  var rhsDom = initOrderedSet[LuxNode](initialSize = 8)
+
+  lhs.searchDomains(lhsDom)
+  rhs.searchDomains(rhsDom)
+
   LuxNode(
     id: genId(),
     kind: Assign,
     lval: lhs,
-    rval: rhs
-    # domains: TODO
+    rval: rhs,
+    domains: (lhsDom.toSeq(), rhsDom.toSeq())
   )
 
 proc newSym*(symbol: string, rhs: LuxNode): LuxNode =

@@ -35,15 +35,16 @@ when isMainModule:
   proc foobar(a: LuxNode, b, c: LuxNode): tuple[bar: LuxNode, baz, buzz: LuxNode] =
 
     # Domain
-    var i: LuxNode
+    var i, j: LuxNode
     newLuxIterDomain(i)
+    newLuxIterDomain(j)
 
     # Avoid in-place update of implicit result
     # https://github.com/nim-lang/Nim/issues/11637
     var bar: LuxNode
     newLuxMutTensor(bar)
 
-    bar[i] = a[i] + b[i] + c[i]
+    bar[i, j] = a[i, j] + b[i, j] + c[i, j]
 
     # Update result
     result.bar = bar

@@ -47,6 +47,7 @@ proc `$`*(ast: LuxNode): string =
       result.add '\n' &  repeat(' ', indent) & "indices " & $ast.indices
       result.add repeat(' ', indent) & inspect(ast.tensorView, indent)
     of Assign:
+      result.add '\n' & repeat(' ', indent) & "domains " & $ast.domains
       result.add repeat(' ', indent) & inspect(ast.lval, indent)
       result.add repeat(' ', indent) & inspect(ast.rval, indent)
     else:

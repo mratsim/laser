@@ -244,7 +244,9 @@ type
       floatVal*: float
     of Assign:
       lval*, rval*: LuxNode
-      domains*: seq[LuxNode]      # Nested loops needed to construct this assignment
+      domains*: tuple[lhs, rhs: seq[LuxNode]]
+        # Nested loops needed to construct this assignment
+        # Ordered from outermost to innermost (approximative for rhs)
     of BinOp:
       binOpKind*: BinaryOpKind
       lhs*, rhs*: LuxNode
