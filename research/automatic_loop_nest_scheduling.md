@@ -19,6 +19,12 @@
 
 ### Machine Learning
 
+- Learning to Optimize Halide with Tree Search and Random Programs
+
+  _A. Adams, 2019_
+
+  https://halide-lang.org/papers/halide_autoscheduler_2019.pdf
+
 - Loop Transformations Leveraging Hardware Prefetching
 
   _S. Sioutas, 2018_
@@ -36,6 +42,7 @@
   Heterogeneous Parallelism
 
   _J Zhao, thesis, 2019_
+  
   https://tel.archives-ouvertes.fr/tel-01988073/file/thesis.pdf
 
 - TIRAMISU: A Polyhedral Compiler for Expressing
