@@ -53,19 +53,21 @@ proc assign*(lhs, rhs: LuxNode): LuxNode =
   ## for the LHS.
   ## And approximatively this way as well for the RHS.
 
-  var lhsDom = initOrderedSet[LuxNode](initialSize = 8)
-  var rhsDom = initOrderedSet[LuxNode](initialSize = 8)
-
-  lhs.searchDomains(lhsDom)
-  rhs.searchDomains(rhsDom)
-
-  LuxNode(
+  result = LuxNode(
     id: genId(),
     kind: Assign,
     lval: lhs,
     rval: rhs,
-    domains: (lhsDom.toSeq(), rhsDom.toSeq())
   )
+
+  var domains = initOrderedSet[LuxNode](initialSize = 8)
+
+  # Inner dimension of the lhs is always last
+  # as prefetching for write operations is more expensive.
+  rhs.searchDomains(domains)
+  lhs.searchDomains(domains)
+
+  result.domains = domains.toSeq()
 
 proc newSym*(symbol: string, rhs: LuxNode): LuxNode =
   # Declare and allocate a new AST symbol

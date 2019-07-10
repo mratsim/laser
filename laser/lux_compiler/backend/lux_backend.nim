@@ -9,6 +9,8 @@ import
   # Internal
   ../core/lux_types,
   ../utils/macro_utils,
+  # Compiler passes
+  ./passes/pass_build_loops,
   # Debug
   ../core/lux_print
 
@@ -160,7 +162,12 @@ macro compile*(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
 
   # Sanity check on AST produced
-  echo io_ast
+  echo "\n############################"
+  echo "Before\n"
+  echo io_ast.treerepr()
+  echo "\n############################"
+  echo "After\n"
+  echo io_ast.passBuildLoops().treerepr()
 
   # # We create an inner generic proc on the base type (without Tensor[T])
   # var genericProc = procDef[0].liftTypes(containerIdent = "Tensor")

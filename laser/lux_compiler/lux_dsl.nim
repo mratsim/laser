@@ -36,10 +36,10 @@ when isMainModule:
 
     # Domain
     var i, j: LuxNode
-    newLuxIterDomain(i)
-    newLuxIterDomain(j)
+    newLuxIterDomain(i, 0, a.shape(0))
+    newLuxIterDomain(j, 0, a.shape(1))
 
-    # Avoid in-place update of implicit result
+    # Avoid in-place update of implicit result ref address
     # https://github.com/nim-lang/Nim/issues/11637
     var bar: LuxNode
     newLuxMutTensor(bar)

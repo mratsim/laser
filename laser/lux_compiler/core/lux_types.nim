@@ -244,9 +244,11 @@ type
       floatVal*: float
     of Assign:
       lval*, rval*: LuxNode
-      domains*: tuple[lhs, rhs: seq[LuxNode]]
+      domains*: seq[LuxNode]
         # Nested loops needed to construct this assignment
-        # Ordered from outermost to innermost (approximative for rhs)
+        # Approximatively ordered from outermost to innermost
+        # Inner dimension of the lhs is always last.
+        # As prefetching for write operations is more expensive.
     of BinOp:
       binOpKind*: BinaryOpKind
       lhs*, rhs*: LuxNode
@@ -273,8 +275,10 @@ type
     of AffineFor:
       # Represent a for loop
       domain*: LuxNode
+      affineForBody*: LuxNode
     of AffineIf:
       constraint*: LuxNode
+      affineIfBody*: LuxNode
     of CpuInfo:
       # Extern function call
       # Only supports proc with no arguments

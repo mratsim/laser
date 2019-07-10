@@ -32,6 +32,29 @@ template newLuxIterDomain*(index: untyped) =
       symDomain: index.astToStr
     )
 
+proc shape*(t: LuxNode, axis: int): LuxNode =
+  LuxNode(
+    kind: Shape,
+    tensor: t,
+    axis: axis
+  )
+
+template newLuxIterDomain*(index: untyped, start_iter: static int, stop_iter: LuxNode) =
+  index = LuxNode(
+      id: genId(),
+      kind: Domain,
+      symDomain: index.astToStr,
+      start: LuxNode(
+        kind: IntImm,
+        intVal: start_iter
+      ),
+      stop: stop_iter,
+      step: LuxNode(
+        kind: IntImm,
+        intVal: 1
+      )
+    )
+
 proc `+`*(a, b: LuxNode): LuxNode =
   checkScalarExpr("Add", a)
   checkScalarExpr("Add", b)
@@ -163,7 +186,6 @@ proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
         expression
       )
     )
-    echo t
 
 macro `[]`*(t: LuxNode, indices: varargs[untyped]): untyped =
   # TODO
