@@ -8,8 +8,9 @@ import
   ../compiler_optim_hints,
   ../strided_iteration/foreach,
   ../dynamic_stack_arrays,
+  ../private/nested_containers,
   ./datatypes, ./allocator,
-  typetraits
+  typetraits, sequtils
 
 ## Initialization and copy routines
 
@@ -31,9 +32,11 @@ template initTensorMetadataImpl(result: var Tensor, size: var int, shape: openar
     size *= shape[i]
 
 func initTensorMetadata*(result: var Tensor, size: var int, shape: openarray[int]) =
+  ## result metadata and size will be initialized in-place
   initTensorMetadataImpl(result, size, shape)
 
 func initTensorMetadata*(result: var Tensor, size: var int, shape: Metadata) =
+  ## result metadata and size will be initialized in-place
   initTensorMetadataImpl(result, size, shape)
 
 proc deepCopy*[T](dst: var Tensor[T], src: Tensor[T]) =
@@ -161,3 +164,39 @@ proc newTensor*[T](shape: Metadata): Tensor[T] =
   initTensorMetadata(result, size, shape)
   allocCpuStorage(result.storage, size)
   setZero(result, check_contiguous = false)
+
+proc toTensor*(a: openarray, dummy_bugfix: static[int] = 0): auto =
+  ## Convert an openarray to a Tensor
+  ## Input:
+  ##      - An array or a seq (can be nested)
+  ## Result:
+  ##      - A Tensor of the same shape
+  ##
+  ## Note: dummy_bugfix param is unused and is a workaround a Nim bug.
+  # TODO: remove 'dummy_bugfix' - https://github.com/nim-lang/Nim/issues/6343
+
+  let
+    shape = getShape(a)
+    data = toSeq(flatIter(a))
+
+  if unlikely(shape.product != data.len):
+    raise newException(
+      IndexError,
+      "Each nested sequence at the same level" &
+        " must have the same number of elements"
+      )
+
+  type T = typeof(data[0])
+  var
+    t: Tensor[T]
+    size: int
+
+  initTensorMetadata(t, size, shape)
+  allocCpuStorage(t.storage, size)
+
+  when T.supportsCopyMem():
+    t.copyFromRaw(data[0].unsafeAddr, data.len)
+  else:
+    shallowCopy(t.storage.raw_buffer, data)
+
+  result = t
