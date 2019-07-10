@@ -9,8 +9,10 @@ import
   # Internal
   ../core/lux_types,
   ../utils/macro_utils,
+  ../platforms,
   # Compiler passes
   ./passes/pass_build_loops,
+  ./lux_codegen,
   # Debug
   ../core/lux_print
 
@@ -57,7 +59,7 @@ proc initParams(
         # If Tensor take pointers
 
         # Raw ptr
-        let raw_ptr = newIdentNode($ident & "_raw_ptr")
+        let raw_ptr = ident($ident & "_raw_ptr")
         result.ptrs.inParams.add raw_ptr
 
         # Init statement and iteration length
@@ -76,7 +78,7 @@ proc initParams(
           let `raw_ptr` = `ident`.unsafe_raw_data()
 
         # SIMD ident
-        result.simds.inParams.add newIdentNode($ident & "_simd")
+        result.simds.inParams.add ident($ident & "_simd")
 
   # Now add the result idents
   # We work at simd vector level
@@ -97,12 +99,12 @@ proc initParams(
           result.ids_baseType.add baseType
 
           # Raw ptr
-          let raw_ptr = newIdentNode($ident & "_raw_ptr")
+          let raw_ptr = ident($ident & "_raw_ptr")
           result.ptrs.outParams.add raw_ptr
 
           # Init statement
           let res = nnkDotExpr.newTree(
-                      newIdentNode"result",
+                      ident"result",
                       iddefs[j]
                     )
           result.initStmt.add quote do:
@@ -110,7 +112,7 @@ proc initParams(
             let `raw_ptr` = `res`.unsafe_raw_data()
 
           # SIMD ident
-          result.simds.outParams.add newIdentNode($ident & "_simd")
+          result.simds.outParams.add ident($ident & "_simd")
 
 macro compile*(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   ## Lux Compiler backend
@@ -163,60 +165,27 @@ macro compile*(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
 
   # Sanity check on AST produced
   echo "\n############################"
-  echo "Before\n"
-  echo io_ast.treerepr()
-  echo "\n############################"
-  echo "After\n"
-  echo io_ast.passBuildLoops().treerepr()
+  echo "After loop generation\n"
+  let io_ast2 = io_ast.passBuildLoops()
+  echo io_ast2.treerepr()
+  echo "\n############################\n"
 
-  # # We create an inner generic proc on the base type (without Tensor[T])
-  # var genericProc = procDef[0].liftTypes(containerIdent = "Tensor")
+  let kernel = genKernel(
+    arch = ArchGeneric,
+    io_ast2,
+    ids,
+    ids_baseType,
+    resultTy
+  )
 
-  # # We create the inner generic proc
-  # let genericOverload = bodyGen(
-  #   arch = ArchGeneric,
-  #   io_ast = io_ast,
-  #   ids = ids,
-  #   ids_baseType = ids_baseType,
-  #   resultType = resultTy
-  # )
+  echo kernel.treerepr()
+  echo kernel.toStrLit()
 
-  # genericProc[6] = genericOverload   # Assign to proc body
-  # # echo genericProc.toStrLit
-
-  # # We create the inner SIMD proc, specialized to a SIMD architecture
-  # # In the inner proc we shadow the original idents ids.
-  # let simdOverload = bodyGen(
-  #   arch = x86_SSE,
-  #   io_ast = io_ast,
-  #   ids = ids,
-  #   ids_baseType = ids_baseType,
-  #   resultType = resultTy
-  # )
-
-  # var simdProc = procDef[0].liftTypes(
-  #   containerIdent = "Tensor",
-  #   remapping = func(typeNode: NimNode): NimNode {.gcsafe, locks: 0.} = {.noSideEffect.}: SimdMap(x86_SSE, typeNode, simdType)
-  # )
-
-  # simdProc[6] = simdOverload   # Assign to proc body
-  # # echo simdProc.toStrLit
-
-  # # We vectorize the inner proc to apply to an contiguous array
-  # var vecBody: NimNode
-  # vecBody = vectorize(
-  #     procDef[0][0],
-  #     ptrs, simds,
-  #     length,
-  #     x86_SSE, ids_baseType[0] # TODO, only use the inner loop
-  #   )
-
-  # result = procDef.copyNimTree()
-  # let resBody = newStmtList()
+  result = procDef.copyNimTree()
+  let resBody = newStmtList()
   # resBody.add initParams
-  # resBody.add genericProc
-  # resBody.add simdProc
-  # resBody.add vecBody
-  # result[0][6] = resBody
+  resBody.add kernel
 
-  # echo result.toStrLit
+  result[0][6] = resBody
+
+  echo result.toStrLit

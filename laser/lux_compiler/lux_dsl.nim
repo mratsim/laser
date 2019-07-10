@@ -18,7 +18,10 @@ from ./core/lux_types import LuxNode
 when isMainModule:
   import
     sequtils,
-    ../tensor/[datatypes, allocator, initialization]
+    ../tensor/[datatypes, allocator, initialization],
+
+    # TODO: How to bindSym to "[]" / nkBracketExpr
+    ../dynamic_stack_arrays
 
   proc toTensor[T](s: seq[T]): Tensor[T] =
     var size: int
@@ -31,8 +34,14 @@ when isMainModule:
     copyMem(tmp[0].addr, cast[ptr T](t.unsafe_raw_data), t.size * sizeof(T))
     result = $tmp
 
+  proc `[]`[T](t: Tensor[T], idx: varargs[int]): T =
+    # Hack for this example
+    assert t.rank == 2
+    assert idx.len == 2
+    t.storage.raw_buffer[idx[0] * t.strides[0] + idx[1] * t.strides[1]]
+
   # We intentionally have a tricky non-canonical function signature
-  proc foobar(a: LuxNode, b, c: LuxNode): tuple[bar: LuxNode, baz, buzz: LuxNode] =
+  proc foobar(a: LuxNode, b, c: LuxNode): tuple[bar: LuxNode] =
 
     # Domain
     var i, j: LuxNode
@@ -50,4 +59,4 @@ when isMainModule:
     result.bar = bar
 
   generate foobar:
-    proc foobar(a: Tensor[float32], b, c: Tensor[float32]): tuple[bar: Tensor[float32], baz, buzz: Tensor[float32]]
+    proc foobar(a: Tensor[float32], b, c: Tensor[float32]): tuple[bar: Tensor[float32]]

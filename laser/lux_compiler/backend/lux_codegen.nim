@@ -8,7 +8,9 @@ import
   macros, tables,
   # Internal
   ../core/lux_types,
-  ../platforms
+  ../platforms,
+  # Debug
+  ../core/lux_print
 
 # ###########################################
 #
@@ -36,7 +38,7 @@ proc codegen*(
     of FloatImm:
       return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.floatVal))
     of MutTensor, LValTensor:
-      let sym = newIdentNode(ast.symLVal)
+      let sym = ident(ast.symLVal)
       if ast.id in visited:
         return sym
       elif ast.prev_version.isNil:
@@ -46,13 +48,66 @@ proc codegen*(
         visited[ast.id] = sym
         var blck = newStmtList()
         let expression = codegen(ast.prev_version, arch, T, params, visited, blck)
+
         stmts.add blck
-        if not(expression.kind == nnkIdent and eqIdent(sym, expression)):
+        if  not(expression.kind == nnkIdent and eqIdent(sym, expression)):
           stmts.add newAssignment(
-            newIdentNode(ast.symLVal),
+            ident(ast.symLVal),
             expression
           )
-        return newIdentNode(ast.symLVal)
+        return ident(ast.symLVal)
+
+    of AffineFor:
+      if ast.id in visited:
+        return visited[ast.id]
+
+      var
+        forLoop = nnkForStmt.newTree()
+        loopPrologue = newStmtList()
+        loopBody = newStmtList()
+
+      let forLoopRange = nnkInfix.newTree(
+        # TODO - hack - need a proper domain to loop range
+        ident"..",
+        newLit(ast.domain.start.intVal),
+        nnkBracketExpr.newTree(
+          nnkDotExpr.newTree(
+            codegen(ast.domain.stop.tensor, arch, T, params, visited, loopPrologue),
+            ident"shape"
+          ),
+          newLit(ast.domain.stop.axis)
+        )
+      )
+      stmts.add loopPrologue
+
+      discard codegen(ast.affineForBody, arch, T, params, visited, loopBody)
+
+      forLoop.add ident(ast.domain.symDomain)
+      forLoop.add forLoopRange
+      forLoop.add loopBody
+
+      stmts.add forLoop
+
+      let nestedLVal = ident(ast.nestedLVal.symLVal)
+      visited[ast.id] = nestedLVal
+      return nestedLVal
+
+    of Access, MutAccess:
+      if ast.id in visited:
+        return visited[ast.id]
+
+      var preAccessStmt = newStmtList()
+      let tensor = codegen(ast.tensorView, arch, T, params, visited, preAccessStmt)
+      stmts.add preAccessStmt
+
+      var bracketExpr = nnkBracketExpr.newTree()
+      bracketExpr.add tensor
+      for index in ast.indices:
+        bracketExpr.add ident(index.symDomain)
+
+      visited[ast.id] = bracketExpr
+      return bracketExpr
+
     of Assign:
       if ast.id in visited:
         return visited[ast.id]
@@ -75,7 +130,7 @@ proc codegen*(
       # "visited[ast.id] = lhs" is stored
       stmts.add lvalStmt
 
-      lval.expectKind(nnkIdent)
+      lval.expectKind({nnkIdent, nnkBracketExpr})
       if varAssign:
         stmts.add newVarStmt(lval, rval)
       else:
@@ -100,7 +155,6 @@ proc codegen*(
       case ast.binOpKind
       of Add: callStmt.add SimdMap(arch, T, simdAdd)
       of Mul: callStmt.add SimdMap(arch, T, simdMul)
-      # else: raise newException(ValueError, "Unreachable code")
 
       callStmt.add lhs
       callStmt.add rhs
@@ -113,7 +167,7 @@ proc codegen*(
     else:
       raise newException(ValueError, "Unsupported code generation")
 
-proc bodyGen*(
+proc genKernel*(
       arch: SimdArch,
       io_ast: varargs[LuxNode],
       ids: seq[NimNode],
@@ -132,14 +186,14 @@ proc bodyGen*(
         if resultType.kind == nnkTupleTy:
           result.add newAssignment(
             nnkDotExpr.newTree(
-              newIdentNode"result",
+              ident"result",
               ids[i]
             ),
             sym
           )
         else:
           result.add newAssignment(
-            newIdentNode"result",
+            ident"result",
             sym
           )
       else:
@@ -147,14 +201,14 @@ proc bodyGen*(
         if resultType.kind == nnkTupleTy:
           result.add newAssignment(
             nnkDotExpr.newTree(
-              newIdentNode"result",
+              ident"result",
               ids[i]
             ),
             expression
           )
         else:
           result.add newAssignment(
-            newIdentNode"result",
+            ident"result",
             expression
           )
   # TODO: support var Tensor.

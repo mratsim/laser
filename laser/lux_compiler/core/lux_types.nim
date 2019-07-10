@@ -276,6 +276,8 @@ type
       # Represent a for loop
       domain*: LuxNode
       affineForBody*: LuxNode
+      nestedLVal*: LuxNode # for codegen and assigning result
+                           # we need the lval that required the loop
     of AffineIf:
       constraint*: LuxNode
       affineIfBody*: LuxNode

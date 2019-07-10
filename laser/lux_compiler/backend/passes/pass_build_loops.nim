@@ -81,6 +81,15 @@ proc buildLoopsImpl(node: LuxNode, visited: var Table[Id, LuxNode]): LuxNode =
       # domains - now unneeded
     )
 
+    let lvalConcrete = case lval.kind:
+      of LValTensor: lval
+      of Access, MutAccess: lval.tensorView
+      else:
+        raise newException(
+          ValueError,
+          "Found node \"" & $lval.kind & "\" when looking for a l-value"
+        )
+
     # Progressively wrap the assign statement from inner to outer loop
     # TODO: directly use implicit result - https://github.com/nim-lang/Nim/issues/11637
     for domain in node.domains.reverse():
@@ -88,7 +97,8 @@ proc buildLoopsImpl(node: LuxNode, visited: var Table[Id, LuxNode]): LuxNode =
         id: genId(),
         kind: AffineFor,
         domain: domain,
-        affineForBody: innerStmt
+        affineForBody: innerStmt,
+        nestedLVal: lvalConcrete
       )
 
     visited[node.id] = innerStmt
