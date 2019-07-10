@@ -67,7 +67,7 @@ proc assign*(lhs, rhs: LuxNode): LuxNode =
   rhs.searchDomains(domains)
   lhs.searchDomains(domains)
 
-  result.domains = domains.toSeq()
+  result.domains = toSeq(domains)
 
 proc newSym*(symbol: string, rhs: LuxNode): LuxNode =
   # Declare and allocate a new AST symbol

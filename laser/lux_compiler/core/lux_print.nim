@@ -26,14 +26,7 @@ proc toStrLit*(ast: LuxNode): string =
     of Add: return ast.lhs.toStrLit & "+" & ast.rhs.toStrLit
     of Mul: return ast.lhs.toStrLit & "*" & ast.rhs.toStrLit
   of Domain:
-    result = "Domain(iterator: \""
-    result.add ast.symDomain
-    result.add "\", from: "
-    result.add ast.start.toStrLit
-    result.add ", to: "
-    result.add ast.stop.toStrLit
-    result.add ", step: "
-    result.add ast.step.toStrLit
+    result = ast.symDomain
   of InTensor:
     return "In" & $ast.symId
   of MutTensor, LValTensor:
@@ -55,6 +48,18 @@ proc toStrLit*(asts: openarray[LuxNode]): string =
       result.add ", "
     result.add toStrLit(ast)
   result.add ']'
+
+proc shortDomain*(ast: LuxNode): string =
+  assert ast.kind == Domain
+  result = "Domain(symDomain: \""
+  result.add ast.symDomain
+  result.add "\", start: "
+  result.add ast.start.toStrLit
+  result.add ", stop: "
+  result.add ast.stop.toStrLit
+  result.add ", step: "
+  result.add ast.step.toStrLit
+  result.add ')'
 
 proc treeRepr*(ast: LuxNode): string =
   proc inspect(ast: LuxNode, indent: int): string =
@@ -95,7 +100,7 @@ proc treeRepr*(ast: LuxNode): string =
       result.add '\n' & repeat(' ', indent) & "stop \"" & ast.stop.toStrLit & '\"'
       result.add '\n' & repeat(' ', indent) & "step \"" & ast.step.toStrLit & '\"'
     of AffineFor:
-      result.add '\n' & repeat(' ', indent) & ast.domain.toStrLit
+      result.add '\n' & repeat(' ', indent) & ast.domain.shortDomain()
       result.add repeat(' ', indent) &
           inspect(ast.affineForBody, indent)
     else:

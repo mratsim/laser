@@ -154,13 +154,11 @@ proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
     lvalify(t)
 
   # Then update it
-  if t.kind == LValTensor:
-    t = LuxNode(
-      id: genId(),
-      kind: LValTensor,
-      symLVal: t.symLVal,
-      version: t.version + 1,
-      prev_version: assign(
+  var upd_t = LuxNode(id: genId())
+  upd_t.kind = t.kind
+  upd_t.symLVal = t.symLVal
+  upd_t.version = t.version + 1
+  upd_t.prev_version = assign(
         LuxNode(
           id: genId(),
           kind: MutAccess,
@@ -169,23 +167,9 @@ proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
         ),
         expression
       )
-    )
-  else:
-    t = LuxNode(
-      id: genId(),
-      kind: MutTensor,
-      symLVal: t.symLVal,
-      version: t.version + 1,
-      prev_version: assign(
-        LuxNode(
-          id: genId(),
-          kind: MutAccess,
-          tensorView: t,
-          indices: @indices
-        ),
-        expression
-      )
-    )
+
+  # And swap it
+  t = upd_t
 
 macro `[]`*(t: LuxNode, indices: varargs[untyped]): untyped =
   # TODO
