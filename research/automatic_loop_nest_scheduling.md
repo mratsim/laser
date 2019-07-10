@@ -4,73 +4,106 @@
 
 ### Heuristics / Expert-systems
 
-- S. Sioutas, 2019
-  Schedule Synthesis for Halide Pipelines through
+- Schedule Synthesis for Halide Pipelines through
   Reuse Analysis
+
+  _S. Sioutas, 2019_
+
   http://delivery.acm.org/10.1145/3320000/3310248/a10-sioutas.pdf
-- R.T. Mullapudi, 2016
-  Automatically Scheduling Halide Image Processing Pipelines
+
+- Automatically Scheduling Halide Image Processing Pipelines
+
+  _R.T. Mullapudi, 2016_
+
   http://graphics.cs.cmu.edu/projects/halidesched/mullapudi16_halidesched.pdf
 
 ### Machine Learning
 
-- S. Sioutas, 2018
-  Loop Transformations Leveraging Hardware Prefetching
+- Loop Transformations Leveraging Hardware Prefetching
+
+  _S. Sioutas, 2018_
+
   http://www.es.ele.tue.nl/~sander/publications/cgo18.pdf
 
 ### Polyhedral approaches
 
-- T. Zerell, 2019
-  Stripe: Tensor Compilation via the Nested Polyhedral Model
+- Stripe: Tensor Compilation via the Nested Polyhedral Model
+
+  _T. Zerell, 2019_
+
   https://arxiv.org/pdf/1903.06498.pdf
-- J Zhao, thesis, 2019
-  A Combined Language and Polyhedral Approach for
+- A Combined Language and Polyhedral Approach for
   Heterogeneous Parallelism
+
+  _J Zhao, thesis, 2019_
   https://tel.archives-ouvertes.fr/tel-01988073/file/thesis.pdf
-- R. Baghdadi, 2018
-  TIRAMISU: A Polyhedral Compiler for Expressing
+
+- TIRAMISU: A Polyhedral Compiler for Expressing
   Fast and Portable Code
+
+  _R. Baghdadi, 2018_
+
   https://arxiv.org/pdf/1804.10694.pdf
-- M. Ben Romdhane, 2018
-  Extending the Capabilities of Tiramisu
+- Extending the Capabilities of Tiramisu
+
+  _M. Ben Romdhane, 2018_
+
   http://groups.csail.mit.edu/commit/papers/18/thesis_malek.pdf
-- J. Zhao, 2018
-  A General Purpose Automatic Overlapped Tiling
+- A General Purpose Automatic Overlapped Tiling
   Technique in Polyhedral Frameworks
+
+  _J. Zhao, 2018_
+
   https://www.di.ens.fr/~zhaojie/cgo2018-poster-presentation
-- R.T. Mullapudi, 2015
-  PolyMage: Automatic Optimization
+- PolyMage: Automatic Optimization
   for Image Processing Pipelines
+
+  _R.T. Mullapudi, 2015_
+
   http://mcl.csa.iisc.ac.in/polymage/asplos235-mullapudi.pdf
-- D. Wonnacott, 2015
-  Automatic Tiling of “Mostly-Tileable” Loop Nests
+- Automatic Tiling of “Mostly-Tileable” Loop Nests
+
+  _D. Wonnacott, 2015_
+
   http://impact.gforge.inria.fr/impact2015/papers/impact2015-wonnacott.pdf
-- T. Grosser, thesis, 2015
-  A decoupled approach to high-level loop optimization :
+- A decoupled approach to high-level loop optimization :
   tile shapes, polyhedral building blocks and low-level
   compilers
+
+  _T. Grosser, thesis, 2015_
+
   https://tel.archives-ouvertes.fr/tel-01144563/document
-- R. Baghdadi, thesis, 2015
-  Improving Tiling, Reducing Compilation Time, and
+- Improving Tiling, Reducing Compilation Time, and
   Extending the Scope of Polyhedral Compilation
+
+  _R. Baghdadi, thesis, 2015_
+
   https://tel.archives-ouvertes.fr/tel-01270558/document
-- A. Cohen, 2013
-  Split Tiling for GPUs: Automatic Parallelization Using
+- Split Tiling for GPUs: Automatic Parallelization Using
   Trapezoidal Tiles to Reconcile Parallelism and Locality,
   avoiding Divergence and Load Imbalance
+
+  _A. Cohen, 2013_
+
   https://hal.inria.fr/hal-00786812/document
-- U. Bondhugula, 2008
-  A Practical Automatic Polyhedral Parallelizer and
+- A Practical Automatic Polyhedral Parallelizer and
   Locality Optimizer
+
+  _U. Bondhugula, 2008_
+
   http://www.ece.lsu.edu/jxr/Publications-pdf/pldi08.pdf
 
 ### Search approaches
 
-- N. Vasilache, 2018
-  Tensor Comprehensions: Framework-Agnostic
+- Tensor Comprehensions: Framework-Agnostic
   High-Performance Machine Learning Abstractions
+
+  _N. Vasilache, 2018_
+
   https://arxiv.org/pdf/1802.04730.pdf
-- N. Prajapati, 2017
-  Simple, Accurate, Analytical Time Modeling and Optimal
+- Simple, Accurate, Analytical Time Modeling and Optimal
   Tile Size Selection for GPGPU Stencils
+
+  _N. Prajapati, 2017_
+
   https://www.grosser.es/publications/grosser-2017-Simple-Accurate-Analytical-Time-Modeling-and-Optimal-Tile-Size-Selection-for-GPGPU-Stencils.pdf
