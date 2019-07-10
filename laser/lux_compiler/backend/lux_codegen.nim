@@ -42,6 +42,11 @@ proc codegen*(
       if ast.id in visited:
         return sym
       elif ast.prev_version.isNil:
+
+        # TODO - need to add to the list of
+        # buffer to initialize
+        # And we need the size as well
+
         visited[ast.id] = sym
         return sym
       else:
@@ -112,15 +117,6 @@ proc codegen*(
       if ast.id in visited:
         return visited[ast.id]
 
-      var varAssign = false
-
-      # TODO rework to use unique LVal variable
-      if ast.lval.id notin visited and
-            ast.lval.kind == LValTensor and
-            ast.lval.prev_version.isNil and
-            ast.rval.id notin visited:
-          varAssign = true
-
       var rvalStmt = newStmtList()
       let rval = codegen(ast.rval, arch, T, params, visited, rvalStmt)
       stmts.add rvalStmt
@@ -131,10 +127,7 @@ proc codegen*(
       stmts.add lvalStmt
 
       lval.expectKind({nnkIdent, nnkBracketExpr})
-      if varAssign:
-        stmts.add newVarStmt(lval, rval)
-      else:
-        stmts.add newAssignment(lval, rval)
+      stmts.add newAssignment(lval, rval)
       # visited[ast.id] = lhs # Already done
       return lval
 

@@ -178,12 +178,16 @@ macro compile*(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
     resultTy
   )
 
-  echo kernel.treerepr()
   echo kernel.toStrLit()
 
   result = procDef.copyNimTree()
   let resBody = newStmtList()
   # resBody.add initParams
+
+  let bar = ident"bar"
+  resBody.add quote do:
+    var `bar` = newTensor[a.T](a.shape[0], a.shape[1])
+
   resBody.add kernel
 
   result[0][6] = resBody

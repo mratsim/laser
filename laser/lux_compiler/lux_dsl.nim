@@ -23,12 +23,6 @@ when isMainModule:
     # TODO: How to bindSym to "[]" / nkBracketExpr
     ../dynamic_stack_arrays
 
-  proc toTensor[T](s: seq[T]): Tensor[T] =
-    var size: int
-    initTensorMetadata(result, size, [s.len])
-    allocCpuStorage(result.storage, size)
-    result.copyFromRaw(s[0].unsafeAddr, s.len)
-
   proc `$`[T](t: Tensor[T]): string =
     var tmp = newSeq[T](t.size)
     copyMem(tmp[0].addr, cast[ptr T](t.unsafe_raw_data), t.size * sizeof(T))
@@ -39,6 +33,13 @@ when isMainModule:
     assert t.rank == 2
     assert idx.len == 2
     t.storage.raw_buffer[idx[0] * t.strides[0] + idx[1] * t.strides[1]]
+
+  proc `[]=`[T](t: Tensor[T], idx: varargs[int], val: T) =
+    # Hack for this example
+    assert t.rank == 2
+    assert idx.len == 2
+    t.storage.raw_buffer[idx[0] * t.strides[0] + idx[1] * t.strides[1]] = val
+
 
   # We intentionally have a tricky non-canonical function signature
   proc foobar(a: LuxNode, b, c: LuxNode): tuple[bar: LuxNode] =
@@ -60,3 +61,17 @@ when isMainModule:
 
   generate foobar:
     proc foobar(a: Tensor[float32], b, c: Tensor[float32]): tuple[bar: Tensor[float32]]
+
+  let
+    u = [[float32 1, 1, 1],
+         [float32 1, 1, 1],
+         [float32 1, 1, 1]].toTensor()
+    v = [[float32 2, 2, 2],
+         [float32 2, 2, 2],
+         [float32 2, 2, 2]].toTensor()
+    w = [[float32 3, 3, 3],
+         [float32 3, 3, 3],
+         [float32 3, 3, 3]].toTensor()
+
+  let r = foobar(u, v, w)
+  echo r
