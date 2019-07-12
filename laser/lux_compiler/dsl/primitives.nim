@@ -87,7 +87,7 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
   checkMutable(a)
 
   # If LHS does not have a memory location, attribute one
-  if a.kind notin {MutTensor, LValTensor}:
+  if a.kind notin {MutTensor, LValTensor, MutAccess}:
     lvalify(a)
 
   # Then create the new node
