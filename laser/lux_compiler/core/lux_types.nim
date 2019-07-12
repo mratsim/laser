@@ -64,13 +64,138 @@
 #   In Lux there is no context, all computations needed for the results are carried
 #   by the results and dead code eliminated by construction.
 
-# ###########################################
-#
-#         Internal Graph Representation
-#
-# ###########################################
+## # Overview of Lux
+##
+## Lux is a Domain-Specific Language (DSL) embedded in Nim.
+## It provides a high-level expressive language to represent
+## algorithms that work on multi-dimensional constructs,
+## scalars, vectors, matrices and their generalisations, ndarrays/tensors.
+##
+## Lux allows you to schedule those algorithms and compose their schedules
+## to best use your hardware: parallelizing, vectorizing, unrolling, tiling, prefetching, ...
+##
+## In the rest of the overview we will use the term tensor interchangeably with
+##   - vectors, 1d tensors indexed like A[i]
+##   - matrices, 2d tensors indexed like B[i, j]
+##   - ndarrays, n-d tensors indexed like C[i, j, k, l]
+##
+## ## Types and data structures
+##
+## Let's dive into Lux from the high-level to the nitty gritty details.
+##
+## But first we need to introduce `LuxNode`. `LuxNode` is a basic block in Lux.
+## It can represent a scalar parameter, a tensor, an addition, anything that can
+## or will be used in Lux, be it a function or a symbolic parameter.
+##
+## Lux is separated in a front-end, a nice DSL language that generates LuxNode
+## and specifies scheduling directives (like parallelize this computation),
+## and a backend that compiles LuxNode to a target, currently Nim code.
+##
+## ### Kernels
+##
+## At the top-level of Lux we have kernels. Kernels are Nim procedures that work
+## on concrete Nim types or on `LuxNode`. This means that we can compose symbolic kernels.
+##
+## ### Functions
+##
+## Inside a lux kernel, we mainly use `Function`. It represents a symbolic computation
+## done on tensor elements and scalars.
+##
+## #### Function Definition
+##
+## A function definition requires point/element coordinates as parameters and an expression.
+## For example, a function that set all elements of a 2d matrix to 1 would be
+##
+## ..code::nim
+##   A(i, j) := 1
+##
+## Functions can be composed
+##
+## ..code::nim
+##   B(i, j) := A(i, j)
+##
+## Note: All tensors have an implicit operator `()` defined
+##       that corresponds to their access `[]` operator
+##
+##       ..code::nim
+##         A(i, j) := A[i, j] # if A is a tensor/matrix
+##
+##       This allows composition of functions across kernels
+##       as functions do not have a `[]` operator defined by default.
+##
+## The syntax is similar to Einstein summation and implicit for-loops are inferred
+## from the indices used.
+##
+## For example a matrix multiplication would be:
+##   C(i, j) := A[i, k] * B[k, j]
+##
+## The loops i, j, k are implicit.
+##
+## Element-wise operations on a whole tensor can use the wildcard symbol "_"
+##   C[_] := A[_] * B[_]
+##
+## Lux functions are able to represent in-place updates as well, any in-place operator can be used
+## instead of `:=`
+##
+## For example:
+##
+## ..code::nim:
+##   A(i, j) := 1
+##   A(i, j) += 10
+##
+## Internally the A function will keep track of the multiple versions of its definition.
+## Each version are referred to as `Phase` and can be scheduled freely.
+##
+## #### Function schedule
+##
+## Automatic optimisations for the heavily nested-loop in deep learning
+## that takes into account architecture differences (cache size, NUMA sockets, SIMDS, CPUs, GPUs, ...)
+## is still difficult and often time-consuming
+## if offered by an application (polyhedral compilers and auto-tuners).
+##
+## Traditional compilers are significantly lagging behind those applications or hand-written kernels.
+##
+## Hand-written kernels are difficult to write and quite error-prone.
+## This is exacerbated in cases like writing function derivatives.
+##
+## Lux offers a middle-ground:
+##   - a declarative language to easily define a function.
+##   - scheduling primitives that enable fearless loop optimizations:
+##       - nested parallelism, tiling, vectorization, loop fusion at any nest level, loop distribution, ...
+##
+## TODO: scheduling language
+##
+## ### AST transformation passes
+##
+##   0. A Function is defined on LuxNodes.
+##      A schedule is optionally attached to them.
+##
+##   0 bis. If rewrite-rules are defined at the LuxNode level like exp(ln(x)) or fused-multiply-add.
+##          They are applied automatically by the Nim compiler.
+##
+##   1. Function is then symbolically executed at compile-time (and in the future runtime).
+##      This eliminates dead code and construct a Lux AST for each output or mutated symbols.
+##
+##   2. The AST contains high-level representation of array access patterns.
+##
+##   3. An inference pass is done to infer tensor ranks and shapes.
+##
+##   4. A lowering pass transforms assignment into affine loops over the relevant iteration domains.
+##
+##   5. A schedule pass will apply the desired schedule on those loops.
+##      At the start, the schedule will not be checked for validity regarding data dependencies.
+##
+##   6. Nim AST will be generated from the low-level Lux AST at compile-time.
+##      In the future, LLVM IR or MLIR will be generated instead at runtime.
 
 type
+
+  # ###########################################
+  #
+  #         Internal Graph Representation
+  #
+  # ###########################################
+
   UnaryOpKind* = enum
     Ln
     Exp
@@ -89,65 +214,7 @@ type
     ## Computation Graph / Abstract Syntax Tree nodes
     ## that represents a Lux computation.
     ##
-    ## ### Function definition
-    ##
-    ## A function definition uses Lux nodes.
-    ##
-    ## The function definition mixes iteration domains, tensor accesses and operations.
-    ## It symbolically represents the computation done with a syntax
-    ## similar to Einstein summation and implicit for-loops that are inferred from the indices used.
-    ##
-    ## For example a matrix multiplication would be:
-    ##   C[i, j] := A[i, k] * B[k, j]
-    ##
-    ## The loops i, j, k are implicit.
-    ##
-    ## Operations are done on symbolic scalars.
-    ## Tensors rank will be inferred from the access pattern.
-    ##
-    ## Element-wise operations on a whole tensor can use "_"
-    ##   C[_] := A[_] * B[_]
-    ##
-    ## The operator `:=` is a shorthand for defining the tensors and indices used (if not defined)
-    ## And then doing the symbolic computation.
-    ##
-    ## ### Function schedule
-    ##
-    ## Automatic optimisations for the heavily nested-loop in deep learning
-    ## that takes into account architecture differences (cache size, NUMA sockets, SIMDS, CPUs, GPUs, ...)
-    ## is still difficult and often time-consuming
-    ## if offered by an application (polyhedral compilers, auto-tuners).
-    ## Traditional compilers are significantly lagging behind those applications or hand-written kernels.
-    ## Hand-written kernels are difficult to write and quite error-prone.
-    ## This is exacerbated in cases like writing function derivatives.
-    ##
-    ## Lux offers a middle-ground:
-    ##   - a declarative language to easily define a function.
-    ##   - scheduling primitives that enable fearless loop optimizations:
-    ##       - nested parallelism, tiling, vectorization, loop fusion at any nest level, loop distribution, ...
-    ##
-    ## ### AST transformation passes
-    ##
-    ##   0. Function is defined on LuxNodes.
-    ##      A schedule is optionally attached to l-value symbols (on the left-side of an assignment).
-    ##
-    ##   0 bis. If rewrite-rules are defined at the LuxNode level like exp(ln(x)) or fused-multiply-add.
-    ##          They are applied automatically by the Nim compiler
-    ##
-    ##   1. Function is then symbolically executed at compile-time (and in the future runtime).
-    ##      This eliminates dead code and construct a Lux AST for each output or mutated symbols.
-    ##
-    ##   2. The AST contains high-level representation of array access patterns.
-    ##
-    ##   3. An inference pass is done to infer tensor ranks and shapes.
-    ##
-    ##   4. A lowering pass transforms assignment into affine loops over the relevant iteration domains.
-    ##
-    ##   5. A schedule pass will apply the desired schedule on those loops.
-    ##      At the start, the schedule will not be checked for validity regarding data dependencies.
-    ##
-    ##   6. Nim AST will be generated from the low-level Lux AST at compile-time.
-    ##      In the future, LLVM IR or MLIR will be generated instead at runtime.
+
 
     # ############################################
     #
