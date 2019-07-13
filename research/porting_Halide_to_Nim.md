@@ -172,7 +172,9 @@ Processing Applications
 - DeepDSL (Scala): A Compilation-based Domain-Specific Language for Deep Learning
   - https://github.com/deepdsl/deepdsl
   - https://openreview.net/pdf?id=Bks8cPcxe
-
+- Lift (Scala): A Functional Data-Parallel IR for
+High-Performance GPU Code Generation
+  - https://www.lift-project.org/publications/2017/steuwer17LiftIR.pdf
 
 ### Auto-scheduling - Polyhedral tiling
 
