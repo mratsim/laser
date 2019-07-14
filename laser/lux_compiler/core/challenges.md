@@ -207,3 +207,47 @@ proc gru_cell(
 
 And now we need to add a timestep/sequence and a layer dimension
 for full blown GRU
+
+## Parallel vectorized reduction
+
+As shown in other modules of Laser to saturate memory bandwidth with reduction, first it needs to be associative.
+
+Then we need to create extra accumulators (i.e. unrolling), potentially SIMD accumulators, then we need to loop on those.
+
+Finally we need to merge the temporary results across threads.
+
+This poses a couple of difficulties:
+
+- We declare a global accumulator visible from each threads
+- We declare a local accumulator per thread
+- Each accumulator must be initialized with a neutral element:
+  - 0 for addition
+  - 1 for multiplication
+  - -Inf for max
+  - +Inf for min
+  - (-1, -Inf) for argmax
+- Each thread is distributed a contiguous chunk of work
+- If vectorized we need a simd level implementation
+  of the reduction to merge results for example
+  ```Nim
+  template m128_reduction(op_name, scalar_op, vector_op: untyped) =
+    func op_name*(vec: m128): m128 {.inline.}=
+      ## Reduce packed packed 4xfloat32
+      let shuf = mm_movehdup_ps(vec)
+      let sums = vector_op(vec, shuf)
+      let shuf2 = mm_movehl_ps(sums, sums)
+      result = scalar_op(sums, shuf2) # .mm_cvtss_f32
+
+  m128_reduction(sum_ps_sse3, mm_add_ss, mm_add_ps)
+  m128_reduction(max_ps_sse3, mm_max_ss, mm_max_ps)
+  m128_reduction(min_ps_sse3, mm_min_ss, mm_min_ps)
+  ```
+- Threads are joined, local accumulators are merged across threads
+  within a critical section or using atomics or locks.
+
+## Argmax
+
+## Softmax / Softmax_cross_entropy / logsumexp
+
+## Lookup tables / Embedding / SParse Matrix-Vector Multiplication
+
