@@ -245,9 +245,16 @@ This poses a couple of difficulties:
 - Threads are joined, local accumulators are merged across threads
   within a critical section or using atomics or locks.
 
+## Convolution padding
+
+Need to support:
+
+- "valid" (no padding, truncate the image)
+- "same" (pad with zero so that outputs has the same size has input)
+- "causal" for dilated temporal convolution
+
 ## Argmax
 
 ## Softmax / Softmax_cross_entropy / logsumexp
 
 ## Lookup tables / Embedding / SParse Matrix-Vector Multiplication
-
