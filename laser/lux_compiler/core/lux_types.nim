@@ -7,7 +7,7 @@ type
 
   # ###########################################
   #
-  #         Internal Graph Representation
+  #         Internal AST Representation
   #
   # ###########################################
 
@@ -149,6 +149,69 @@ type
     # To design
     # ScAffinity --> NUMA, multi-socket, multiGPU affinity
 
+  # ###########################################
+  #
+  #         High-level data structures
+  #
+  # ###########################################
+
+  Iter* = object
+    symbol*: string
+    start*, stop*, step*: LuxNode
+
+  FuncOutputKind* = enum
+    foScalar
+    foTensor
+
+  Function* = ref object
+    ## Main datastructure of Lux
+    ## A function can be redefined to represent mutation
+    ## Each redefinition called a stage.
+    ## A function can represent a Tensor, a Scalar,
+    ## or a sequence of transformations applied to them.
+    ## Those transformations can be scheduled at the global function level
+    ## and at the stage level.
+    ##
+    ## The first initial stage must define a default value
+    ## on the whole domain
+    stages*: seq[Stage]
+    schedule*: FunctionSchedule
+    outputKind*: FuncOutputKind
+
+  Call* = ref object
+    ## Object created when indexing a Function
+    ## with A[i,j] or A[i,j] = expression
+    # Must be ref object to live long enough for
+    # assignation
+    function*: Function
+    params*: seq[LuxNode]
+
+  Stage* = ref object
+    ## A unique definition of a function
+    definition*: LuxNode
+    params*: seq[LuxNode]
+      # domain or specific location to apply this phase
+    recurrence*: seq[LuxNode]
+      # Stage is repeated on a non-spatial domain, i.e.
+      # the iteration domain does not appear on neither the LHS or RHS assignment
+      # for example a Gauss-Seidel Smoother with the time domain t:
+      # ------------------------------------
+      #   for t in 0 ..< timeSteps:
+      #     for i in 1 ..< N-1:
+      #       for j in 1 ..< N-1:
+      #         A[i][j] = 0.25 * (A[i][j-1] * # left
+      #                           A[i][j+1] * # right
+      #                           A[i-1][j] * # top
+      #                           A[i+1][j])  # bottom
+    condition*: LuxNode
+      # wrapped in a
+      # if(condition):
+      #   A(i, j) = ...
+    schedule*: StageSchedule
+
+  StageSchedule* = ref object
+  FunctionSchedule* = ref object
+
 # ###########################################
 #
 #            Base procs and consts
@@ -166,6 +229,9 @@ proc `[]=`*(node: LuxNode, idx: int, val: LuxNode) =
 
 proc len*(node: LuxNode): int =
   node.children.len
+
+proc add*(node: LuxNode, val: LuxNode) =
+  node.children.add val
 
 # ###########################################
 #
