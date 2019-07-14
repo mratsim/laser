@@ -27,33 +27,3 @@ proc genId*(): int =
     luxNodeRngCT.rand(high(int))
   else:
     luxNodeRngRT.rand(high(int))
-
-const ScalarExpr = {
-            IntImm, FloatImm, IntParam, FloatParam,
-            IntMut, FloatMut, IntLVal, FloatLVal,
-            BinOp,
-            Access, Shape, Domain
-          }
-
-func checkScalarExpr*(targetOp: string, input: LuxNode) =
-  # TODO - mapping LuxNode -> corresponding function
-  # for better errors as LuxNode are "low-level"
-  if input.kind notin ScalarExpr:
-    raise newException(
-      ValueError,
-      "Invalid scalar expression \"" & $input.kind & "\"\n" &
-      "Only the following LuxNodes are allowed:\n    " & $ScalarExpr &
-      "\nfor building a \"" & targetOp & "\" function."
-      # "\nOrigin: " & $node.lineInfo
-    )
-
-func checkMutable*(node: LuxNode) =
-  # TODO
-  discard
-
-func checkTensor*(node: LuxNode) =
-  if node.kind notin {InTensor, LValTensor, MutTensor}:
-    raise newException(
-      ValueError,
-      "Invalid tensor node \"" & $node.kind & "\""
-    )

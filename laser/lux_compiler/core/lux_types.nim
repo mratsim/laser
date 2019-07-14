@@ -51,18 +51,22 @@ type
     Domain      # Iteration Domain
 
     # Scalar expressions built-ins
-    BinOp       # Built-in binary operations
+    BinOpKind   # Built-in binary operations
+    BinOp       #
 
     # Tensor/Function spatial indexing and properties
-    Index       # Access a single element of a Tensor/Func
+    Access      # Access a single element of a Tensor/Func
     Shape       # Tensor/Func shape
 
-    # ISA runtime characteristics
-    CpuInfo     # CPUInfo function call
+    # Extern Function Calls
+    ExternCall  # Extern function call like CPUInfo
 
     # ################### Statements #########################
     # Statements are generate when the high-level functional AST
     # is lowered to an AST that more closely match Nim's AST.
+
+    # General statement
+    Statement
 
     # Scalar statements
     Assign
@@ -104,13 +108,7 @@ type
     of IntParam, FloatParam:
       symParam*: string
     of Func:
-      function: Function
-    of BinOp:
-      binOpKind*: BinaryOpKind
-      lhs*, rhs*: LuxNode
-    of Shape:
-      tensor*: LuxNode
-      axis*: int
+      function*: Function
     of Domain:
       # Domain represents an iteration domain.
       # During execution its value corresponds to the iteration index value
@@ -124,22 +122,10 @@ type
       # This might change as Nim is inclusive and polyhedral representation
       # uses inclusive constraints.
       iter*: Iter
-    of AffineFor:
-      # Represent a for loop
-      domain*: Iter
-      affineForBody*: LuxNode
-    of AffineIf:
-      # Represent an if around an assignment
-      # It should only be an affine combination of iterators
-      # and run-time invariant IntParameters to allow
-      # polyhedral optimizations, for example to schedule non-rectangular loops.
-      constraint*: LuxNode
-      affineIfBody*: LuxNode
-    of CpuInfo:
-      # Extern function call
-      # Only supports proc with no arguments
-      # as it is only needed for CPUInfo
-      symFunc*: string
+    of BinOpKind:
+      bopKind*: BinaryOpKind
+    else:
+      children: seq[LuxNode]
 
   ScheduleKind* = enum
     ScReduce
@@ -162,6 +148,24 @@ type
     #
     # To design
     # ScAffinity --> NUMA, multi-socket, multiGPU affinity
+
+# ###########################################
+#
+#            Base procs and consts
+#
+# ###########################################
+
+const LuxExpr* = {IntImm..Domain}
+const LuxStmt* = {AffineFor, AffineIf}
+
+proc `[]`*(node: LuxNode, idx: int): var LuxNode =
+  node.children[idx]
+
+proc `[]=`*(node: LuxNode, idx: int, val: LuxNode) =
+  node.children[idx] = val
+
+proc len*(node: LuxNode): int =
+  node.children.len
 
 # ###########################################
 #
