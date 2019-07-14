@@ -28,53 +28,48 @@ type
   LuxNodeKind* = enum
     ## Computation Graph / Abstract Syntax Tree nodes
     ## that represents a Lux computation.
-    ##
 
+    # Order is important to separate Expression from statements
 
-    # ############################################
-    #
-    #             High-level AST
-    #
-    # ############################################
+    # ################### High-level #########################
+    # Functions are the high-level concepts of Lux
+
+    # Scalars, Tensors, Chained Functions
+    Func        # Everything is a function
+                # to promote composability
+
+    # ################### Expressions #########################
 
     # Scalar invariants
-    IntImm        # Integer immediate (known at compile-time)
-    FloatImm      # Float immediate (known at compile-time)
-    IntParam      # Integer environment parameter (known at run-time, invariant during function execution)
-    FloatParam    # Float environment parameter (known at run-time, invariant during function execution)
+    IntImm      # Integer immediate (known at compile-time)
+    FloatImm    # Float immediate (known at compile-time)
+    IntParam    # Integer environment parameter (known at run-time, invariant during function execution)
+    FloatParam  # Float environment parameter (known at run-time, invariant during function execution)
+    BoolParam   # Bool environment parameter (known at run-time, invariant during function execution)
 
-    # Mutable scalars
-    IntMut
-    FloatMut
-    IntLVal
-    FloatLVal
+    # Affine loop expression
+    Domain      # Iteration Domain
 
     # Scalar expressions built-ins
     BinOp       # Built-in binary operations
 
-    # Tensor Symbols
-    InTensor    # InTensor tensor node
-    MutTensor   # Mutable output tensor node
-    LValTensor  # Temporary allocated node
+    # Tensor/Function spatial indexing and properties
+    Index       # Access a single element of a Tensor/Func
+    Shape       # Tensor/Func shape
 
-    # Tensor access and properties
-    Access      # Tensor access
-    Shape       # Tensor shape
+    # ISA runtime characteristics
+    CpuInfo     # CPUInfo function call
+
+    # ################### Statements #########################
+    # Statements are generate when the high-level functional AST
+    # is lowered to an AST that more closely match Nim's AST.
 
     # Scalar statements
-    Assign      # Assignment statement
-    MutAccess   # `[]=` assignment
+    Assign
 
-    # ############################################
-    #
-    #             Mid-level AST
-    #
-    # ############################################
-
-    # Affine statements
+    # Affine loop statements
     AffineFor   # Affine for loop
     AffineIf    # Affine if
-    Domain      # Iteration Domain
 
     # Affine statements:
     # - for/if constraints are a linear expression of
@@ -95,17 +90,6 @@ type
     #       - This will also allows branching depending of
     #         fraction if CPU/GPU charatectristics like cache or TLB size
 
-    # ############################################
-    #
-    #             Low-level AST
-    #
-    # ############################################
-
-    # ISA runtime characteristics
-    CpuInfo     # CPUInfo function call
-
-    # Control-Flow
-    IfElifElse  # Restrict to function invariants?
 
   Id* = int
 
@@ -113,30 +97,17 @@ type
     id*: Id
 
     case kind*: LuxNodeKind
-    of InTensor, IntParam, FloatParam:
-      ast*: LuxNode               # If nil, it uses symId
-      symId*: int
-    of MutTensor, LValTensor, IntMut, FloatMut, IntLVal, FloatLVal:
-      symLval*: string            # TODO MutTensor should probably use symId
-      version*: int
-      prev_version*: LuxNode      # Persistent data structure
     of IntImm:
       intVal*: int
     of FloatImm:
       floatVal*: float
-    of Assign:
-      lval*, rval*: LuxNode
-      domains*: seq[LuxNode]
-        # Nested loops needed to construct this assignment
-        # Approximatively ordered from outermost to innermost
-        # Inner dimension of the lhs is always last.
-        # As prefetching for write operations is more expensive.
+    of IntParam, FloatParam:
+      symParam*: string
+    of Func:
+      function: Function
     of BinOp:
       binOpKind*: BinaryOpKind
       lhs*, rhs*: LuxNode
-    of Access, MutAccess:
-      tensorView*: LuxNode
-      indices*: seq[LuxNode]
     of Shape:
       tensor*: LuxNode
       axis*: int
@@ -152,15 +123,16 @@ type
       # We usually steps from 0 to N with N the dimension of a tensor axis.
       # This might change as Nim is inclusive and polyhedral representation
       # uses inclusive constraints.
-      symDomain*: string
-      start*, stop*, step*: LuxNode
+      iter*: Iter
     of AffineFor:
       # Represent a for loop
-      domain*: LuxNode
+      domain*: Iter
       affineForBody*: LuxNode
-      nestedLVal*: LuxNode # for codegen and assigning result
-                           # we need the lval that required the loop
     of AffineIf:
+      # Represent an if around an assignment
+      # It should only be an affine combination of iterators
+      # and run-time invariant IntParameters to allow
+      # polyhedral optimizations, for example to schedule non-rectangular loops.
       constraint*: LuxNode
       affineIfBody*: LuxNode
     of CpuInfo:
@@ -168,9 +140,6 @@ type
       # Only supports proc with no arguments
       # as it is only needed for CPUInfo
       symFunc*: string
-    of IfElifElse:
-      # Represent if f0: .. elif f1: .. elif ... else:
-      ifBranches*: seq[LuxNode]
 
   ScheduleKind* = enum
     ScReduce
