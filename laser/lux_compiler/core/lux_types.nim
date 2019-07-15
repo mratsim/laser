@@ -41,8 +41,8 @@ type
     # ################### Expressions #########################
 
     # Scalar invariants
-    IntImm      # Integer immediate (known at compile-time)
-    FloatImm    # Float immediate (known at compile-time)
+    IntLit      # Integer immediate (known at compile-time)
+    FloatLit    # Float immediate (known at compile-time)
     IntParam    # Integer environment parameter (known at run-time, invariant during function execution)
     FloatParam  # Float environment parameter (known at run-time, invariant during function execution)
     BoolParam   # Bool environment parameter (known at run-time, invariant during function execution)
@@ -56,7 +56,7 @@ type
 
     # Tensor/Function spatial indexing and properties
     Access      # Access a single element of a Tensor/Func
-    Shape       # Tensor/Func shape
+    DimSize     # Get the size of one of the Tensor/Func dimensions
 
     # Extern Function Calls
     ExternCall  # Extern function call like CPUInfo
@@ -101,9 +101,9 @@ type
     id*: Id
 
     case kind*: LuxNodeKind
-    of IntImm:
+    of IntLit:
       intVal*: int
-    of FloatImm:
+    of FloatLit:
       floatVal*: float
     of IntParam, FloatParam:
       symParam*: string
@@ -155,9 +155,18 @@ type
   #
   # ###########################################
 
-  Iter* = object
+  Iter* = ref object
     symbol*: string
     start*, stop*, step*: LuxNode
+
+  InvariantKind = enum
+    ikInt
+    ikFloat
+
+  Invariant* = ref object
+    ## Runtime invariant inputs once a kernel is called
+    kind*: InvariantKind
+    symbol*: string
 
   FuncOutputKind* = enum
     foScalar
@@ -218,7 +227,7 @@ type
 #
 # ###########################################
 
-const LuxExpr* = {IntImm..Domain}
+const LuxExpr* = {IntLit..Domain}
 const LuxStmt* = {AffineFor, AffineIf}
 
 proc `[]`*(node: LuxNode, idx: int): var LuxNode =
@@ -232,6 +241,30 @@ proc len*(node: LuxNode): int =
 
 proc add*(node: LuxNode, val: LuxNode) =
   node.children.add val
+
+proc newTree*(kind: LuxNodeKind, args: varargs[LuxNode]): LuxNode =
+  new result
+  result.kind = kind
+  result.children = @args
+
+proc newLux*(lit: int): LuxNode =
+  LuxNode(kind: IntLit, intVal: lit)
+
+proc newLux*(lit: float): LuxNode =
+  LuxNode(kind: FloatLit, floatVal: lit)
+
+proc newLux*(invariant: Invariant): LuxNode =
+  case invariant.kind:
+  of ikInt:
+    LuxNode(kind: IntParam, symParam: invariant.symbol)
+  of ikFLoat:
+    LuxNode(kind: FloatParam, symParam: invariant.symbol)
+
+proc newLux*(function: Function): LuxNode =
+  LuxNode(kind: Func, function: function)
+
+proc newLux*(domain: Iter): LuxNode =
+  LuxNode(kind: Domain, iter: domain)
 
 # ###########################################
 #

@@ -18,42 +18,12 @@ import
 #
 # ###########################################
 
-template newLuxMutTensor*(t: untyped) =
-  t = LuxNode(
-      id: genId(),
-      kind: MutTensor,
-      symLVal: t.astToStr
-    )
-
-template newLuxIterDomain*(index: untyped) =
-  index = LuxNode(
-      id: genId(),
-      kind: Domain,
-      symDomain: index.astToStr
-    )
-
-proc shape*(t: LuxNode, axis: int): LuxNode =
+proc dim_size*(t: LuxNode, axis: int): LuxNode =
   LuxNode(
-    kind: Shape,
+    kind: DimSize,
     tensor: t,
     axis: axis
   )
-
-template newLuxIterDomain*(index: untyped, start_iter: static int, stop_iter: LuxNode) =
-  index = LuxNode(
-      id: genId(),
-      kind: Domain,
-      symDomain: index.astToStr,
-      start: LuxNode(
-        kind: IntImm,
-        intVal: start_iter
-      ),
-      stop: stop_iter,
-      step: LuxNode(
-        kind: IntImm,
-        intVal: 1
-      )
-    )
 
 proc `+`*(a, b: LuxNode): LuxNode =
   checkScalarExpr("Add", a)
@@ -103,41 +73,25 @@ proc `+=`*(a: var LuxNode, b: LuxNode) =
   # And swap it
   a = upd_a
 
-
-proc at(t: LuxNode, indices: varargs[LuxNode]): LuxNode =
+proc `[]`*(t: Function, indices: varargs[untyped]): untyped =
   ## Access a tensor
   ## For example
   ##   - A[i, j, k] on a rank 3 tensor
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
+  # TODO
+  # Handle the "_" joker for whole dimension
 
-  checkTensor(t)
-  LuxNode(
-      id: genId(),
-      kind: Access,
-      tensorView: t,
-      indices: @indices
-  )
 
-proc at(t: var LuxNode, indices: varargs[LuxNode]): var LuxNode =
-  ## Access a tensor, returns a mutable element
+proc `[]`*(t: var Function, indices: varargs[untyped]): untyped =
+  ## Access a tensor
   ## For example
   ##   - A[i, j, k] on a rank 3 tensor
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
-  ##
-  ## Used for A[i, j] += foo(i, j)
+  # TODO
+  # Handle the "_" joker for whole dimension
 
-  checkTensor(t)
-  checkMutable(t)
-  t = LuxNode(
-      id: genId(),
-      kind: MutAccess,
-      tensorView: t,
-      indices: @indices
-  )
-  return t
-
-proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
-  ## Mutate a tensor element
+proc `[]=`*(t: var Function, indicesAndExpr: varargs[untyped]): untyped =
+  ## Mutate a Func/tensor element
   ## at specified indices
   ##
   ## For example
@@ -145,46 +99,5 @@ proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
   ##
   ## Used for A[i, j] = foo(i, j)
-
-  checkTensor(t)
-  checkMutable(t)
-
-  # If LHS does not have a memory location, attribute one
-  if t.kind notin {MutTensor, LValTensor}:
-    lvalify(t)
-
-  # Then update it
-  var upd_t = LuxNode(id: genId())
-  upd_t.kind = t.kind
-  upd_t.symLVal = t.symLVal
-  upd_t.version = t.version + 1
-  upd_t.prev_version = assign(
-        LuxNode(
-          id: genId(),
-          kind: MutAccess,
-          tensorView: t,
-          indices: @indices
-        ),
-        expression
-      )
-
-  # And swap it
-  t = upd_t
-
-macro `[]`*(t: LuxNode, indices: varargs[untyped]): untyped =
   # TODO
   # Handle the "_" joker for whole dimension
-  result = newCall(bindSym"at", t)
-  indices.copyChildrenTo result
-
-macro `[]=`*(t: var LuxNode, indicesAndExpr: varargs[untyped]): untyped =
-  # Handle varargs[untyped] consume everything
-  var indices = indicesAndExpr
-  let expression = indices.pop()
-
-  # TODO
-  # Handle the "_" joker for whole dimension
-
-  result = newCall(bindSym"at_mut", t)
-  indices.copyChildrenTo result
-  result.add expression
