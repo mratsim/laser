@@ -34,8 +34,8 @@ proc genId*(): int =
 #
 # ###########################################
 
-const LuxExpr* = {IntLit..Domain}
-const LuxStmt* = {AffineFor, AffineIf}
+const LuxExpr* = {IntLit..DimSize}
+const LuxStmt* = {Statement..AffineIf}
 
 proc `[]`*(node: LuxNode, idx: int): var LuxNode =
   node.children[idx]

@@ -17,19 +17,22 @@ import
 #
 # ###########################################
 
-# proc inputTensor(paramId: int): LuxNode =
-#   LuxNode(
-#     id: genId(),
-#     kind: InTensor, symId: paramId
-#   )
+proc inputFunction(funcIdent: NimNode): NimNode =
+  nnkObjConstr.newTree(
+    ident"Function",
+    nnkExprColonExpr.newTree(
+      ident"symbol",
+      newLit $funcIdent
+    )
+  )
 
 proc symbolicExecStmt*(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outputSyms, stmts: var NimNode) =
   # Allocate inputs
-  # for i, in_ident in inputSyms:
-  #   stmts.add newLetStmt(
-  #     ct(in_ident),
-  #     newCall(bindSym"inputTensor", newLit i)
-  #   )
+  for i, in_ident in inputSyms:
+    stmts.add newLetStmt(
+      ct(in_ident),
+      inputFunction(in_ident)
+    )
 
   # Call the AST routine
   let call = newCall(ast, inputSyms)

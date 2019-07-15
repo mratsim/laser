@@ -80,8 +80,6 @@ proc `[]`*(function: var Function, indices: varargs[Iter]): Call =
   for iter in indices:
     result.params.add newLux(iter)
 
-  result.allow_mutation = true
-
 proc `[]=`*(
         function: var Function,
         indices: varargs[Iter],
@@ -103,7 +101,7 @@ proc `[]=`*(
 
   let stageId = function.stages.len
   # if stageId = 0: assert that indices are the full function domain.
-
+  function.stages.setLen(stageId+1)
   new function.stages[stageId]
   for iter in indices:
     function.stages[stageId].params.add newLux(iter)

@@ -183,10 +183,19 @@ type
     ##
     ## The first initial stage must define a default value
     ## on the whole domain
+    #
+    # For symbolic execution, the initial input tensors
+    # will be created as Function with no stages at all.
     symbol*: string
     stages*: seq[Stage]
     schedule*: FunctionSchedule
     outputKind*: FuncOutputKind
+
+  # ###########################################
+  #
+  #         Low-level data structures
+  #
+  # ###########################################
 
   Call* = ref object
     ## Object created when indexing a Function
@@ -195,7 +204,6 @@ type
     # assignation
     function*: Function
     params*: seq[LuxNode]
-    allow_mutation*: bool
 
   Stage* = ref object
     ## A unique definition of a function
