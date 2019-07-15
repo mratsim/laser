@@ -7,8 +7,9 @@ import
   # Standard library
   macros,
   # Internal
-  ./primitives_helpers,
+  # ./primitives_helpers,
   ../../private/ast_utils,
+  ../core/[lux_types, lux_core_helpers],
   # Debug
   ../core/lux_print
 
@@ -18,126 +19,72 @@ import
 #
 # ###########################################
 
-template newLuxMutTensor*(t: untyped) =
-  t = LuxNode(
-      id: genId(),
-      kind: MutTensor,
-      symLVal: t.astToStr
-    )
-
-template newLuxIterDomain*(index: untyped) =
-  index = LuxNode(
-      id: genId(),
-      kind: Domain,
-      symDomain: index.astToStr
-    )
-
-proc shape*(t: LuxNode, axis: int): LuxNode =
-  LuxNode(
-    kind: Shape,
-    tensor: t,
-    axis: axis
+proc dim_size*(function: Function, axis: int): LuxNode =
+  DimSize.newTree(
+    newLux function,
+    newLux axis
   )
 
-template newLuxIterDomain*(index: untyped, start_iter: static int, stop_iter: LuxNode) =
-  index = LuxNode(
-      id: genId(),
-      kind: Domain,
-      symDomain: index.astToStr,
-      start: LuxNode(
-        kind: IntImm,
-        intVal: start_iter
-      ),
-      stop: stop_iter,
-      step: LuxNode(
-        kind: IntImm,
-        intVal: 1
-      )
-    )
-
 proc `+`*(a, b: LuxNode): LuxNode =
-  checkScalarExpr("Add", a)
-  checkScalarExpr("Add", b)
-  LuxNode(
-    id: genId(),
-    kind: BinOp, binOpKind: Add,
-    lhs: a, rhs: b
+  assert(a.kind in LuxExpr)
+  assert(b.kind in LuxExpr)
+  BinOp.newTree(
+    newLux Add,
+    a, b
   )
 
 proc `*`*(a, b: LuxNode): LuxNode =
-  checkScalarExpr("Mul", a)
-  checkScalarExpr("Mul", b)
-  LuxNode(
-    id: genId(),
-    kind: BinOp, binOpKind: Mul,
-    lhs: a, rhs: b
+  assert(a.kind in LuxExpr)
+  assert(b.kind in LuxExpr)
+  BinOp.newTree(
+    newLux Mul,
+    a, b
   )
 
 proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
-  checkScalarExpr("Mul", a)
-  LuxNode(
-      id: genId(),
-      kind: BinOp, binOpKind: Mul,
-      lhs: a,
-      rhs: LuxNode(kind: IntImm, intVal: b)
-    )
+  assert(a.kind in LuxExpr)
+  assert(b.kind in LuxExpr)
+  BinOp.newTree(
+    newLux Add,
+    a, newLux b
+  )
 
 proc `+=`*(a: var LuxNode, b: LuxNode) =
-  checkScalarExpr("In-place addition", b)
-  checkMutable(a)
+  discard
 
-  # If LHS does not have a memory location, attribute one
-  if a.kind notin {MutTensor, LValTensor, MutAccess}:
-    lvalify(a)
-
-  # Then create the new node
-  var upd_a = LuxNode(id: genId())
-  upd_a.kind = a.kind
-  upd_a.symLVal = a.symLVal
-  upd_a.version = a.version + 1
-  upd_a.prev_version = assign(
-    lhs = a,
-    rhs = a + b
-  )
-
-  # And swap it
-  a = upd_a
-
-
-proc at(t: LuxNode, indices: varargs[LuxNode]): LuxNode =
-  ## Access a tensor
+proc `[]`*(function: Function, indices: varargs[Iter]): Call =
+  ## Access a tensor/function
   ## For example
   ##   - A[i, j, k] on a rank 3 tensor
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
+  # TODO
+  # - Handle the "_" joker for whole dimension
+  # - Handle combinations of Iter, LuxNodes, IntParams and literals
+  # - Get a friendly function symbol
+  new result
+  result.function = function
+  for iter in indices:
+    result.params.add newLux(iter)
 
-  checkTensor(t)
-  LuxNode(
-      id: genId(),
-      kind: Access,
-      tensorView: t,
-      indices: @indices
-  )
-
-proc at(t: var LuxNode, indices: varargs[LuxNode]): var LuxNode =
-  ## Access a tensor, returns a mutable element
+proc `[]`*(function: var Function, indices: varargs[Iter]): Call =
+  ## Access a tensor/function
   ## For example
   ##   - A[i, j, k] on a rank 3 tensor
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
-  ##
-  ## Used for A[i, j] += foo(i, j)
+  # TODO
+  # - Handle the "_" joker for whole dimension
+  # - Handle combinations of Iter, LuxNodes, IntParams and literals
+  # - Get a friendly function symbol
+  new result
+  result.function = function
+  for iter in indices:
+    result.params.add newLux(iter)
 
-  checkTensor(t)
-  checkMutable(t)
-  t = LuxNode(
-      id: genId(),
-      kind: MutAccess,
-      tensorView: t,
-      indices: @indices
-  )
-  return t
-
-proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
-  ## Mutate a tensor element
+proc `[]=`*(
+        function: var Function,
+        indices: varargs[Iter],
+        expression: LuxNode) =
+  ## Mutate a Func/tensor element
   ## at specified indices
   ##
   ## For example
@@ -145,46 +92,26 @@ proc at_mut(t: var LuxNode, indices: varargs[LuxNode], expression: LuxNode) =
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
   ##
   ## Used for A[i, j] = foo(i, j)
-
-  checkTensor(t)
-  checkMutable(t)
-
-  # If LHS does not have a memory location, attribute one
-  if t.kind notin {MutTensor, LValTensor}:
-    lvalify(t)
-
-  # Then update it
-  var upd_t = LuxNode(id: genId())
-  upd_t.kind = t.kind
-  upd_t.symLVal = t.symLVal
-  upd_t.version = t.version + 1
-  upd_t.prev_version = assign(
-        LuxNode(
-          id: genId(),
-          kind: MutAccess,
-          tensorView: t,
-          indices: @indices
-        ),
-        expression
-      )
-
-  # And swap it
-  t = upd_t
-
-macro `[]`*(t: LuxNode, indices: varargs[untyped]): untyped =
   # TODO
-  # Handle the "_" joker for whole dimension
-  result = newCall(bindSym"at", t)
-  indices.copyChildrenTo result
+  # - Handle the "_" joker for whole dimension
+  # - Handle combinations of Iter, LuxNodes, IntParams and literals
+  # - Get a friendly function symbol
+  if function.isNil:
+    new function
 
-macro `[]=`*(t: var LuxNode, indicesAndExpr: varargs[untyped]): untyped =
-  # Handle varargs[untyped] consume everything
-  var indices = indicesAndExpr
-  let expression = indices.pop()
+  let stageId = function.stages.len
+  # if stageId = 0: assert that indices are the full function domain.
+  function.stages.setLen(stageId+1)
+  new function.stages[stageId]
+  for iter in indices:
+    function.stages[stageId].params.add newLux(iter)
+  function.stages[stageId].definition = expression
 
-  # TODO
-  # Handle the "_" joker for whole dimension
-
-  result = newCall(bindSym"at_mut", t)
-  indices.copyChildrenTo result
-  result.add expression
+converter toLuxNode*(call: Call): LuxNode =
+  # Implicit conversion of function/tensor indexing
+  # to allow seamless:
+  # A[i,j] = myParam + B[i,j]
+  result = Access.newTree(
+    newLux call.function
+  )
+  result.add call.params

@@ -11,7 +11,7 @@ import
 
 # ###########################################
 #
-#         Lux Core Helpers
+#         LuxNode unique identifiers
 #
 # ###########################################
 
@@ -28,32 +28,72 @@ proc genId*(): int =
   else:
     luxNodeRngRT.rand(high(int))
 
-const ScalarExpr = {
-            IntImm, FloatImm, IntParam, FloatParam,
-            IntMut, FloatMut, IntLVal, FloatLVal,
-            BinOp,
-            Access, Shape, Domain
-          }
+# ###########################################
+#
+#         LuxNode basic procs
+#
+# ###########################################
 
-func checkScalarExpr*(targetOp: string, input: LuxNode) =
-  # TODO - mapping LuxNode -> corresponding function
-  # for better errors as LuxNode are "low-level"
-  if input.kind notin ScalarExpr:
-    raise newException(
-      ValueError,
-      "Invalid scalar expression \"" & $input.kind & "\"\n" &
-      "Only the following LuxNodes are allowed:\n    " & $ScalarExpr &
-      "\nfor building a \"" & targetOp & "\" function."
-      # "\nOrigin: " & $node.lineInfo
-    )
+const LuxExpr* = {IntLit..DimSize}
+const LuxStmt* = {Statement..AffineIf}
 
-func checkMutable*(node: LuxNode) =
-  # TODO
-  discard
+proc `[]`*(node: LuxNode, idx: int): var LuxNode =
+  node.children[idx]
 
-func checkTensor*(node: LuxNode) =
-  if node.kind notin {InTensor, LValTensor, MutTensor}:
-    raise newException(
-      ValueError,
-      "Invalid tensor node \"" & $node.kind & "\""
-    )
+proc `[]=`*(node: LuxNode, idx: int, val: LuxNode) =
+  node.children[idx] = val
+
+proc len*(node: LuxNode): int =
+  node.children.len
+
+proc add*(node: LuxNode, val: LuxNode) =
+  node.children.add val
+
+proc add*(node: LuxNode, vals: openarray[LuxNode]) =
+  node.children.add vals
+
+iterator items*(node: LuxNode): LuxNode =
+  for val in node.children:
+    yield val
+
+# ###########################################
+#
+#         LuxNode tree constructions
+#
+# ###########################################
+
+proc newTree*(kind: LuxNodeKind, args: varargs[LuxNode]): LuxNode =
+  new result
+  result.id = genId()
+  result.kind = kind
+  result.children = @args
+
+proc newLux*(function: Function): LuxNode =
+  LuxNode(
+    id: genId(),
+    kind: Func, function: function
+  )
+
+proc newLux*(domain: Iter): LuxNode =
+  LuxNode(
+    id: genId(),
+    kind: Domain, iter: domain
+  )
+
+# We don't need genId for the following variant types
+
+proc newLux*(lit: int): LuxNode =
+  LuxNode(kind: IntLit, intVal: lit)
+
+proc newLux*(lit: float): LuxNode =
+  LuxNode(kind: FloatLit, floatVal: lit)
+
+proc newLux*(invariant: Invariant): LuxNode =
+  case invariant.kind:
+  of ikInt:
+    LuxNode(kind: IntParam, symParam: invariant.symbol)
+  of ikFLoat:
+    LuxNode(kind: FloatParam, symParam: invariant.symbol)
+
+proc newLux*(bopKind: BinaryOpKind): LuxNode =
+  LuxNode(kind: BinOpKind, bopKind: bopKind)

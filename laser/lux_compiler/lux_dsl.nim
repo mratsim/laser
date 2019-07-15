@@ -7,7 +7,7 @@ import
   ./frontend/lux_frontend,
   ./dsl/primitives
 
-from ./core/lux_types import LuxNode
+from ./core/lux_types import Iter, Invariant, Function
 
 # ###########################
 #
@@ -40,24 +40,19 @@ when isMainModule:
     assert idx.len == 2
     t.storage.raw_buffer[idx[0] * t.strides[0] + idx[1] * t.strides[1]] = val
 
+  proc foobar(a, b, c: Function): Function =
 
-  # We intentionally have a tricky non-canonical function signature
-  proc foobar(a: LuxNode, b, c: LuxNode): tuple[bar: LuxNode] =
-
-    # Domain
-    var i, j: LuxNode
-    newLuxIterDomain(i, 0, a.shape(0))
-    newLuxIterDomain(j, 0, a.shape(1))
+    # Iteration Domain
+    var i, j: Iter
 
     # Avoid in-place update of implicit result ref address
     # https://github.com/nim-lang/Nim/issues/11637
-    var bar: LuxNode
-    newLuxMutTensor(bar)
+    var bar: Function
 
     bar[i, j] = a[i, j] + b[i, j] + c[i, j]
 
     # Update result
-    result.bar = bar
+    result = bar
 
   generate foobar:
     proc foobar(a: Tensor[float32], b, c: Tensor[float32]): tuple[bar: Tensor[float32]]
@@ -73,5 +68,5 @@ when isMainModule:
          [float32 3, 3, 3],
          [float32 3, 3, 3]].toTensor()
 
-  let r = foobar(u, v, w)
-  echo r
+  # let r = foobar(u, v, w)
+  # echo r

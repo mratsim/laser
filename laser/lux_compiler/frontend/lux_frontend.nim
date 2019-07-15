@@ -12,7 +12,7 @@ import
   ./lux_sigmatch,
   ./lux_symbolic_exec
 
-from ../backend/lux_backend import compile
+# from ../backend/lux_backend import compile
 
 # ###########################################
 #
@@ -35,8 +35,11 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
   ## The procs generated are specialized (they cannot be generic)
   ## but the same base ast_routine can be reused to generate all
   ## the desired specialized procs.
-
-  # TODO: remove the need for ast_routine for symbol resolution
+  ##
+  ## The name of the generated proc does not need to be the same
+  ## as the symbolic proc.
+  ##
+  ## The signature can include pragmas like {.exportc.}
 
   result = newStmtList()
 
@@ -52,7 +55,8 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
   var inputSyms: seq[NimNode]
   for idx_identdef in 1 ..< sig.len:
     let identdef = sig[idx_identdef]
-    doAssert identdef[^2].eqIdent"LuxNode"
+    doAssert identdef[^2].eqIdent"Function" or
+               identdef[^2].eqIdent"Invariant"
     identdef[^1].expectKind(nnkEmpty)
     for idx_ident in 0 .. identdef.len-3:
       inputSyms.add genSym(nskLet, $identdef[idx_ident] & "_")
@@ -87,7 +91,7 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
 
   # Call the compilation macro
   result.add symExecStmt
-  result.add quote do:
-    compile(`io`, `signature`)
+  # result.add quote do:
+  #   compile(`io`, `signature`)
 
-  # echo result.toStrlit
+  # # echo result.toStrlit

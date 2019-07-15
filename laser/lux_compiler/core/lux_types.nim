@@ -7,7 +7,7 @@ type
 
   # ###########################################
   #
-  #         Internal Graph Representation
+  #         Internal AST Representation
   #
   # ###########################################
 
@@ -28,53 +28,52 @@ type
   LuxNodeKind* = enum
     ## Computation Graph / Abstract Syntax Tree nodes
     ## that represents a Lux computation.
-    ##
 
+    # Order is important to separate Expression from statements
 
-    # ############################################
-    #
-    #             High-level AST
-    #
-    # ############################################
+    # ################### High-level #########################
+    # Functions are the high-level concepts of Lux
+
+    # Scalars, Tensors, Chained Functions
+    Func        # Everything is a function
+                # to promote composability
+
+    # ################### Expressions #########################
 
     # Scalar invariants
-    IntImm        # Integer immediate (known at compile-time)
-    FloatImm      # Float immediate (known at compile-time)
-    IntParam      # Integer environment parameter (known at run-time, invariant during function execution)
-    FloatParam    # Float environment parameter (known at run-time, invariant during function execution)
+    IntLit      # Integer immediate (known at compile-time)
+    FloatLit    # Float immediate (known at compile-time)
+    IntParam    # Integer environment parameter (known at run-time, invariant during function execution)
+    FloatParam  # Float environment parameter (known at run-time, invariant during function execution)
+    BoolParam   # Bool environment parameter (known at run-time, invariant during function execution)
 
-    # Mutable scalars
-    IntMut
-    FloatMut
-    IntLVal
-    FloatLVal
+    # Affine loop expression
+    Domain      # Iteration Domain
 
     # Scalar expressions built-ins
-    BinOp       # Built-in binary operations
+    BinOpKind   # Built-in binary operations
+    BinOp       #
 
-    # Tensor Symbols
-    InTensor    # InTensor tensor node
-    MutTensor   # Mutable output tensor node
-    LValTensor  # Temporary allocated node
+    # Tensor/Function spatial indexing and properties
+    Access      # Access a single element of a Tensor/Func
+    DimSize     # Get the size of one of the Tensor/Func dimensions
 
-    # Tensor access and properties
-    Access      # Tensor access
-    Shape       # Tensor shape
+    # Function Calls
+    ExternCall  # Extern function call like CPUInfo
+
+    # ################### Statements #########################
+    # Statements are generate when the high-level functional AST
+    # is lowered to an AST that more closely match Nim's AST.
+
+    # General statement
+    Statement
 
     # Scalar statements
-    Assign      # Assignment statement
-    MutAccess   # `[]=` assignment
+    Assign
 
-    # ############################################
-    #
-    #             Mid-level AST
-    #
-    # ############################################
-
-    # Affine statements
+    # Affine loop statements
     AffineFor   # Affine for loop
     AffineIf    # Affine if
-    Domain      # Iteration Domain
 
     # Affine statements:
     # - for/if constraints are a linear expression of
@@ -95,17 +94,6 @@ type
     #       - This will also allows branching depending of
     #         fraction if CPU/GPU charatectristics like cache or TLB size
 
-    # ############################################
-    #
-    #             Low-level AST
-    #
-    # ############################################
-
-    # ISA runtime characteristics
-    CpuInfo     # CPUInfo function call
-
-    # Control-Flow
-    IfElifElse  # Restrict to function invariants?
 
   Id* = int
 
@@ -113,33 +101,14 @@ type
     id*: Id
 
     case kind*: LuxNodeKind
-    of InTensor, IntParam, FloatParam:
-      ast*: LuxNode               # If nil, it uses symId
-      symId*: int
-    of MutTensor, LValTensor, IntMut, FloatMut, IntLVal, FloatLVal:
-      symLval*: string            # TODO MutTensor should probably use symId
-      version*: int
-      prev_version*: LuxNode      # Persistent data structure
-    of IntImm:
+    of IntLit:
       intVal*: int
-    of FloatImm:
+    of FloatLit:
       floatVal*: float
-    of Assign:
-      lval*, rval*: LuxNode
-      domains*: seq[LuxNode]
-        # Nested loops needed to construct this assignment
-        # Approximatively ordered from outermost to innermost
-        # Inner dimension of the lhs is always last.
-        # As prefetching for write operations is more expensive.
-    of BinOp:
-      binOpKind*: BinaryOpKind
-      lhs*, rhs*: LuxNode
-    of Access, MutAccess:
-      tensorView*: LuxNode
-      indices*: seq[LuxNode]
-    of Shape:
-      tensor*: LuxNode
-      axis*: int
+    of IntParam, FloatParam:
+      symParam*: string
+    of Func:
+      function*: Function
     of Domain:
       # Domain represents an iteration domain.
       # During execution its value corresponds to the iteration index value
@@ -152,25 +121,11 @@ type
       # We usually steps from 0 to N with N the dimension of a tensor axis.
       # This might change as Nim is inclusive and polyhedral representation
       # uses inclusive constraints.
-      symDomain*: string
-      start*, stop*, step*: LuxNode
-    of AffineFor:
-      # Represent a for loop
-      domain*: LuxNode
-      affineForBody*: LuxNode
-      nestedLVal*: LuxNode # for codegen and assigning result
-                           # we need the lval that required the loop
-    of AffineIf:
-      constraint*: LuxNode
-      affineIfBody*: LuxNode
-    of CpuInfo:
-      # Extern function call
-      # Only supports proc with no arguments
-      # as it is only needed for CPUInfo
-      symFunc*: string
-    of IfElifElse:
-      # Represent if f0: .. elif f1: .. elif ... else:
-      ifBranches*: seq[LuxNode]
+      iter*: Iter
+    of BinOpKind:
+      bopKind*: BinaryOpKind
+    else:
+      children*: seq[LuxNode]
 
   ScheduleKind* = enum
     ScReduce
@@ -193,6 +148,88 @@ type
     #
     # To design
     # ScAffinity --> NUMA, multi-socket, multiGPU affinity
+
+  # ###########################################
+  #
+  #         High-level data structures
+  #
+  # ###########################################
+
+  Iter* = ref object
+    symbol*: string
+    start*, stop*, step*: LuxNode
+
+  InvariantKind* = enum
+    ikInt
+    ikFloat
+
+  Invariant* = ref object
+    ## Runtime invariant inputs once a kernel is called
+    kind*: InvariantKind
+    symbol*: string
+
+  FuncOutputKind* = enum
+    foScalar
+    foTensor
+
+  Function* = ref object
+    ## Main datastructure of Lux
+    ## A function can be redefined to represent mutation
+    ## Each redefinition called a stage.
+    ## A function can represent a Tensor, a Scalar,
+    ## or a sequence of transformations applied to them.
+    ## Those transformations can be scheduled at the global function level
+    ## and at the stage level.
+    ##
+    ## The first initial stage must define a default value
+    ## on the whole domain
+    #
+    # For symbolic execution, the initial input tensors
+    # will be created as Function with no stages at all.
+    symbol*: string
+    stages*: seq[Stage]
+    schedule*: FunctionSchedule
+    outputKind*: FuncOutputKind
+
+  # ###########################################
+  #
+  #         Low-level data structures
+  #
+  # ###########################################
+
+  Call* = ref object
+    ## Object created when indexing a Function
+    ## with A[i,j] or A[i,j] = expression
+    # Must be ref object to live long enough for
+    # assignation
+    function*: Function
+    params*: seq[LuxNode]
+
+  Stage* = ref object
+    ## A unique definition of a function
+    definition*: LuxNode
+    params*: seq[LuxNode]
+      # domain or specific location to apply this phase
+    recurrence*: seq[LuxNode]
+      # Stage is repeated on a non-spatial domain, i.e.
+      # the iteration domain does not appear on neither the LHS or RHS assignment
+      # for example a Gauss-Seidel Smoother with the time domain t:
+      # ------------------------------------
+      #   for t in 0 ..< timeSteps:
+      #     for i in 1 ..< N-1:
+      #       for j in 1 ..< N-1:
+      #         A[i][j] = 0.25 * (A[i][j-1] * # left
+      #                           A[i][j+1] * # right
+      #                           A[i-1][j] * # top
+      #                           A[i+1][j])  # bottom
+    condition*: LuxNode
+      # wrapped in a
+      # if(condition):
+      #   A(i, j) = ...
+    schedule*: StageSchedule
+
+  StageSchedule* = ref object
+  FunctionSchedule* = ref object
 
 # ###########################################
 #
