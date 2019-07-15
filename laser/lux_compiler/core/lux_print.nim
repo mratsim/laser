@@ -7,7 +7,7 @@ import
   # standard library
   strutils,
   # internal
-  ../core/lux_types
+  ../core/[lux_types, lux_core_helpers]
 
 # ###########################################
 #
@@ -19,23 +19,17 @@ proc toStrLit*(ast: LuxNode): string =
   if ast.isNil:
     return "nil"
   case ast.kind:
-  of IntImm: return $ast.intVal
-  of FloatImm: return $ast.floatVal
-  of BinOp:
-    case ast.binOpKind
-    of Add: return ast.lhs.toStrLit & "+" & ast.rhs.toStrLit
-    of Mul: return ast.lhs.toStrLit & "*" & ast.rhs.toStrLit
+  of IntLit: return $ast.intVal
+  of FloatLit: return $ast.floatVal
+  of IntParam, FloatParam:
+    return ast.symParam
   of Domain:
-    result = ast.symDomain
-  of InTensor:
-    return "In" & $ast.symId
-  of MutTensor, LValTensor:
-    return ast.symLVal
-  of Shape:
-    result = ast.tensor.toStrLit
-    result.add ".shape["
-    result.add $ast.axis
-    result.add ']'
+    if ast.iter.symbol != "":
+      return ast.iter.symbol
+    else:
+      return "iter" & $ast.id
+  of Func:
+    return ast.function.symbol
   else:
     raise newException(
       ValueError, "Pretty Printer for \"" &
@@ -51,14 +45,14 @@ proc toStrLit*(asts: openarray[LuxNode]): string =
 
 proc shortDomain*(ast: LuxNode): string =
   assert ast.kind == Domain
-  result = "Domain(symDomain: \""
-  result.add ast.symDomain
+  result = "symbol: \""
+  result.add ast.iter.symbol
   result.add "\", start: "
-  result.add ast.start.toStrLit
+  result.add ast.iter.start.toStrLit
   result.add ", stop: "
-  result.add ast.stop.toStrLit
+  result.add ast.iter.stop.toStrLit
   result.add ", step: "
-  result.add ast.step.toStrLit
+  result.add ast.iter.step.toStrLit
   result.add ')'
 
 proc treeRepr*(ast: LuxNode): string =
@@ -69,44 +63,19 @@ proc treeRepr*(ast: LuxNode): string =
     result.add '\n' & repeat(' ', indent) & $ast.kind & " (id: " & $ast.id & ')'
     let indent = indent + 2
     case ast.kind
-    of InTensor:
-      result.add '\n' & repeat(' ', indent) & "paramId \"" & $ast.symId & '\"'
-    of MutTensor, LValTensor:
-      result.add '\n' & repeat(' ', indent) & "symLVal \"" & ast.symLVal & '\"'
-      result.add '\n' & repeat(' ', indent) & "version \"" & $ast.version & '\"'
-      if ast.prev_version.isNil:
-        result.add '\n' & repeat(' ', indent) & "prev_version: nil"
-      else:
-        result.add repeat(' ', indent) & "⮢⮢⮢ (prev_version)" &
-          inspect(ast.prev_version, indent)
-    of IntImm:
+    of Func:
+      result.add '\n' & repeat(' ', indent) & "function \"" & $ast.function.symbol & '\"'
+    of IntLit:
       result.add '\n' & repeat(' ', indent) & $ast.intVal
-    of FloatImm:
+    of FloatLit:
       result.add '\n' & repeat(' ', indent) & $ast.floatVal
-    of BinOp:
-      result.add '\n' &  repeat(' ', indent) & $ast.binOpKind
-      result.add repeat(' ', indent) & inspect(ast.lhs, indent)
-      result.add repeat(' ', indent) & inspect(ast.rhs, indent)
-    of Access, MutAccess:
-      result.add '\n' &  repeat(' ', indent) & "indices " & ast.indices.toStrLit
-      result.add repeat(' ', indent) & inspect(ast.tensorView, indent)
-    of Assign:
-      result.add '\n' & repeat(' ', indent) & "domains " & ast.domains.toStrLit
-      result.add repeat(' ', indent) & inspect(ast.lval, indent)
-      result.add repeat(' ', indent) & inspect(ast.rval, indent)
+    of IntParam, FloatParam:
+      result.add '\n' & repeat(' ', indent) & "symbol \"" & $ast.symParam & '\"'
     of Domain:
-      result.add '\n' & repeat(' ', indent) & "symDomain \"" & $ast.symDomain & '\"'
-      result.add '\n' & repeat(' ', indent) & "start \"" & ast.start.toStrLit & '\"'
-      result.add '\n' & repeat(' ', indent) & "stop \"" & ast.stop.toStrLit & '\"'
-      result.add '\n' & repeat(' ', indent) & "step \"" & ast.step.toStrLit & '\"'
-    of AffineFor:
-      result.add '\n' & repeat(' ', indent) & ast.domain.shortDomain()
-      result.add repeat(' ', indent) &
-          inspect(ast.affineForBody, indent)
+      result.add '\n' & repeat(' ', indent) & shortDomain(ast)
     else:
-      raise newException(
-        ValueError, "Pretty Printer for \"" &
-                    $ast.kind & "\" is not implemented")
+      for node in ast:
+        result.add repeat(' ', indent) & inspect(node, indent)
 
   result = inspect(ast, 0)
 

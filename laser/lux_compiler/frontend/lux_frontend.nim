@@ -12,7 +12,7 @@ import
   ./lux_sigmatch,
   ./lux_symbolic_exec
 
-from ../backend/lux_backend import compile
+# from ../backend/lux_backend import compile
 
 # ###########################################
 #
@@ -40,54 +40,54 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
 
   result = newStmtList()
 
-  # TODO: canonicalize signature
-  let formalParams = signature[0][3]
-  let ast = ast_routine.resolveASToverload(formalParams)
+  # # TODO: canonicalize signature
+  # let formalParams = signature[0][3]
+  # let ast = ast_routine.resolveASToverload(formalParams)
 
-  # Get the routine signature
-  let sig = ast.getImpl[3]
-  sig.expectKind(nnkFormalParams)
+  # # Get the routine signature
+  # let sig = ast.getImpl[3]
+  # sig.expectKind(nnkFormalParams)
 
-  # Get all inputs
-  var inputSyms: seq[NimNode]
-  for idx_identdef in 1 ..< sig.len:
-    let identdef = sig[idx_identdef]
-    doAssert identdef[^2].eqIdent"LuxNode"
-    identdef[^1].expectKind(nnkEmpty)
-    for idx_ident in 0 .. identdef.len-3:
-      inputSyms.add genSym(nskLet, $identdef[idx_ident] & "_")
+  # # Get all inputs
+  # var inputSyms: seq[NimNode]
+  # for idx_identdef in 1 ..< sig.len:
+  #   let identdef = sig[idx_identdef]
+  #   doAssert identdef[^2].eqIdent"LuxNode"
+  #   identdef[^1].expectKind(nnkEmpty)
+  #   for idx_ident in 0 .. identdef.len-3:
+  #     inputSyms.add genSym(nskLet, $identdef[idx_ident] & "_")
 
-  # Symbolic execution statement
-  var outputSyms: NimNode
-  var symExecStmt = newStmtList()
-  symbolicExecStmt(
-      ast,
-      inputSyms,
-      hasOut = sig[0].kind != nnkEmpty,
-      outputSyms,
-      symExecStmt
-    )
+  # # Symbolic execution statement
+  # var outputSyms: NimNode
+  # var symExecStmt = newStmtList()
+  # symbolicExecStmt(
+  #     ast,
+  #     inputSyms,
+  #     hasOut = sig[0].kind != nnkEmpty,
+  #     outputSyms,
+  #     symExecStmt
+  #   )
 
-  # Collect all the input/output idents
-  var io = inputSyms
-  case sig[0].kind
-  of nnkEmpty:
-    discard
-  of nnkTupleTy:
-    var idx = 0
-    for identdef in sig[0]:
-      for idx_ident in 0 .. identdef.len-3:
-        io.add nnkBracketExpr.newTree(
-          outputSyms[0],
-          newLit idx
-        )
-        inc idx
-  else:
-    io.add outputSyms
+  # # Collect all the input/output idents
+  # var io = inputSyms
+  # case sig[0].kind
+  # of nnkEmpty:
+  #   discard
+  # of nnkTupleTy:
+  #   var idx = 0
+  #   for identdef in sig[0]:
+  #     for idx_ident in 0 .. identdef.len-3:
+  #       io.add nnkBracketExpr.newTree(
+  #         outputSyms[0],
+  #         newLit idx
+  #       )
+  #       inc idx
+  # else:
+  #   io.add outputSyms
 
-  # Call the compilation macro
-  result.add symExecStmt
-  result.add quote do:
-    compile(`io`, `signature`)
+  # # Call the compilation macro
+  # result.add symExecStmt
+  # result.add quote do:
+  #   compile(`io`, `signature`)
 
-  # echo result.toStrlit
+  # # echo result.toStrlit

@@ -17,19 +17,19 @@ import
 #
 # ###########################################
 
-proc inputTensor(paramId: int): LuxNode =
-  LuxNode(
-    id: genId(),
-    kind: InTensor, symId: paramId
-  )
+# proc inputTensor(paramId: int): LuxNode =
+#   LuxNode(
+#     id: genId(),
+#     kind: InTensor, symId: paramId
+#   )
 
 proc symbolicExecStmt*(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outputSyms, stmts: var NimNode) =
   # Allocate inputs
-  for i, in_ident in inputSyms:
-    stmts.add newLetStmt(
-      ct(in_ident),
-      newCall(bindSym"inputTensor", newLit i)
-    )
+  # for i, in_ident in inputSyms:
+  #   stmts.add newLetStmt(
+  #     ct(in_ident),
+  #     newCall(bindSym"inputTensor", newLit i)
+  #   )
 
   # Call the AST routine
   let call = newCall(ast, inputSyms)

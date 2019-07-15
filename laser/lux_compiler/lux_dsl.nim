@@ -52,7 +52,7 @@ when isMainModule:
     bar[i, j] = a[i, j] + b[i, j] + c[i, j]
 
     # Update result
-    result.bar = bar
+    result = bar
 
   generate foobar:
     proc foobar(a: Tensor[float32], b, c: Tensor[float32]): tuple[bar: Tensor[float32]]
@@ -68,5 +68,5 @@ when isMainModule:
          [float32 3, 3, 3],
          [float32 3, 3, 3]].toTensor()
 
-  let r = foobar(u, v, w)
-  echo r
+  # let r = foobar(u, v, w)
+  # echo r

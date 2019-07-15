@@ -58,7 +58,7 @@ type
     Access      # Access a single element of a Tensor/Func
     DimSize     # Get the size of one of the Tensor/Func dimensions
 
-    # Extern Function Calls
+    # Function Calls
     ExternCall  # Extern function call like CPUInfo
 
     # ################### Statements #########################
@@ -125,7 +125,7 @@ type
     of BinOpKind:
       bopKind*: BinaryOpKind
     else:
-      children: seq[LuxNode]
+      children*: seq[LuxNode]
 
   ScheduleKind* = enum
     ScReduce
@@ -159,7 +159,7 @@ type
     symbol*: string
     start*, stop*, step*: LuxNode
 
-  InvariantKind = enum
+  InvariantKind* = enum
     ikInt
     ikFloat
 
@@ -183,6 +183,7 @@ type
     ##
     ## The first initial stage must define a default value
     ## on the whole domain
+    symbol*: string
     stages*: seq[Stage]
     schedule*: FunctionSchedule
     outputKind*: FuncOutputKind
@@ -194,6 +195,7 @@ type
     # assignation
     function*: Function
     params*: seq[LuxNode]
+    allow_mutation*: bool
 
   Stage* = ref object
     ## A unique definition of a function
@@ -220,51 +222,6 @@ type
 
   StageSchedule* = ref object
   FunctionSchedule* = ref object
-
-# ###########################################
-#
-#            Base procs and consts
-#
-# ###########################################
-
-const LuxExpr* = {IntLit..Domain}
-const LuxStmt* = {AffineFor, AffineIf}
-
-proc `[]`*(node: LuxNode, idx: int): var LuxNode =
-  node.children[idx]
-
-proc `[]=`*(node: LuxNode, idx: int, val: LuxNode) =
-  node.children[idx] = val
-
-proc len*(node: LuxNode): int =
-  node.children.len
-
-proc add*(node: LuxNode, val: LuxNode) =
-  node.children.add val
-
-proc newTree*(kind: LuxNodeKind, args: varargs[LuxNode]): LuxNode =
-  new result
-  result.kind = kind
-  result.children = @args
-
-proc newLux*(lit: int): LuxNode =
-  LuxNode(kind: IntLit, intVal: lit)
-
-proc newLux*(lit: float): LuxNode =
-  LuxNode(kind: FloatLit, floatVal: lit)
-
-proc newLux*(invariant: Invariant): LuxNode =
-  case invariant.kind:
-  of ikInt:
-    LuxNode(kind: IntParam, symParam: invariant.symbol)
-  of ikFLoat:
-    LuxNode(kind: FloatParam, symParam: invariant.symbol)
-
-proc newLux*(function: Function): LuxNode =
-  LuxNode(kind: Func, function: function)
-
-proc newLux*(domain: Iter): LuxNode =
-  LuxNode(kind: Domain, iter: domain)
 
 # ###########################################
 #
