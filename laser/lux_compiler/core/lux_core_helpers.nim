@@ -68,10 +68,10 @@ proc newTree*(kind: LuxNodeKind, args: varargs[LuxNode]): LuxNode =
   result.kind = kind
   result.children = @args
 
-proc newLux*(function: Function): LuxNode =
+proc newLux*(fn: Fn): LuxNode =
   LuxNode(
     id: genId(),
-    kind: Func, function: function
+    kind: Func, fn: fn
   )
 
 proc newLux*(domain: Iter): LuxNode =

@@ -7,7 +7,7 @@ import
   ./frontend/lux_frontend,
   ./dsl/primitives
 
-from ./core/lux_types import Iter, Invariant, Function
+from ./core/lux_types import Iter, Invariant, Fn
 
 # ###########################
 #
@@ -40,14 +40,14 @@ when isMainModule:
     assert idx.len == 2
     t.storage.raw_buffer[idx[0] * t.strides[0] + idx[1] * t.strides[1]] = val
 
-  proc foobar(a, b, c: Function): Function =
+  proc foobar(a, b, c: Fn): Fn =
 
     # Iteration Domain
     var i, j: Iter
 
     # Avoid in-place update of implicit result ref address
     # https://github.com/nim-lang/Nim/issues/11637
-    var bar: Function
+    var bar: Fn
 
     bar[i, j] = a[i, j] + b[i, j] + c[i, j]
 

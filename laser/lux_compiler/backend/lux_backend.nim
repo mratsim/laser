@@ -11,8 +11,8 @@ import
   ../utils/macro_utils,
   ../platforms,
   # Compiler passes
-  ./passes/pass_build_loops,
-  ./lux_codegen,
+  # ./passes/pass_build_loops,
+  # ./lux_codegen,
   # Debug
   ../core/lux_print
 
@@ -114,7 +114,7 @@ proc initParams(
           # SIMD ident
           result.simds.outParams.add ident($ident & "_simd")
 
-macro compile*(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
+macro compile*(io_ast: static varargs[Fn], procDef: untyped): untyped =
   ## Lux Compiler backend
   ## Accept an array of AST representing the computation
   ## and generate specialized code from it
@@ -160,36 +160,36 @@ macro compile*(io_ast: static varargs[LuxNode], procDef: untyped): untyped =
   # TODO: check that the function inputs are in a symbol table?
   procDef[0][6].expectKind(nnkEmpty)
 
-  let resultTy = procDef[0][3][0]
-  let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
+  # let resultTy = procDef[0][3][0]
+  # let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
 
-  # Sanity check on AST produced
-  echo "\n############################"
-  echo "After loop generation\n"
-  let io_ast2 = io_ast.passBuildLoops()
-  echo io_ast2.treerepr()
-  echo "\n############################\n"
+  # # Sanity check on AST produced
+  # echo "\n############################"
+  # echo "After loop generation\n"
+  # let io_ast2 = io_ast.passBuildLoops()
+  # echo io_ast2.treerepr()
+  # echo "\n############################\n"
 
-  let kernel = genKernel(
-    arch = ArchGeneric,
-    io_ast2,
-    ids,
-    ids_baseType,
-    resultTy
-  )
+  # let kernel = genKernel(
+  #   arch = ArchGeneric,
+  #   io_ast2,
+  #   ids,
+  #   ids_baseType,
+  #   resultTy
+  # )
 
-  echo kernel.toStrLit()
+  # echo kernel.toStrLit()
 
-  result = procDef.copyNimTree()
-  let resBody = newStmtList()
-  # resBody.add initParams
+  # result = procDef.copyNimTree()
+  # let resBody = newStmtList()
+  # # resBody.add initParams
 
-  let bar = ident"bar"
-  resBody.add quote do:
-    var `bar` = newTensor[a.T](a.shape[0], a.shape[1])
+  # let bar = ident"bar"
+  # resBody.add quote do:
+  #   var `bar` = newTensor[a.T](a.shape[0], a.shape[1])
 
-  resBody.add kernel
+  # resBody.add kernel
 
-  result[0][6] = resBody
+  # result[0][6] = resBody
 
-  echo result.toStrLit
+  # echo result.toStrLit

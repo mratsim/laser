@@ -12,7 +12,7 @@ import
   ./lux_sigmatch,
   ./lux_symbolic_exec
 
-# from ../backend/lux_backend import compile
+from ../backend/lux_backend import compile
 
 # ###########################################
 #
@@ -55,7 +55,7 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
   var inputSyms: seq[NimNode]
   for idx_identdef in 1 ..< sig.len:
     let identdef = sig[idx_identdef]
-    doAssert identdef[^2].eqIdent"Function" or
+    doAssert identdef[^2].eqIdent"Fn" or
                identdef[^2].eqIdent"Invariant"
     identdef[^1].expectKind(nnkEmpty)
     for idx_ident in 0 .. identdef.len-3:
@@ -91,7 +91,7 @@ macro generate*(ast_routine: typed, signature: untyped): untyped =
 
   # Call the compilation macro
   result.add symExecStmt
-  # result.add quote do:
-  #   compile(`io`, `signature`)
+  result.add quote do:
+    compile(`io`, `signature`)
 
-  # # echo result.toStrlit
+  echo result.toStrlit

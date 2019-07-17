@@ -29,7 +29,7 @@ proc toStrLit*(ast: LuxNode): string =
     else:
       return "iter" & $ast.id
   of Func:
-    return ast.function.symbol
+    return ast.fn.symbol
   else:
     raise newException(
       ValueError, "Pretty Printer for \"" &
@@ -64,7 +64,7 @@ proc treeRepr*(ast: LuxNode): string =
     let indent = indent + 2
     case ast.kind
     of Func:
-      result.add '\n' & repeat(' ', indent) & "function \"" & $ast.function.symbol & '\"'
+      result.add '\n' & repeat(' ', indent) & "function \"" & $ast.fn.symbol & '\"'
     of IntLit:
       result.add '\n' & repeat(' ', indent) & $ast.intVal
     of FloatLit:

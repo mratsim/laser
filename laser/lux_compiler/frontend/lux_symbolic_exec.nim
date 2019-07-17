@@ -17,12 +17,12 @@ import
 #
 # ###########################################
 
-proc inputFunction(funcIdent: NimNode): NimNode =
+proc inputFn(fnIdent: NimNode): NimNode =
   nnkObjConstr.newTree(
-    ident"Function",
+    ident"Fn",
     nnkExprColonExpr.newTree(
       ident"symbol",
-      newLit $funcIdent
+      newLit $fnIdent
     )
   )
 
@@ -31,7 +31,7 @@ proc symbolicExecStmt*(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outp
   for i, in_ident in inputSyms:
     stmts.add newLetStmt(
       ct(in_ident),
-      inputFunction(in_ident)
+      inputFn(in_ident)
     )
 
   # Call the AST routine
@@ -39,7 +39,7 @@ proc symbolicExecStmt*(ast: NimNode, inputSyms: seq[NimNode], hasOut: bool, outp
   if not hasOut: # Case 1: no result
     stmts.add call
   else:
-    outputSyms = ct(genSym(nskLet, "callResult_"))
+    outputSyms = genSym(nskLet, "callResult_")
     stmts.add newLetStmt(
-      outputSyms, call
+      ct(outputSyms), call
     )

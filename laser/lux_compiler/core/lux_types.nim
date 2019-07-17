@@ -108,7 +108,7 @@ type
     of IntParam, FloatParam:
       symParam*: string
     of Func:
-      function*: Function
+      fn*: Fn
     of Domain:
       # Domain represents an iteration domain.
       # During execution its value corresponds to the iteration index value
@@ -168,11 +168,11 @@ type
     kind*: InvariantKind
     symbol*: string
 
-  FuncOutputKind* = enum
-    foScalar
-    foTensor
+  FnOutputKind* = enum
+    fnScalar
+    fnTensor
 
-  Function* = ref object
+  Fn* = ref object
     ## Main datastructure of Lux
     ## A function can be redefined to represent mutation
     ## Each redefinition called a stage.
@@ -188,8 +188,8 @@ type
     # will be created as Function with no stages at all.
     symbol*: string
     stages*: seq[Stage]
-    schedule*: FunctionSchedule
-    outputKind*: FuncOutputKind
+    schedule*: FnSchedule
+    outputKind*: FnOutputKind
 
   # ###########################################
   #
@@ -202,10 +202,10 @@ type
     ## with A[i,j] or A[i,j] = expression
     # Must be ref object to live long enough for
     # assignation
-    function*: Function
+    fn*: Fn
     params*: seq[LuxNode]
 
-  Stage* = ref object
+  Stage* = object
     ## A unique definition of a function
     definition*: LuxNode
     params*: seq[LuxNode]
@@ -228,8 +228,8 @@ type
       #   A(i, j) = ...
     schedule*: StageSchedule
 
-  StageSchedule* = ref object
-  FunctionSchedule* = ref object
+  StageSchedule* = object
+  FnSchedule* = object
 
 # ###########################################
 #
