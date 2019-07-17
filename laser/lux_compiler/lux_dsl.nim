@@ -55,7 +55,7 @@ when isMainModule:
     result = bar
 
   generate foobar:
-    proc foobar(a: Tensor[float32], b, c: Tensor[float32]): tuple[bar: Tensor[float32]]
+    proc foobar(a: Tensor[float32], b, c: Tensor[float32]): Tensor[float32]
 
   let
     u = [[float32 1, 1, 1],

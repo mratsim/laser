@@ -53,6 +53,10 @@ proc add*(node: LuxNode, vals: openarray[LuxNode]) =
   node.children.add vals
 
 iterator items*(node: LuxNode): LuxNode =
+  doAssert(
+    node.kind notin {Func .. BinOpKind},
+    "Invalid node kind for iteration: \"" & $node.kind & '\"'
+  )
   for val in node.children:
     yield val
 

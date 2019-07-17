@@ -5,7 +5,7 @@
 
 import
   # Standard library
-  random, sets, hashes, sequtils,
+  macros,
   # Internal
   ../core/[lux_types, lux_core_helpers]
 
@@ -17,111 +17,51 @@ export lux_types, lux_core_helpers
 #
 # ###########################################
 
-proc hash(node: LuxNode): Hash =
-  # Use of hash is restricted to the OrderedSet used in this module.
-  # In other modules like codegen, we want to index via node ID.
-  # as 2 ASTs can have the same node ID, if one is the expression
-  # and the other is the variable it has been assigned to.
-  node.id
+# proc hash(node: LuxNode): Hash =
+#   # Use of hash is restricted to the OrderedSet used in this module.
+#   # In other modules like codegen, we want to index via node ID.
+#   # as 2 ASTs can have the same node ID, if one is the expression
+#   # and the other is the variable it has been assigned to.
+#   node.id
 
-proc searchDomains*(node: LuxNode, domainsFound: var OrderedSet[LuxNode]) =
-  case node.kind
-  of LValTensor, IntMut, FloatMut, IntLVal, FloatLVal:
-    node.prev_version.searchDomains(domainsFound)
-  of BinOp:
-    node.lhs.searchDomains(domainsFound)
-    node.rhs.searchDomains(domainsFound)
-  of Access, MutAccess:
-    for idx in node.indices:
-      # We need to handle A[i+j, 0] access
-      idx.searchDomains(domainsFound)
-  of Domain:
-    domainsFound.incl node
-  else:
-    discard
+# proc searchDomains*(node: LuxNode, domainsFound: var OrderedSet[LuxNode]) =
+#   case node.kind
+#   of LValTensor, IntMut, FloatMut, IntLVal, FloatLVal:
+#     node.prev_version.searchDomains(domainsFound)
+#   of BinOp:
+#     node.lhs.searchDomains(domainsFound)
+#     node.rhs.searchDomains(domainsFound)
+#   of Access, MutAccess:
+#     for idx in node.indices:
+#       # We need to handle A[i+j, 0] access
+#       idx.searchDomains(domainsFound)
+#   of Domain:
+#     domainsFound.incl node
+#   else:
+#     discard
 
-  # Assign - we reach another assignment, i.e. managed in another loop
-  # AffineFor - We are already looping, we don't want double loop
-  # AffineIf - If loop index constraint, only make sense when accompanied by affine for
+#   # Assign - we reach another assignment, i.e. managed in another loop
+#   # AffineFor - We are already looping, we don't want double loop
+#   # AffineIf - If loop index constraint, only make sense when accompanied by affine for
 
-proc assign*(lhs, rhs: LuxNode): LuxNode =
-  ## Generate the Assign node
-  ## This also scans the domain / loop nest needed
-  ## to generate the assignment.
-  ##
-  ## Iteration domains are ordered from outermost to innermost
-  ## for the LHS.
-  ## And approximatively this way as well for the RHS.
+proc symFnAndIndices*(
+        stmts: var NimNode,
+        fn: NimNode, indices: NimNode
+      ): NimNode =
+  ## Add statement that fill the .symbol field
+  ## of functions and indices with their Nim ident
+  ## Return a NimNode suitable for varargs call
+  ## workaround https://github.com/nim-lang/Nim/issues/11769
 
-  result = LuxNode(
-    id: genId(),
-    kind: Assign,
-    lval: lhs,
-    rval: rhs,
-  )
+  stmts.add quote do:
+    if `fn`.symbol == "":
+      `fn`.symbol = astToStr(`fn`)
 
-  var domains = initOrderedSet[LuxNode](initialSize = 8)
+  result = nnkArgList.newTree()
 
-  # Inner dimension of the lhs is always last
-  # as prefetching for write operations is more expensive.
-  rhs.searchDomains(domains)
-  lhs.searchDomains(domains)
-
-  result.domains = toSeq(domains)
-
-proc newSym*(symbol: string, rhs: LuxNode): LuxNode =
-  # Declare and allocate a new AST symbol
-  # This also scans the domain/loop nest needed
-  # to generate the assignment
-  assign(
-    lhs = LuxNode(
-        # 1. Declare unallocated lval
-        id: genId(),
-        kind: LValTensor,
-        symLVal: symbol,
-        version: 0,
-        prev_version: nil
-      ),
-    rhs = rhs
-  )
-
-proc lvalify*(node: var LuxNode) =
-  ## Allocate an expression result
-  ## to a mutable memory location.
-  ##
-  ## Solve the case where we have:
-  ##
-  ## .. code::nim
-  ##   var B = A
-  ##   B += C
-  ##
-  ## B must be attributed a memory location (l-value)
-  ## to be mutated
-  ##
-  ## Also in the case
-  ## .. code::nim
-  ##   var B = A
-  ##   var B2 = A
-  ##   B += C
-  ##   B2 *= C
-  ##
-  ## we want to reuse the same computation A
-  ## but B and B2 should have unique ID in the AST tree
-  ##
-  ## # Summary
-  ##
-  ## Unique:
-  ##   - lval symbol
-  ##
-  ## Reused:
-  ##   - operation/expression ID
-
-  let lval_id = genId()
-  let lval_symbol = "lval_" & $lval_id
-  node = LuxNode(
-    id: lval_id,
-    kind: LValTensor, # TODO accept scalars
-    symLVal: lval_symbol,
-    version: 1,
-    prev_version: newSym(lval_symbol, node)
-  )
+  for index in indices:
+    stmts.add quote do:
+      if `index`.isNil:
+        new `index`
+        `index`.symbol = astToStr(`index`)
+    result.add index

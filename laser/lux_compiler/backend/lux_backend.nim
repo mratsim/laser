@@ -160,8 +160,10 @@ macro compile*(io_ast: static varargs[Fn], procDef: untyped): untyped =
   # TODO: check that the function inputs are in a symbol table?
   procDef[0][6].expectKind(nnkEmpty)
 
-  # let resultTy = procDef[0][3][0]
-  # let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
+  let resultTy = procDef[0][3][0]
+  let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
+
+  echo io_ast.treerepr
 
   # # Sanity check on AST produced
   # echo "\n############################"

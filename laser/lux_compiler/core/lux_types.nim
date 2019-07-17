@@ -40,6 +40,7 @@ type
 
     # ################### Expressions #########################
 
+    # ----- Kinds not using "children: seq[LuxNode]" field
     # Scalar invariants
     IntLit      # Integer immediate (known at compile-time)
     FloatLit    # Float immediate (known at compile-time)
@@ -52,6 +53,8 @@ type
 
     # Scalar expressions built-ins
     BinOpKind   # Built-in binary operations
+
+    # ----- Kinds using "children: seq[LuxNode]" field
     BinOp       #
 
     # Tensor/Function spatial indexing and properties

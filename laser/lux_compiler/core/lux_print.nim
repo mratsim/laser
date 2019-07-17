@@ -43,24 +43,41 @@ proc toStrLit*(asts: openarray[LuxNode]): string =
     result.add toStrLit(ast)
   result.add ']'
 
+proc `?`(node: LuxNode): string =
+  if node.isNil:
+    result = "nil"
+  else:
+    result = node.toStrLit
+
 proc shortDomain*(ast: LuxNode): string =
   assert ast.kind == Domain
   result = "symbol: \""
-  result.add ast.iter.symbol
-  result.add "\", start: "
-  result.add ast.iter.start.toStrLit
-  result.add ", stop: "
-  result.add ast.iter.stop.toStrLit
-  result.add ", step: "
-  result.add ast.iter.step.toStrLit
+  if ast.iter.isNil:
+    result.add "none\""
+  else:
+    result.add ast.iter.symbol
+    result.add "\", start: "
+    result.add ?ast.iter.start
+    result.add ", stop: "
+    result.add ?ast.iter.stop
+    result.add ", step: "
+    result.add ?ast.iter.step
   result.add ')'
+
+proc shortId(id: Id): string =
+  if false:
+    result = $id
+    if result.len > 3:
+      result = "\t\t(id: " & result[0..<3] & ')'
+    else:
+      result = "\t\t(id: " & result & ')'
 
 proc treeRepr*(ast: LuxNode): string =
   proc inspect(ast: LuxNode, indent: int): string =
     if ast.isNil:
       return '\n' & repeat(' ', indent) & "nil"
 
-    result.add '\n' & repeat(' ', indent) & $ast.kind & " (id: " & $ast.id & ')'
+    result.add '\n' & repeat(' ', indent) & $ast.kind & shortId(ast.id)
     let indent = indent + 2
     case ast.kind
     of Func:
@@ -73,6 +90,8 @@ proc treeRepr*(ast: LuxNode): string =
       result.add '\n' & repeat(' ', indent) & "symbol \"" & $ast.symParam & '\"'
     of Domain:
       result.add '\n' & repeat(' ', indent) & shortDomain(ast)
+    of BinOpKind:
+      result.add '\n' & repeat(' ', indent) & $ast.bopKind
     else:
       for node in ast:
         result.add repeat(' ', indent) & inspect(node, indent)
@@ -85,3 +104,14 @@ proc treeRepr*(asts: openarray[LuxNode]): string =
     result.add "\n\n- Node " & $i & "--------\n"
     result.add treerepr(ast)
   result.add "\n- --------------\n]"
+
+proc treeRepr*(fns: openarray[Fn]): string =
+  result = "["
+  for i, fn in fns:
+    result.add "\n\n===== Function " & $i & ", " & fn.symbol & "\t\t======="
+    for j, stage in fn.stages:
+      result.add "\n----- Function " & $i & ", " & fn.symbol & "\t\tStage " & $j & '\n'
+      result.add stage.definition.treerepr()
+      result.add "\n\n----- Function " & $i & ", " & fn.symbol & "\t\tStage " & $j & '\n'
+
+  result.add "\n= ================\n]"

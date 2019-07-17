@@ -7,9 +7,8 @@ import
   # Standard library
   macros,
   # Internal
-  # ./primitives_helpers,
+  ./primitives_helpers,
   ../../private/ast_utils,
-  ../core/[lux_types, lux_core_helpers],
   # Debug
   ../core/lux_print
 
@@ -52,37 +51,50 @@ proc `*`*(a: LuxNode, b: SomeInteger): LuxNode =
 proc `+=`*(a: Call, b: LuxNode) =
   discard
 
-proc `[]`*(fn: Fn, indices: varargs[Iter]): Call =
+proc at(fn: Fn, indices: varargs[Iter]): Call =
   ## Access a tensor/function
   ## For example
   ##   - A[i, j, k] on a rank 3 tensor
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
-  # TODO
-  # - Handle the "_" joker for whole dimension
-  # - Handle combinations of Iter, LuxNodes, IntParams and literals
-  # - Get a friendly function symbol
   assert not fn.isNil
   new result
   result.fn = fn
   for iter in indices:
     result.params.add newLux(iter)
 
-proc `[]`*(fn: var Fn, indices: varargs[Iter]): Call =
+proc at(fn: var Fn, indices: varargs[Iter]): Call =
   ## Access a tensor/function
   ## For example
   ##   - A[i, j, k] on a rank 3 tensor
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
-  # TODO
-  # - Handle the "_" joker for whole dimension
-  # - Handle combinations of Iter, LuxNodes, IntParams and literals
-  # - Get a friendly function symbol
   if fn.isNil:
     new fn
   result.fn = fn
   for iter in indices:
     result.params.add newLux(iter)
 
-proc `[]=`*(
+macro `[]`*(fn: Fn, indices: varargs[Iter]): untyped =
+  # TODO
+  # - Handle the "_" joker for whole dimension
+  # - Handle combinations of Iter, LuxNodes, IntParams and literals
+  result = newStmtList()
+  let args = symFnAndIndices(result, fn, indices)
+  result.add quote do:
+    at(`fn`, `args`)
+
+macro `[]`*(fn: var Fn, indices: varargs[Iter]): untyped =
+  # TODO
+  # - Handle the "_" joker for whole dimension
+  # - Handle combinations of Iter, LuxNodes, IntParams and literals
+  result = newStmtList()
+  result.add quote do:
+    if `fn`.isNil:
+      new `fn`
+  let args = symFnAndIndices(result, fn, indices)
+  result.add quote do:
+    at(`fn`, `args`)
+
+proc at_mut*(
         fn: var Fn,
         indices: varargs[Iter],
         expression: LuxNode) =
@@ -94,19 +106,27 @@ proc `[]=`*(
   ##   - A[0, i+j] on a rank 2 tensor (matrix)
   ##
   ## Used for A[i, j] = foo(i, j)
-  # TODO
-  # - Handle the "_" joker for whole dimension
-  # - Handle combinations of Iter, LuxNodes, IntParams and literals
-  # - Get a friendly function symbol
-  if fn.isNil:
-    new fn
-
   let stageId = fn.stages.len
   # if stageId = 0: assert that indices are the full function domain.
   fn.stages.setLen(stageId+1)
   for iter in indices:
     fn.stages[stageId].params.add newLux(iter)
   fn.stages[stageId].definition = expression
+
+macro `[]=`*(
+        fn: var Fn,
+        indices: varargs[Iter],
+        expression: LuxNode): untyped =
+  # TODO
+  # - Handle the "_" joker for whole dimension
+  # - Handle combinations of Iter, LuxNodes, IntParams and literals
+  result = newStmtList()
+  result.add quote do:
+    if `fn`.isNil:
+      new `fn`
+  let args = symFnAndIndices(result, fn, indices)
+  result.add quote do:
+    at_mut(`fn`, `args`, `expression`)
 
 converter toLuxNode*(call: Call): LuxNode =
   # Implicit conversion of function/tensor indexing
@@ -116,3 +136,6 @@ converter toLuxNode*(call: Call): LuxNode =
     newLux call.fn
   )
   result.add call.params
+
+converter toLuxNode*(lit: int): LuxNode =
+  result = newLux lit
