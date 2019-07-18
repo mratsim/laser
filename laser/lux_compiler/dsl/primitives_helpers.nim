@@ -32,9 +32,22 @@ proc symFnAndIndices*(
 
   result = nnkArgList.newTree()
 
-  for index in indices:
+  for i, index in indices:
+
+    # Quote do with "DimSize.newTree(newLux(`fn`), newLux(`i`))"
+    # will resolve fn type to NimNode instead of LuxNode.
+    # So we defer bounds assignation to backend
     stmts.add quote do:
       if `index`.isNil:
+        debugecho "Init @", `fn`.symbol, ": ", astToStr(`index`)
         new `index`
+        `index`.domId = genId()
         `index`.symbol = astToStr(`index`)
+        # `index`.start = newLux(0)
+        # `index`.stop = DimSize.newTree(newLux(`fn`), newLux(`i`))
+      else:
+        debugEcho "Already filled for: "
+        debugecho `fn`.symbol, " - ", `index`.symbol, " - ", `index`.domId
+        debugEcho "----------------------"
+
     result.add index

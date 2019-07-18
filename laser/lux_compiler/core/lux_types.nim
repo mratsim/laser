@@ -160,6 +160,9 @@ type
   # ###########################################
 
   Iter* = ref object
+    domId*: Id # Shouldn't be necessary
+               # But when passing to the backend
+               # The reference is lost
     symbol*: string
     start*, stop*, step*: LuxNode
 

@@ -94,7 +94,7 @@ macro `[]`*(fn: var Fn, indices: varargs[Iter]): untyped =
   result.add quote do:
     at(`fn`, `args`)
 
-proc at_mut*(
+proc at_mut(
         fn: var Fn,
         indices: varargs[Iter],
         expression: LuxNode) =

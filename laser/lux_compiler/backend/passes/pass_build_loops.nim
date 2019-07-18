@@ -5,7 +5,7 @@
 
 import
   # Standard Library
-  sets, hashes, sequtils,
+  sets, tables, hashes, sequtils,
   # Internal
   ../../core/lux_types,
   ../../core/lux_core_helpers,
@@ -25,47 +25,51 @@ import
 # In the future this will take scheduling information
 # like parallel, unroll or vectorize
 
-proc hash(node: LuxNode): Hash =
-  # Use of hash is restricted to the OrderedSet used in this proc.
-  # In other procs/modules like codegen, we want to index via node ID.
-  # as 2 ASTs can have the same node ID, if one is the expression
-  # and the other is the variable it has been assigned to.
-  node.id
-
 proc searchDomains(node: LuxNode,
-                    domainsFound: var OrderedSet[LuxNode],
+                    domainsFound: var OrderedTable[Id, LuxNode],
                     boundsStmts: var LuxNode) =
 
   case node.kind
   of Domain:
-    domainsFound.incl node
+    domainsFound[node.id] = node
   of BinOp:
     for idx in 1 ..< node.len:
       # We need to handle A[i+j, 0] access
       node[idx].searchDomains(domainsFound, boundsStmts)
   of Access:
     for idx in 1 ..< node.len:
+      # We can't do bound checks and bounds definition
+      # in symFnAndIndices due to Nim bug
+      #
+      # Furthermore, the single reference to a domain instance is lost
+      # so we need to track domain Id in a field
+      #
+      # Important, domainsFound is indexed by domId not by LuxNode.id
       if node[idx].kind == Domain:
-        if node[idx].iter.start.isNil:
+        if node[idx].iter.domId in domainsFound:
+          boundsStmts.add Check.newTree(
+            BinOp.newTree(
+              newLux(Eq),
+              domainsFound[node[idx].iter.domId].iter.stop,
+              DimSize.newTree(
+                node[0],
+                newLux(idx-1)
+              )
+            )
+          )
+          # Canonicalize domain
+          node[idx] = domainsFound[node[idx].iter.domId]
+        else:
           assert node[idx].iter.stop.isNil
+          assert node[idx].iter.domId != 0
           assert node[0].kind == Func
           node[idx].iter.start = newLux 0
           node[idx].iter.stop = DimSize.newTree(
             node[0],
-            newLux(idx)
+            newLux(idx-1)
           )
-        else:
-          assert not node[idx].iter.stop.isNil
-          boundsStmts.add Check.newTree(
-            BinOp.newTree(
-              newLux(Eq),
-              node[idx].iter.stop,
-              DimSize.newTree(
-                node[0],
-                newLux(idx)
-              )
-            )
-          )
+          domainsFound[node[idx].iter.domId] = node[idx]
+
       else:
         # We need to handle A[i+j, 0] access
         # TODO bounds checking
@@ -107,7 +111,7 @@ proc buildLoopsImpl(node: LuxNode, visited: var HashSet[Id], stmts: var LuxNode)
       stmts.add stagePrelude
 
       # infer the loop bounds and add bounds-checking
-      var domains: OrderedSet[LuxNode]
+      var domains: OrderedTable[Id, LuxNode]
       var boundsStmts = newLuxStmtList()
       searchDomains(stage.definition, domains, boundsStmts)
       stmts.add boundsStmts
@@ -129,12 +133,12 @@ proc buildLoopsImpl(node: LuxNode, visited: var HashSet[Id], stmts: var LuxNode)
       var lhs = Access.newTree(node)
       for param in stage.params:
         if param.kind == Domain:
-          domains.incl param
+          discard domains.hasKeyOrPut(param.iter.domId, param)
         else:
           assert param.kind in {IntLit, IntParam}
         lhs.add param
 
-      let domainList = toSeq(domains)
+      let domainList = toSeq(domains.values())
       var loopStmt = Assign.newTree(
         lhs,
         stage.definition

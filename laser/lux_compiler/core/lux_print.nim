@@ -56,21 +56,6 @@ proc `?`(node: LuxNode): string =
   else:
     result = node.toStrLit
 
-proc shortDomain*(ast: LuxNode): string =
-  assert ast.kind == Domain
-  result = "symbol: \""
-  if ast.iter.isNil:
-    result.add "none\""
-  else:
-    result.add ast.iter.symbol
-    result.add "\", start: "
-    result.add ?ast.iter.start
-    result.add ", stop: "
-    result.add ?ast.iter.stop
-    result.add ", step: "
-    result.add ?ast.iter.step
-  result.add ')'
-
 proc shortId(id: Id): string =
   if false:
     result = $id
@@ -78,6 +63,23 @@ proc shortId(id: Id): string =
       result = "\t\t(id: " & result[0..<3] & ')'
     else:
       result = "\t\t(id: " & result & ')'
+
+proc shortDomain*(ast: LuxNode): string =
+  assert ast.kind == Domain
+  result = "symbol: \""
+  if ast.iter.isNil:
+    result.add "none\""
+  else:
+    result.add ast.iter.symbol
+    result.add "\", domId: \""
+    result.add ast.iter.domId
+    result.add "\", start: "
+    result.add ?ast.iter.start
+    result.add ", stop: "
+    result.add ?ast.iter.stop
+    result.add ", step: "
+    result.add ?ast.iter.step
+  result.add ')'
 
 proc treeRepr*(ast: LuxNode): string =
   proc inspect(ast: LuxNode, indent: int): string =
