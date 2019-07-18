@@ -7,7 +7,7 @@ import
   # Standard library
   macros, tables,
   # Internal
-  ../core/lux_types,
+  ../core/[lux_types, lux_core_helpers],
   ../platforms,
   # Debug
   ../core/lux_print
@@ -24,146 +24,83 @@ proc codegen*(
     ast: LuxNode,
     arch: SimdArch,
     T: NimNode,
-    params: seq[NimNode],
+    # domainStack: var seq[Iter],
     visited: var Table[Id, NimNode],
     stmts: var NimNode): NimNode =
   ## Recursively walk the AST
   ## Append the corresponding Nim AST for generic instructions
-  ## and returns a LValTensor, MutTensor or expression
   case ast.kind:
-    of InTensor:
-      return params[ast.symId]
-    of IntImm:
-      return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.intVal))
-    of FloatImm:
-      return newCall(SimdMap(arch, T, simdBroadcast), newLit(ast.floatVal))
-    of MutTensor, LValTensor:
-      let sym = ident(ast.symLVal)
-      if ast.id in visited:
-        return sym
-      elif ast.prev_version.isNil:
-
-        # TODO - need to add to the list of
-        # buffer to initialize
-        # And we need the size as well
-
-        visited[ast.id] = sym
-        return sym
-      else:
-        visited[ast.id] = sym
-        var blck = newStmtList()
-        let expression = codegen(ast.prev_version, arch, T, params, visited, blck)
-
-        stmts.add blck
-        if  not(expression.kind == nnkIdent and eqIdent(sym, expression)):
-          stmts.add newAssignment(
-            ident(ast.symLVal),
-            expression
-          )
-        return ident(ast.symLVal)
-
-    of AffineFor:
-      if ast.id in visited:
-        return visited[ast.id]
-
-      var
-        forLoop = nnkForStmt.newTree()
-        loopPrologue = newStmtList()
-        loopBody = newStmtList()
-
-      let forLoopRange = nnkInfix.newTree(
-        # TODO - hack - need a proper domain to loop range
-        ident"..",
-        newLit(ast.domain.start.intVal),
-        nnkBracketExpr.newTree(
-          nnkDotExpr.newTree(
-            codegen(ast.domain.stop.tensor, arch, T, params, visited, loopPrologue),
-            ident"shape"
-          ),
-          newLit(ast.domain.stop.axis)
-        )
-      )
-      stmts.add loopPrologue
-
-      discard codegen(ast.affineForBody, arch, T, params, visited, loopBody)
-
-      forLoop.add ident(ast.domain.symDomain)
-      forLoop.add forLoopRange
-      forLoop.add loopBody
-
-      stmts.add forLoop
-
-      let nestedLVal = ident(ast.nestedLVal.symLVal)
-      visited[ast.id] = nestedLVal
-      return nestedLVal
-
-    of Access, MutAccess:
-      if ast.id in visited:
-        return visited[ast.id]
-
-      var preAccessStmt = newStmtList()
-      let tensor = codegen(ast.tensorView, arch, T, params, visited, preAccessStmt)
-      stmts.add preAccessStmt
-
-      var bracketExpr = nnkBracketExpr.newTree()
-      bracketExpr.add tensor
-      for index in ast.indices:
-        bracketExpr.add ident(index.symDomain)
-
-      visited[ast.id] = bracketExpr
-      return bracketExpr
-
-    of Assign:
-      if ast.id in visited:
-        return visited[ast.id]
-
-      var rvalStmt = newStmtList()
-      let rval = codegen(ast.rval, arch, T, params, visited, rvalStmt)
-      stmts.add rvalStmt
-
-      var lvalStmt = newStmtList()
-      let lval = codegen(ast.lval, arch, T, params, visited, lvalStmt)
-      # "visited[ast.id] = lhs" is stored
-      stmts.add lvalStmt
-
-      lval.expectKind({nnkIdent, nnkBracketExpr})
-      stmts.add newAssignment(lval, rval)
-      # visited[ast.id] = lhs # Already done
-      return lval
-
+    of Func:
+      return ident(ast.fn.symbol)
+    of IntLit:
+      return newLit ast.intVal
+    of FloatLit:
+      return newLit ast.floatVal
+    of IntParam..BoolParam:
+      return ident(ast.symParam)
+    of Domain:
+      # Append domId or use domainStack
+      # or does Nim automatically scope/shadow nested for loop
+      # with same ident?
+      return ident(ast.iter.symbol)
     of BinOp:
-      if ast.id in visited:
-        return visited[ast.id]
+      result = nnkInfix.newTree()
+      case ast[0].bopKind
+      of Add: result.add SimdMap(arch, T, simdAdd)
+      of Mul: result.add SimdMap(arch, T, simdMul)
+      of Eq: result.add bindSym"==" # Simd not applicable?
 
-      var callStmt = nnkCall.newTree()
-      var lhsStmt = newStmtList()
-      var rhsStmt = newStmtList()
-
-      let lhs = codegen(ast.lhs, arch, T, params, visited, lhsStmt)
-      let rhs = codegen(ast.rhs, arch, T, params, visited, rhsStmt)
-
-      stmts.add lhsStmt
-      stmts.add rhsStmt
-
-      case ast.binOpKind
-      of Add: callStmt.add SimdMap(arch, T, simdAdd)
-      of Mul: callStmt.add SimdMap(arch, T, simdMul)
-
-      callStmt.add lhs
-      callStmt.add rhs
-
-      let op = genSym(nskLet, "op_")
-      stmts.add newLetStmt(op, callStmt)
-      visited[ast.id] = op
-      return op
-
+      result.add codegen(ast[1], arch, T, visited, stmts)
+      result.add codegen(ast[2], arch, T, visited, stmts)
+    of Access:
+      result = nnkBracketExpr.newTree()
+      result.add ident(ast[0].fn.symbol)
+      for i in 1 ..< ast.len:
+        result.add codegen(ast[i], ArchGeneric, getType(int), visited, stmts)
+    of DimSize:
+      result = nnkBracketExpr.newTree(
+        nnkDotExpr.newTree(
+          ident(ast[0].fn.symbol),
+          ident"shape"
+        ),
+        newLit(ast[1].intVal)
+      )
+    # ------ Statements ----------------
+    of StatementList:
+      # Contrary to Nim, Lux StatementList are never expressions
+      # So we don't need to return anything
+      for subast in ast:
+        discard codegen(subast, arch, T, visited, stmts)
+    of Assign:
+      stmts.add nnkAsgn.newTree(
+        codegen(ast[0], arch, T, visited, stmts),
+        codegen(ast[1], arch, T, visited, stmts)
+      )
+    of Check: # Boun checking
+      stmts.add newCall(
+        ident"doAssert",
+        codegen(ast[0], ArchGeneric, getType(int), visited, stmts)
+      )
+    of AffineFor:
+      var forStmt = nnkForStmt.newTree()
+      var innerStmt = newStmtList()
+      forStmt.add ident(ast[0].iter.symbol)
+      forStmt.add nnkInfix.newTree(
+        ident"..<",
+        codegen(ast[0].iter.start, ArchGeneric, getType(int), visited, stmts),
+        codegen(ast[0].iter.stop, ArchGeneric, getType(int), visited, stmts)
+      )
+      discard codegen(ast[1], arch, T, visited, innerStmt)
+      forStmt.add innerStmt
+      stmts.add forStmt
     else:
       raise newException(ValueError, "Unsupported code generation")
 
 proc genKernel*(
       arch: SimdArch,
-      io_ast: varargs[LuxNode],
-      ids: seq[NimNode],
+      kernel_ast: varargs[LuxNode],
+      fns: varargs[Fn],
+      ids: seq[NimNode], # Unused
       ids_baseType: seq[NimNode],
       resultType: NimNode,
     ): NimNode =
@@ -171,37 +108,23 @@ proc genKernel*(
   result = newStmtList()
   var visitedNodes = initTable[Id, NimNode]()
 
-  for i, inOutVar in io_ast:
-    if inOutVar.kind != InTensor:
-      if inOutVar.kind in {MutTensor, LValTensor}:
-        let sym = codegen(inOutVar, arch, ids_baseType[i], ids, visitedNodes, result)
-        sym.expectKind nnkIdent
-        if resultType.kind == nnkTupleTy:
-          result.add newAssignment(
-            nnkDotExpr.newTree(
-              ident"result",
-              ids[i]
-            ),
-            sym
-          )
-        else:
-          result.add newAssignment(
+  for i, fn in fns:
+    if fn.stages.len == 0:
+      # Input functions, no code to generate
+      discard
+    else:
+      discard codegen(kernel_ast[i], arch, ids_baseType[i], visitedNodes, result)
+      let symbol = ident(fn.symbol)
+      if resultType.kind == nnkTupleTy:
+        result.add newAssignment(
+          nnkDotExpr.newTree(
             ident"result",
-            sym
-          )
+            ids[i]
+          ),
+          symbol
+        )
       else:
-        let expression = codegen(inOutVar, arch, ids_baseType[i], ids, visitedNodes, result)
-        if resultType.kind == nnkTupleTy:
-          result.add newAssignment(
-            nnkDotExpr.newTree(
-              ident"result",
-              ids[i]
-            ),
-            expression
-          )
-        else:
-          result.add newAssignment(
-            ident"result",
-            expression
-          )
-  # TODO: support var Tensor.
+        result.add newAssignment(
+          ident"result",
+          symbol
+        )

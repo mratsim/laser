@@ -68,5 +68,5 @@ when isMainModule:
          [float32 3, 3, 3],
          [float32 3, 3, 3]].toTensor()
 
-  # let r = foobar(u, v, w)
-  # echo r
+  let r = foobar(u, v, w)
+  echo r

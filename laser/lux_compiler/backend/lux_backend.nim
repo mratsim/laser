@@ -12,7 +12,7 @@ import
   ../platforms,
   # Compiler passes
   ./passes/pass_build_loops,
-  # ./lux_codegen,
+  ./lux_codegen,
   # Debug
   ../core/lux_print
 
@@ -48,7 +48,7 @@ proc initParams(
     for j in 0 ..< iddefs.len - 2:
       # Ident
       let ident = iddefs[j]
-      result.ids.add ident
+      # result.ids.add ident # unused
 
       # TODO - support var Tensor
       # Ident base type (without seq)
@@ -90,7 +90,8 @@ proc initParams(
       for j in 0 ..< iddefs.len - 2:
         # Ident
         let ident = iddefs[j]
-        result.ids.add ident
+        # result.ids.add ident # unused
+
         # Ident base type (without seq)
         if not iddefs[^2].isType"Tensor":
           result.ids_baseType.add iddefs[^2]
@@ -98,28 +99,35 @@ proc initParams(
           let baseType = iddefs[^2][1]
           result.ids_baseType.add baseType
 
-          # Raw ptr
-          let raw_ptr = ident($ident & "_raw_ptr")
-          result.ptrs.outParams.add raw_ptr
+          # Unused for result types
+          # # Raw ptr
+          # let raw_ptr = ident($ident & "_raw_ptr")
+          # result.ptrs.outParams.add raw_ptr
 
-          # Init statement
-          let res = nnkDotExpr.newTree(
-                      ident"result",
-                      iddefs[j]
-                    )
-          result.initStmt.add quote do:
-            `res` = newTensor[`baseType`](`shape0`)
-            let `raw_ptr` = `res`.unsafe_raw_data()
+          # # Init statement
+          # let res = nnkDotExpr.newTree(
+          #             ident"result",
+          #             iddefs[j]
+          #           )
+          # result.initStmt.add quote do:
+          #   `res` = newTensor[`baseType`](`shape0`)
+          #   let `raw_ptr` = `res`.unsafe_raw_data()
 
-          # SIMD ident
-          result.simds.outParams.add ident($ident & "_simd")
+          # # SIMD ident
+          # result.simds.outParams.add ident($ident & "_simd")
+  else:
+    if resultType.isType"Tensor":
+      let baseType = resultType[1]
+      result.ids_baseType.add baseType
+    else:
+      result.ids_baseType.add resultType
 
-macro compile*(io_ast: static varargs[Fn], procDef: untyped): untyped =
+macro compile*(fns: static varargs[Fn], procDef: untyped): untyped =
   ## Lux Compiler backend
   ## Accept an array of AST representing the computation
   ## and generate specialized code from it
 
-  # Note: io_ast must be an array - https://github.com/nim-lang/Nim/issues/10691
+  # Note: fns must be an array - https://github.com/nim-lang/Nim/issues/10691
 
   # compile([a, b, c, bar, baz, buzz]):
   #   proc foobar[T](a, b, c: T): tuple[bar, baz, buzz: T]
@@ -163,35 +171,39 @@ macro compile*(io_ast: static varargs[Fn], procDef: untyped): untyped =
   let resultTy = procDef[0][3][0]
   let (ids, ids_baseType, ptrs, simds, length, initParams) = initParams(procDef, resultTy)
 
-  echo io_ast.treerepr
+  # echo fns.treerepr
 
   # Sanity check on AST produced
-  echo "\n############################"
-  echo "After loop generation\n"
-  let io_ast2 = io_ast.passBuildLoops()
-  echo io_ast2.treerepr()
-  echo "\n############################\n"
+  # echo "\n############################"
+  # echo "After loop generation\n"
+  let kernel_ast = fns.passBuildLoops()
+  # echo kernel_ast.treerepr()
+  # echo "\n############################\n"
 
-  # let kernel = genKernel(
-  #   arch = ArchGeneric,
-  #   io_ast2,
-  #   ids,
-  #   ids_baseType,
-  #   resultTy
-  # )
+  let kernel = genKernel(
+    arch = ArchGeneric,
+    kernel_ast,
+    fns,
+    ids,
+    ids_baseType,
+    resultTy
+  )
 
   # echo kernel.toStrLit()
 
-  # result = procDef.copyNimTree()
-  # let resBody = newStmtList()
-  # # resBody.add initParams
+  result = procDef.copyNimTree()
+  let resBody = newStmtList()
+  # resBody.add initParams
 
-  # let bar = ident"bar"
-  # resBody.add quote do:
-  #   var `bar` = newTensor[a.T](a.shape[0], a.shape[1])
+  # Quick hack
+  let bar = ident"bar"
+  resBody.add quote do:
+    var `bar` = newTensor[a.T](a.shape[0], a.shape[1])
 
-  # resBody.add kernel
+  resBody.add kernel
 
-  # result[0][6] = resBody
+  result[0][6] = resBody
 
-  # echo result.toStrLit
+  echo "\n-------------"
+  echo "\nCompiled proc"
+  echo result.toStrLit

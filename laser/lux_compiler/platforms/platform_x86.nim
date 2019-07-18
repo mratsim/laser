@@ -141,5 +141,9 @@ proc SimdMap*(arch: SimdArch, T: NimNode, p: SimdPrimitives): NimNode =
     result = MapX86Float32[arch][p]
   elif T.eqIdent"float64":
     result = MapX86Float64[arch][p]
+  elif T.eqIdent"int":
+    # TODO - hack for integer array accesses
+    assert arch == ArchGeneric
+    result = MapX86Float32[ArchGeneric][p]
   else:
     error "Unsupported type: \"" & T.repr & '\"'

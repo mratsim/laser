@@ -169,12 +169,17 @@ proc buildLoopsImpl(node: LuxNode, visited: var HashSet[Id], stmts: var LuxNode)
   else:
     raise newException(ValueError, "Invalid AST at this phase [Build loop - loop generation]")
 
-proc passBuildLoops*(asts: varargs[Fn]): LuxNode =
+proc passBuildLoops*(asts: varargs[Fn]): seq[LuxNode] =
   ## Scan for Functions
   ## and wrap them in the required for loops
 
-  result = newLuxStmtList()
-  var visited = initHashSet[Id]()
+  var visited: HashSet[Id]
 
-  for ast in asts:
-    buildLoopsImpl(newLux(ast), visited, result)
+  # We keep 1 AST per input/output function
+  # If a function has multiple output and only one is needed
+  # This will allows dead-code elimination
+  result.setLen(asts.len)
+  for i, ast in asts:
+    visited.clear()
+    result[i] = newLuxStmtList()
+    buildLoopsImpl(newLux(ast), visited, result[i])
