@@ -30,6 +30,13 @@ proc toStrLit*(ast: LuxNode): string =
       return "iter" & $ast.id
   of Func:
     return ast.fn.symbol
+  of DimSize:
+    assert ast[0].kind == Func
+    assert ast[1].kind == IntLit
+    return ast[0].fn.symbol &
+             ".shape[" &
+             $ast[1].intVal &
+             ']'
   else:
     raise newException(
       ValueError, "Pretty Printer for \"" &

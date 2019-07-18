@@ -19,6 +19,7 @@ type
     # Must return a scalar for scalar expr check
     Add
     Mul
+    Eq
 
   TernaryOpKind* = enum
     # Must return a scalar for scalar expr check
@@ -69,10 +70,11 @@ type
     # is lowered to an AST that more closely match Nim's AST.
 
     # General statement
-    Statement
+    StatementList
 
     # Scalar statements
     Assign
+    Check
 
     # Affine loop statements
     AffineFor   # Affine for loop
@@ -96,7 +98,6 @@ type
     #       - A non-unit step in the for-loop is quasi-affine.
     #       - This will also allows branching depending of
     #         fraction if CPU/GPU charatectristics like cache or TLB size
-
 
   Id* = int
 

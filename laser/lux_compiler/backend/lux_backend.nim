@@ -11,7 +11,7 @@ import
   ../utils/macro_utils,
   ../platforms,
   # Compiler passes
-  # ./passes/pass_build_loops,
+  ./passes/pass_build_loops,
   # ./lux_codegen,
   # Debug
   ../core/lux_print
@@ -165,12 +165,12 @@ macro compile*(io_ast: static varargs[Fn], procDef: untyped): untyped =
 
   echo io_ast.treerepr
 
-  # # Sanity check on AST produced
-  # echo "\n############################"
-  # echo "After loop generation\n"
-  # let io_ast2 = io_ast.passBuildLoops()
-  # echo io_ast2.treerepr()
-  # echo "\n############################\n"
+  # Sanity check on AST produced
+  echo "\n############################"
+  echo "After loop generation\n"
+  let io_ast2 = io_ast.passBuildLoops()
+  echo io_ast2.treerepr()
+  echo "\n############################\n"
 
   # let kernel = genKernel(
   #   arch = ArchGeneric,

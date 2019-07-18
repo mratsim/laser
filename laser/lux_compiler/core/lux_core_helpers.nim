@@ -35,7 +35,7 @@ proc genId*(): int =
 # ###########################################
 
 const LuxExpr* = {IntLit..DimSize}
-const LuxStmt* = {Statement..AffineIf}
+const LuxStmt* = {StatementList..AffineIf}
 
 proc `[]`*(node: LuxNode, idx: int): var LuxNode =
   node.children[idx]
@@ -101,3 +101,6 @@ proc newLux*(invariant: Invariant): LuxNode =
 
 proc newLux*(bopKind: BinaryOpKind): LuxNode =
   LuxNode(kind: BinOpKind, bopKind: bopKind)
+
+proc newLuxStmtList*(): LuxNode =
+  LuxNode(kind: StatementList)

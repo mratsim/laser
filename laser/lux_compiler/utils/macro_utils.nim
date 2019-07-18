@@ -41,7 +41,7 @@ proc liftTypes*(
   #     we can use a SIMD map: float32 -> m128
   proc inspect(node: NimNode): NimNode =
     case node.kind:
-    of {nnkIdent, nnkSym}: return node
+    of nnkIdent, nnkSym: return node
     of nnkEmpty: return node
     of nnkLiterals: return node
     of nnkIdentDefs:

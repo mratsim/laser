@@ -5,7 +5,7 @@
 
 import
   # Standard Library
-  tables,
+  sets, hashes, sequtils,
   # Internal
   ../../core/lux_types,
   ../../core/lux_core_helpers,
@@ -25,12 +25,66 @@ import
 # In the future this will take scheduling information
 # like parallel, unroll or vectorize
 
-proc buildLoopsImpl(node: LuxNode, visited: var Table[Id, LuxNode]): LuxNode =
+proc hash(node: LuxNode): Hash =
+  # Use of hash is restricted to the OrderedSet used in this proc.
+  # In other procs/modules like codegen, we want to index via node ID.
+  # as 2 ASTs can have the same node ID, if one is the expression
+  # and the other is the variable it has been assigned to.
+  node.id
+
+proc searchDomains(node: LuxNode,
+                    domainsFound: var OrderedSet[LuxNode],
+                    boundsStmts: var LuxNode) =
+
+  case node.kind
+  of Domain:
+    domainsFound.incl node
+  of BinOp:
+    for idx in 1 ..< node.len:
+      # We need to handle A[i+j, 0] access
+      node[idx].searchDomains(domainsFound, boundsStmts)
+  of Access:
+    for idx in 1 ..< node.len:
+      if node[idx].kind == Domain:
+        if node[idx].iter.start.isNil:
+          assert node[idx].iter.stop.isNil
+          assert node[0].kind == Func
+          node[idx].iter.start = newLux 0
+          node[idx].iter.stop = DimSize.newTree(
+            node[0],
+            newLux(idx)
+          )
+        else:
+          assert not node[idx].iter.stop.isNil
+          boundsStmts.add Check.newTree(
+            BinOp.newTree(
+              newLux(Eq),
+              node[idx].iter.stop,
+              DimSize.newTree(
+                node[0],
+                newLux(idx)
+              )
+            )
+          )
+      else:
+        # We need to handle A[i+j, 0] access
+        # TODO bounds checking
+        node[idx].searchDomains(domainsFound, boundsStmts)
+  of DimSize..AffineIf:
+    raise newException(ValueError, "Invalid AST at this phase [Build loop - loop domains]")
+  else:
+    discard
+
+#   # Assign - we reach another assignment, i.e. managed in another loop
+#   # AffineFor - We are already looping, we don't want double loop
+#   # AffineIf - If loop index constraint, only make sense when accompanied by affine for
+
+proc buildLoopsImpl(node: LuxNode, visited: var HashSet[Id], stmts: var LuxNode) =
   # We only need check lvalues for assign statements
   #
   # TODO: While assignment A[i, j] = expression
   #       and in-place op like sum += A[_]
-  #       will always have a Mut or LVal or Assign in the AST,
+  #       will always have a Func or Assign in the AST,
   #       there is the degenerate case:
   #         result = A[i, j]
   #       that will not be wrapped in a (useless) loop.
@@ -38,80 +92,85 @@ proc buildLoopsImpl(node: LuxNode, visited: var Table[Id, LuxNode]): LuxNode =
     return
 
   case node.kind
-  of MutTensor, LValTensor, IntMut, FloatMut, IntLVal, FloatLVal:
-    if node.prev_version.isNil:
-      assert node.version == 0
-      return node
+  of Func:
+    # We don't tag stages as visited
+    # What if a stage is not ultimately used?
+    # For now we assume no co-recursion
     if node.id in visited:
-      return visited[node.id]
+      return
+    visited.incl node.id
 
-    var new_node = new LuxNode
-    new_node.id = node.id
-    new_node.kind = node.kind
-    new_node.symLVal = node.symLval
-    new_node.version = node.version
-    new_node.prev_version = buildLoopsImpl(
-      node.prev_version,
-      visited
-    )
+    for stage in node.fn.stages:
+      # build the prerequisite for this stage
+      var stagePrelude = newLuxStmtList()
+      buildLoopsImpl(stage.definition, visited, stagePrelude)
+      stmts.add stagePrelude
 
-    visited[node.id] = new_node
-    return new_node
-  of Access, MutAccess:
-    var new_node = new LuxNode
-    new_node.id = node.id
-    new_node.kind = node.kind
-    new_node.tensorView = buildLoopsImpl(node.tensorView, visited)
-    new_node.indices = node.indices
-    return new_node
+      # infer the loop bounds and add bounds-checking
+      var domains: OrderedSet[LuxNode]
+      var boundsStmts = newLuxStmtList()
+      searchDomains(stage.definition, domains, boundsStmts)
+      stmts.add boundsStmts
 
-  of Assign:
-    if node.id in visited:
-      return visited[node.id]
+      # Build the nested loops.
+      # TODO: recurrence and condition
+      # Progressively wrap the assign statement from inner to outer loop
+      # TODO: directly use implicit result - https://github.com/nim-lang/Nim/issues/11637
 
-    # Scan for previous assignments
-    let lval = buildLoopsImpl(node.lval, visited)
+      # merge preserving order
+      #   We want the inner-most loop to be unit-stride write as
+      #   write prefetching is costlier than read prefetching.
+      #   but we want to somewhat preserve loop order of contraction
+      #   like A[i, j] += B[i,j,k] and A[i, j] += B[i,k,j]
+      #
+      #   So we should merge the lhs and rhs domain sets as
+      #   {rhs} + {lhs}
 
-    # reconstruct the inner AST
-    var innerStmt = LuxNode(
-      id: genId(),
-      kind: Assign,
-      lval: lval,
-      rval: node.rval,
-      # domains - now unneeded
-    )
+      var lhs = Access.newTree(node)
+      for param in stage.params:
+        if param.kind == Domain:
+          domains.incl param
+        else:
+          assert param.kind in {IntLit, IntParam}
+        lhs.add param
 
-    let lvalConcrete = case lval.kind:
-      of LValTensor: lval
-      of Access, MutAccess: lval.tensorView
-      else:
-        raise newException(
-          ValueError,
-          "Found node \"" & $lval.kind & "\" when looking for a l-value"
-        )
-
-    # Progressively wrap the assign statement from inner to outer loop
-    # TODO: directly use implicit result - https://github.com/nim-lang/Nim/issues/11637
-    for domain in node.domains.reverse():
-      innerStmt = LuxNode(
-        id: genId(),
-        kind: AffineFor,
-        domain: domain,
-        affineForBody: innerStmt,
-        nestedLVal: lvalConcrete
+      let domainList = toSeq(domains)
+      var loopStmt = Assign.newTree(
+        lhs,
+        stage.definition
       )
 
-    visited[node.id] = innerStmt
-    return innerStmt
-  else:
-    return node
+      for domain in domainList.reverse():
+        loopStmt = AffineFor.newTree(
+          domain,
+          loopStmt
+        )
+      stmts.add loopStmt
 
-proc passBuildLoops*(asts: varargs[LuxNode]): seq[LuxNode] =
-  ## Scan for Assign statements
+  of IntLit..BinOpKind:
+    return
+  of BinOp..Access:
+    if node.id in visited:
+      return
+    assert node.len == 3
+    visited.incl node.id
+
+    var lhsPrelude = newLuxStmtList()
+    var rhsPrelude = newLuxStmtList()
+    buildLoopsImpl(node[1], visited, lhsPrelude)
+    buildLoopsImpl(node[2], visited, rhsPrelude)
+
+    stmts.add lhsPrelude
+    stmts.add rhsPrelude
+  else:
+    raise newException(ValueError, "Invalid AST at this phase [Build loop - loop generation]")
+
+proc passBuildLoops*(asts: varargs[Fn]): LuxNode =
+  ## Scan for Functions
   ## and wrap them in the required for loops
 
-  # TODO: should we mutate the AST in-place?
-  var visited = initTable[Id, LuxNode](initialSize = 8)
+  result = newLuxStmtList()
+  var visited = initHashSet[Id]()
 
   for ast in asts:
-    result.add buildLoopsImpl(ast, visited)
+    buildLoopsImpl(newLux(ast), visited, result)
