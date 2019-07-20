@@ -25,6 +25,12 @@ Furthermore research shows that GCC libgomp has a potential bottleneck for taski
 
 - From Intel's TBB: https://techdecoded.intel.io/essentials/turbocharge-your-c-code-efficient-memory-allocation-for-increased-performance/#gs.p065tg
 
+### Hardware detail
+
+- Memory Models: weak/relaxed and strong ordering (impact on atomics)
+
+  https://preshing.com/20120930/weak-vs-strong-memory-models/
+
 ### Papers
 
 - Memory and data aware scheduling, 2018, L. Marchal
@@ -32,6 +38,10 @@ Furthermore research shows that GCC libgomp has a potential bottleneck for taski
   https://hal.inria.fr/tel-01934712/document
 
   http://perso.ens-lyon.fr/loris.marchal/hdr/slides.pdf
+
+- Asymmetry-aware workstealing runtime
+
+  http://www.csl.cornell.edu/~moyang/pdfs/torng-aaws-isca2016.pdf
 
 - Correct and Efficient Work-Stealing for Weak Memory Models
 
@@ -54,6 +64,18 @@ Work Stealing with Private Deques
   http://supertech.csail.mit.edu/papers/steal.pdf
 
 ### Implementation: Shared memory parallelism and tasking
+
+- Molecular Matters tutorial:
+
+  - https://blog.molecular-matters.com/2015/08/24/job-system-2-0-lock-free-work-stealing-part-1-basics/
+  - https://blog.molecular-matters.com/2015/09/08/job-system-2-0-lock-free-work-stealing-part-2-a-specialized-allocator/
+  - https://blog.molecular-matters.com/2015/09/25/job-system-2-0-lock-free-work-stealing-part-3-going-lock-free/
+  - https://blog.molecular-matters.com/2015/11/09/job-system-2-0-lock-free-work-stealing-part-4-parallel_for/
+  - https://blog.molecular-matters.com/2016/04/04/job-system-2-0-lock-free-work-stealing-part-5-dependencies/
+
+- Go's work-stealing scheduler
+
+  https://rakyll.org/scheduler/
 
 - A Comparative Critical Analysis of Modern Task-Parallel Runtimes
 
