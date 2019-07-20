@@ -7,6 +7,10 @@ encounter roadblocks down the line.
 
 Furthermore research shows that GCC libgomp has a potential bottleneck for tasking due to scheduling via a central list protected by a mutex.
 
+A side-effect would be to better control scheduling on
+NUMA and hyperthreads as hyperthreading should be scheduled on
+work that shares the same L1 cache, and NUM shae the same memory address space.
+
 ## Constraints
 
 - Work for JIT (see https://github.com/numforge/laser/issues/31)
@@ -33,15 +37,40 @@ Furthermore research shows that GCC libgomp has a potential bottleneck for taski
 
 ### Papers
 
-- Memory and data aware scheduling, 2018, L. Marchal
+- Parallelism course: http://15418.courses.cs.cmu.edu/fall2016content/lectures/05_progperf1/05_progperf1_slides.pdf
+
+- A Primer on Scheduling Fork-Join Parallelism with Work Stealing
+
+  http://open-std.org/jtc1/sc22/wg21/docs/papers/2014/n3872.pdf
+
+- Memory and data aware scheduling, 2018, L. Marchal, Director Thesis,
 
   https://hal.inria.fr/tel-01934712/document
 
   http://perso.ens-lyon.fr/loris.marchal/hdr/slides.pdf
 
+- A NUMA-Aware Provably-Efficient Task-Parallel
+  Platform Based on the Work-First Principle
+
+  https://arxiv.org/pdf/1806.11128.pdf
+
+- Optimizing Work Stealing Algorithms with Scheduling Constraints
+
+  J.J. Lifflander, 2016, Thesis
+
+  https://pdfs.semanticscholar.org/a0ab/00a23377f333ca4c34dac2b74abc5af6ca25.pdf
+
+  This thesis explores low-overhead tracing, optimization
+  of work-stealing for NUMA and distributed memory systems.
+
 - Asymmetry-aware workstealing runtime
 
   http://www.csl.cornell.edu/~moyang/pdfs/torng-aaws-isca2016.pdf
+
+- Using Memory Mapping to Support Cactus Stacks in
+Work-Stealing Runtime Systems
+
+  http://supertech.csail.mit.edu/papers/stacks.pdf
 
 - Correct and Efficient Work-Stealing for Weak Memory Models
 
@@ -64,6 +93,29 @@ Work Stealing with Private Deques
   http://supertech.csail.mit.edu/papers/steal.pdf
 
 ### Implementation: Shared memory parallelism and tasking
+
+- Work Stealing CppCon 2015, Pablo Halpern
+
+  https://www.youtube.com/watch?v=iLHNF7SgVN4
+
+  This introduces the important distinction between
+  - child stealing, implementable as a library, where
+    the task creator
+    - creates a closure with the environment needed
+      for the execution of the child task
+    - continues work on the parent.
+    This creates stalls at "join" points and an unbounded
+    queue space for unexecuted childs.
+  - continuation stealing or parent stealing where
+    the task creator
+    - saves the stack pointer,
+    - continues work on the child
+    - a thief can resume at the saved task pointer
+    This avoids closure creation and consumes bounded stack space
+    but requires compiler support
+    to check if the parent task was stolen or not.
+
+  TBB uses child stealing while cilk uses continuation stealing
 
 - Molecular Matters tutorial:
 
@@ -148,6 +200,8 @@ Task-Based Programming
 
 - Staccatto: Work-Stealing Task Scheduler, https://github.com/rkuchumov/staccato
 
+
+- Cilk: https://www.usenix.org/legacy/publications/library/proceedings/ana97/full_papers/blumofe/blumofe_html/node2.html
 
 ### Heterogeneous arch scheduling
 
