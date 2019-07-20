@@ -191,7 +191,7 @@ Work Stealing with Private Deques
 
 - Intel's Thread Building Blocks, see task scheduler details: https://software.intel.com/en-us/node/506294
   and architecture of the library from https://techdecoded.intel.io/big-picture/adventures-in-threading-how-tbb-is-advancing-parallelism/#gs.p062y9
-  ![](./media/TBB Functions.png)
+  ![](./media/TBB_Functions.png)
 
 - Extending Intel OpenMP with libkomp + multicore-myltiGPU scheduling:
   https://calcul.math.cnrs.fr/attachments/spip/Documents/Journees/janv2017/kaapi_libkomp.pdf
