@@ -134,6 +134,12 @@ Work Stealing with Private Deques
 
   https://www.dre.vanderbilt.edu/~schmidt/PDF/work-stealing-dequeue.pdf
 
+- Work-First and Help-First Scheduling Policies for Async-Finish Task Parallelism
+
+  https://www.cs.rice.edu/~yguo/pubs/PID824943.pdf
+
+  Work-first is now known as continuation stealing and help-first as child stealing
+
 - Executing Dynamic Task Graph via work stealing
 
   https://www.cse.wustl.edu/~kunal/resources/Papers/nabbit.pdf
