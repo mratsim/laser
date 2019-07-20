@@ -43,16 +43,55 @@ work that shares the same L1 cache, and NUM shae the same memory address space.
 
   http://open-std.org/jtc1/sc22/wg21/docs/papers/2014/n3872.pdf
 
-- Memory and data aware scheduling, 2018, L. Marchal, Director Thesis,
+- The Cilk Plus Runtime System
+and the Cactus Stack (course)
+
+  http://piazza-resources.s3.amazonaws.com/jc9tfyfh36s8f/jdmcwt1p7fn41n/09fullframe.pdf
+
+- A Practical Solution to the Cactus Stack Problem
+
+  http://chaoran.me/assets/pdf/ws-spaa16.pdf
+
+  This introduces _leapfrogging_ originally used for futures to solve
+  the cactus stack problem of child-stealing based work-stealing schedulers
+
+  Implementation: https://github.com/chaoran/fibril
+
+- Effective cooperative scheduling of
+  task-parallel applications on
+  multiprogrammed parallel architectures,
+  2015, Georgios Varisteas, PhD Thesis
+
+  https://www.diva-portal.org/smash/get/diva2:861129/FULLTEXT01.pdf
+
+- Embracing Explicit Communication in
+  Work-Stealing Runtime Systems,
+  2016, Andreas Prell, PhD Thesis
+
+  https://epub.uni-bayreuth.de/2990/1/main_final.pdf
+
+  This introduces Channel-base work-stealing
+
+- Memory and data aware scheduling, 2018, L. Marchal, Research Director Thesis,
 
   https://hal.inria.fr/tel-01934712/document
 
   http://perso.ens-lyon.fr/loris.marchal/hdr/slides.pdf
 
+- Task scheduling for runtime-assisted parallelism
+
+  http://pages.cs.wisc.edu/~adityav/Task_Scheduling_For_Runtime_Assisted_Parallelism.pdf
+
+  Explores NUMA architecture, includes 2D convolution scheduling in benchmarks
+
 - A NUMA-Aware Provably-Efficient Task-Parallel
   Platform Based on the Work-First Principle
 
   https://arxiv.org/pdf/1806.11128.pdf
+
+- The Data Locality of Work Stealing
+
+  https://www.cs.cmu.edu/~guyb/papers/locality2000.pdf
 
 - Optimizing Work Stealing Algorithms with Scheduling Constraints
 
@@ -72,6 +111,12 @@ Work-Stealing Runtime Systems
 
   http://supertech.csail.mit.edu/papers/stacks.pdf
 
+- Resilient work stealing
+
+  https://arxiv.org/pdf/1706.03539.pdf
+
+  Introduces Cobra, a work-stealing scheduler with restartable task graphs
+
 - Correct and Efficient Work-Stealing for Weak Memory Models
 
   https://www.di.ens.fr/~zappa/readings/ppopp13.pdf
@@ -88,6 +133,10 @@ Work Stealing with Private Deques
 - Dynamic Circular Work-Stealing Deque
 
   https://www.dre.vanderbilt.edu/~schmidt/PDF/work-stealing-dequeue.pdf
+
+- Executing Dynamic Task Graph via work stealing
+
+  https://www.cse.wustl.edu/~kunal/resources/Papers/nabbit.pdf
 
 - Scheduling Multithreaded Computations by Work Stealing
   http://supertech.csail.mit.edu/papers/steal.pdf
@@ -124,6 +173,10 @@ Work Stealing with Private Deques
   - https://blog.molecular-matters.com/2015/09/25/job-system-2-0-lock-free-work-stealing-part-3-going-lock-free/
   - https://blog.molecular-matters.com/2015/11/09/job-system-2-0-lock-free-work-stealing-part-4-parallel_for/
   - https://blog.molecular-matters.com/2016/04/04/job-system-2-0-lock-free-work-stealing-part-5-dependencies/
+
+- Intel's GameTechDev GamesTaskScheduler
+
+  https://github.com/GameTechDev/GTS-GamesTaskScheduler
 
 - Go's work-stealing scheduler
 
