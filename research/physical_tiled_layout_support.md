@@ -20,11 +20,13 @@ GEMM prepacking also uses a tiled/swizzled layout.
 
 ## Space-Filling curve references
 
-- [A Parallel N-Dimensional Space-Filling Curve library](https://www.mdpi.com/2220-9964/7/8/327/pdf)
 - [Alternative Array Storage Layouts for Regular Scientific Programs](https://pdfs.semanticscholar.org/3030/22b1c442f543d6794a2171e3dfcd9ff149cb.pdf), Thiyagalingam Jeyarajan, Thesis, 2005
 - Matrix multiplication using SFC, [A Study of Energy and Locality Effects using Space-filling Curves](https://arxiv.org/pdf/1606.06133.pdf)
 - Morton-order vs MKL and libxsmm, [https://hal.inria.fr/hal-02082524/document](https://hal.inria.fr/hal-02082524/document), 2019
 - [Recursive Array Layouts and Fast Parallel Matrix Multiplication](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.92.452&rep=rep1&type=pdf), 1999
+
+Note focused on HPC:
+- [A Parallel N-Dimensional Space-Filling Curve library](https://www.mdpi.com/2220-9964/7/8/327/pdf)
 
 ## Implementation notes
 
