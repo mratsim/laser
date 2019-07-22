@@ -9,7 +9,8 @@ Furthermore research shows that GCC libgomp has a potential bottleneck for taski
 
 A side-effect would be to better control scheduling on
 NUMA and hyperthreads as hyperthreading should be scheduled on
-work that shares the same L1 cache, and NUM shae the same memory address space.
+work that shares the same L1 cache,
+and NUMA nodes on work from the directly connected memory.
 
 ## Constraints
 
