@@ -57,13 +57,21 @@ proc deallocJitFunction(fn: JitFunction) =
 proc allocJitFunction(min_size: Positive): JitFunction {.sideeffect.} =
   new result, deallocJitFunction
   result.len = round_step_up(min_size, PageSize)
-  result.adr = mmap(
-                  nil, result.len,
-                  static(flag(ProtRead, ProtWrite)),
-                  static(flag(MapAnonymous, MapPrivate)),
-                  -1, 0
-                )
-  doAssert cast[int](result.adr) != -1, "JitFunction allocation failure"
+  when defined(windows):
+    result.adr = VirtualAlloc(
+      nil, result.len,
+      static(flag(MemCommit)),
+      ProtReadWrite
+    )
+    doAssert not result.adr.isNil(), "JitFunction allocation failure"
+  else:
+    result.adr = mmap(
+      nil, result.len,
+      static(flag(ProtRead, ProtWrite)),
+      static(flag(MapAnonymous, MapPrivate)),
+      -1, 0
+    )
+    doAssert cast[int](result.adr) != -1, "JitFunction allocation failure"
 
 proc newJitFunction*[R](a: Assembler[R]): JitFunction =
   # Each code fragment is allocated to it's own page(s)
@@ -71,7 +79,11 @@ proc newJitFunction*[R](a: Assembler[R]): JitFunction =
   # but this allows mprotect granularity, as it's page-wide
   result = allocJitFunction(a.code.len)
   copyMem(result.adr, a.code[0].unsafeAddr, a.code.len)
-  mprotect(result.adr, result.len, flag(ProtRead, ProtExec))
+  when defined(windows):
+    let protectResult = VirtualProtect(result.adr, result.len, ProtReadExec)
+    doAssert protectResult != 0, "JitFunction memory protection switch failure"
+  else:
+    mprotect(result.adr, result.len, flag(ProtRead, ProtExec))
 
 proc call*(fn: JitFunction) {.inline, sideeffect.} =
   let f = cast[proc(){.nimcall.}](fn.adr)

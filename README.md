@@ -81,8 +81,6 @@ Examples:
   - [ex06_jit_hello_world.nim](./examples/ex06_jit_hello_world.nim)
   - [ex07_jit_brainfuck_vm.nim](./examples/ex07_jit_brainfuck_vm.nim)
 
-Note: Windows is not supported but easy to add, just replace `mmap`, `mprotect` and `munmap` by `VirtualAlloc`, `VirtualProtect`, `VirtualFree` in [photon_osalloc](./laser/photon_jit/photon_osalloc.nim).
-
 ### Loop-fusion and strided iterators for matrix and tensors
 
 ```Nim
