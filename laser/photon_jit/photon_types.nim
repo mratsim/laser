@@ -53,7 +53,7 @@ type
 proc deallocJitFunction(fn: JitFunction) =
   if not fn.adr.isNil:
     when defined(windows):
-      discard VirtualFree(fn.adr, fn.len, MemFree)
+      discard VirtualFree(fn.adr, fn.len, MemRelease)
     else:
       munmap(fn.adr, fn.len)
 
