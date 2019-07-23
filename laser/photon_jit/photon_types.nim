@@ -52,7 +52,10 @@ type
 
 proc deallocJitFunction(fn: JitFunction) =
   if not fn.adr.isNil:
-    munmap(fn.adr, fn.len)
+    when defined(windows):
+      discard VirtualFree(fn.adr, fn.len, MemFree)
+    else:
+      munmap(fn.adr, fn.len)
 
 proc allocJitFunction(min_size: Positive): JitFunction {.sideeffect.} =
   new result, deallocJitFunction
