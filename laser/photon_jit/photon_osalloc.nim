@@ -81,20 +81,20 @@ when defined(windows):
       dwSize: int;
       flAllocationType: Flag[MemAlloc],
       flProtect: MemProt
-    ): pointer {.importc, stdcall, dynlib: "Kernel32", sideeffect.}
+    ): pointer {.importc, stdcall, header: "windows.h", sideeffect.}
 
   proc VirtualProtect*(
       lpAddress: pointer,
       dwSize: int;
       flNewProtect :MemProt,
       lpflOldProtect: ptr MemProt
-    ): cint {.importc, stdcall, dynlib: "Kernel32", sideeffect.}
+    ): cint {.importc, stdcall, header: "windows.h", sideeffect.}
 
   proc VirtualFree*(
       lpAddress: pointer,
       dwSize: int;
       dwFreeType: MemFree
-    ): cint {.importc, stdcall, dynlib: "Kernel32", sideeffect.}
+    ): cint {.importc, stdcall, header: "Kernel32", sideeffect.}
 
 else:
   proc mmap*(
