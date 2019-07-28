@@ -181,6 +181,22 @@ Work Stealing with Private Deques
   - https://blog.molecular-matters.com/2015/11/09/job-system-2-0-lock-free-work-stealing-part-4-parallel_for/
   - https://blog.molecular-matters.com/2016/04/04/job-system-2-0-lock-free-work-stealing-part-5-dependencies/
 
+  - Third party implementation:
+
+    https://github.com/cdwfs/cds_job
+
+- Parallelizing the Naughty Dogs Engine using Fibers:
+  - https://gdcvault.com/play/1022186/Parallelizing-the-Naughty-Dog-Engine
+
+  - Third party implementations
+    - https://github.com/RichieSams/FiberTaskingLib
+    - https://github.com/SergeyMakeev/TaskScheduler
+
+
+- How Ubisoft Montreal develops Games for multicore
+
+  https://www.youtube.com/watch?v=X1T3IQ4N-3g
+
 - Intel's GameTechDev GamesTaskScheduler
 
   https://github.com/GameTechDev/GTS-GamesTaskScheduler
