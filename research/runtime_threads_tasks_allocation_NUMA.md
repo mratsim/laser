@@ -188,6 +188,8 @@ Work Stealing with Private Deques
 - Parallelizing the Naughty Dogs Engine using Fibers:
   - https://gdcvault.com/play/1022186/Parallelizing-the-Naughty-Dog-Engine
 
+    Slides: http://twvideo01.ubm-us.net/o1/vault/gdc2015/presentations/Gyrling_Christian_Parallelizing_The_Naughty.pdf
+
   - Third party implementations
     - https://github.com/RichieSams/FiberTaskingLib
     - https://github.com/SergeyMakeev/TaskScheduler
