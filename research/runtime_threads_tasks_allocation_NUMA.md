@@ -145,6 +145,10 @@ Work Stealing with Private Deques
 
   https://www.cse.wustl.edu/~kunal/resources/Papers/nabbit.pdf
 
+- Leapfrogging: A portable technique for implementing efficient futures
+
+  https://cseweb.ucsd.edu/~calder/papers/PPoPP-93.pdf
+
 - Scheduling Multithreaded Computations by Work Stealing
   http://supertech.csail.mit.edu/papers/steal.pdf
 
@@ -194,6 +198,10 @@ Work Stealing with Private Deques
     - https://github.com/RichieSams/FiberTaskingLib
     - https://github.com/SergeyMakeev/TaskScheduler
 
+- OpenMP benchmarks with regards to grain size. showcasing the limits
+  of static loop scheduling heuristics depending on hardware.
+  
+  https://github.com/zy97140/omp-benchmark-for-pytorch
 
 - How Ubisoft Montreal develops Games for multicore
 
