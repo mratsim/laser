@@ -64,6 +64,10 @@ template gen_reduce_kernel_f32(
     # Note that the kernel is memory-bandwith bound once the
     # CPU pipeline is saturated. Using AVX doesn't help
     # loading data from memory faster.
+
+    withCompilerOptimHints()
+    let data{.restrict.} = cast[ptr UncheckedArray[float32]](data)
+
     when not defined(openmp):
       when defined(i386) or defined(amd_64):
         if cpuinfo_has_x86_sse3():
