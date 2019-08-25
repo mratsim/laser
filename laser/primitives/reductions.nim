@@ -11,69 +11,106 @@ import
 when defined(i386) or defined(amd_64):
   import ./simd_math/reductions_sse3
 
-func sum_fallback(data: ptr UncheckedArray[float32], len: Natural): float32 =
-  ## Fallback kernel for sum reduction
-  ## We use 2 accumulators as they should exhibits the best compromise
-  ## of speed and code-size across architectures
-  ## especially when fastmath is turned on.
-  ## Benchmarked: 2x faster than naive reduction and 2x slower than the SSE3 kernel
+# Fallback reduction operations
+# ----------------------------------------------------------------------------------
 
-  withCompilerOptimHints()
-  let data{.restrict.} = data
+template reduction_op_fallback(op_name, initial_val, scalar_op, merge_op: untyped) =
+  func `op_name`(data: ptr UncheckedArray[float32], len: Natural): float32 =
+    ## Fallback kernel for reduction
+    ## We use 2 accumulators as they should exhibits the best compromise
+    ## of speed and code-size across architectures
+    ## especially when fastmath is turned on.
+    ## Benchmarked: 2x faster than naive reduction and 2x slower than the SSE3 kernel
 
-  # Loop peeling is left at the compiler discretion,
-  # if optimizing for code size is desired
-  const step = 2
-  var accum1 = 0'f32
-  let unroll_stop = len.round_step_down(step)
-  for i in countup(0, unroll_stop - 1, 2):
-    result += data[i]
-    accum1 += data[i+1]
-  result += accum1
-  if unroll_stop != len:
-    result += data[unroll_stop] # unroll_stop = len -1 last element
+    withCompilerOptimHints()
+    let data{.restrict.} = data
 
-proc sum_kernel*(data: ptr (float32 or UncheckedArray[float32]), len: Natural): float32 {.sideeffect.}=
-  ## Does a sum reduction on a contiguous range of float32
-  ## Warning:
-  ##   This kernel considers floating-point addition associative
-  ##   and will reorder additions.
-  ## Due to parallel reduction and floating point rounding,
-  ## same input can give different results depending on thread timings
+    # Loop peeling is left at the compiler discretion,
+    # if optimizing for code size is desired
+    const step = 2
+    var accum1 = initial_val
+    let unroll_stop = len.round_step_down(step)
+    for i in countup(0, unroll_stop - 1, 2):
+      result = scalar_op(result, data[i])
+      accum1 = scalar_op(accum1, data[i+1])
+    result = scalar_op(result, accum1)
+    if unroll_stop != len:
+      # unroll_stop = len - 1 last element
+      result = scalar_op(result, data[unroll_stop])
 
-  # Note that the kernel is memory-bandwith bound once the
-  # CPU pipeline is saturated. Using AVX doesn't help
-  # loading data from memory faster.
-  when not defined(openmp):
-    when defined(i386) or defined(amd_64):
-      if cpuinfo_has_x86_sse3():
-        return sum_sse3(data, len)
-    return sum_fallback(data, len)
-  else:
-    # TODO: Fastest between a padded seq, a critical section, OMP atomics or CPU atomics?
-    let
-      max_threads = omp_get_max_threads()
-      omp_condition = OMP_MEMORY_BOUND_GRAIN_SIZE * max_threads < len
-      sse3 = cpuinfo_has_x86_sse3()
+reduction_op_fallback(sum_fallback, 0'f32, `+`, `+`)
+reduction_op_fallback(min_fallback, float32(Inf), min, min)
+reduction_op_fallback(max_fallback, float32(-Inf), max, max)
 
-    {.emit: "#pragma omp parallel if (`omp_condition`)".}
-    block:
+# Reduction primitives
+# ----------------------------------------------------------------------------------
+
+template gen_reduce_kernel_f32(
+          kernel_name: untyped{ident},
+          initial_val: static float32,
+          sse3_kernel, fallback_kernel: untyped{ident},
+          merge_op: untyped
+          ): untyped =
+
+  proc `kernel_name`*(data: ptr (float32 or UncheckedArray[float32]), len: Natural): float32 {.sideeffect.}=
+    ## Does a reduction on a contiguous range of float32
+    ## Warning:
+    ##   This kernel considers the reduction operation associative
+    ##   and will reorder operations.
+    ## Due to parallel reduction and floating point rounding,
+    ## the same input can give different results depending on thread timings
+    ## for some operations like addition
+
+    # Note that the kernel is memory-bandwith bound once the
+    # CPU pipeline is saturated. Using AVX doesn't help
+    # loading data from memory faster.
+
+    withCompilerOptimHints()
+    let data{.restrict.} = cast[ptr UncheckedArray[float32]](data)
+
+    when not defined(openmp):
+      when defined(i386) or defined(amd_64):
+        if cpuinfo_has_x86_sse3():
+          return `sse3_kernel`(data, len)
+      return `fallback_kernel`(data, len)
+    else:
+      result = initial_val
+
       let
-        nb_chunks = omp_get_num_threads()
-        whole_chunk_size = len div nb_chunks
-        thread_id = omp_get_thread_num()
-        `chunk_offset`{.inject.} = whole_chunk_size * thread_id
-        `chunk_size`{.inject.} =  if thread_id < nb_chunks - 1: whole_chunk_size
-                                    else: len - chunk_offset
-      block:
-        let p_chunk{.restrict.} = cast[ptr UncheckedArray[float32]](
-                                    data[chunk_offset].addr
-                                  )
-        when defined(i386) or defined(amd_64):
-          let local_sum = if sse3: sum_sse3(p_chunk, chunk_size)
-                          else: sum_fallback(p_chunk, chunk_size)
-        else:
-          let local_sum = sum_fallback(p_chunk, chunk_size)
+        omp_condition = OMP_MEMORY_BOUND_GRAIN_SIZE * omp_get_max_threads() < len
+        sse3 = cpuinfo_has_x86_sse3()
 
-        {.emit: "#pragma omp atomic".}
-        {.emit: "`result` += `local_sum`;".}
+      omp_parallel_if(omp_condition):
+        omp_chunks(len, chunk_offset, chunk_size):
+          let local_ptr_chunk{.restrict.} = cast[ptr UncheckedArray[float32]](
+                                      data[chunk_offset].addr
+                                    )
+          when defined(i386) or defined(amd_64):
+            let local_accum = if sse3: `sse3_kernel`(local_ptr_chunk, chunk_size)
+                            else: `fallback_kernel`(local_ptr_chunk, chunk_size)
+          else:
+            let local_accum = `fallback_kernel`(local_ptr_chunk, chunk_size)
+
+          omp_critical:
+            result = merge_op(result, local_accum)
+
+gen_reduce_kernel_f32(
+      reduce_sum,
+      0'f32,
+      sum_sse3, sum_fallback,
+      `+`
+    )
+
+gen_reduce_kernel_f32(
+      reduce_min,
+      float32(Inf),
+      min_sse3, min_fallback,
+      min
+    )
+
+gen_reduce_kernel_f32(
+      reduce_max,
+      float32(-Inf),
+      max_sse3, max_fallback,
+      max
+    )
