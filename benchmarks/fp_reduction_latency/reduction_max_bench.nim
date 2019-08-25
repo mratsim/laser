@@ -46,7 +46,7 @@ func getIndex[T](t: Tensor[T], idx: varargs[int]): int =
 
 func `[]`*[T](t: Tensor[T], idx: varargs[int]): T {.inline.}=
   ## Index tensor
-  t.storage.raw_data[t.getIndex(idx)]
+  t.storage.raw_buffer[t.getIndex(idx)]
 
 ################################################################
 
@@ -95,7 +95,7 @@ proc mainBench_1_accum_simple(a: Tensor[float32], nb_samples: int) =
   var accum = float32(-Inf)
   bench("Reduction - 1 accumulator - simple iter", accum):
     for i in 0 ..< a.size:
-      accum = max(accum, a.storage.raw_data[i])
+      accum = max(accum, a.storage.raw_buffer[i])
 
 proc mainBench_1_accum_macro(a: Tensor[float32], nb_samples: int) =
   var accum = float32(-Inf)
@@ -111,10 +111,10 @@ proc mainBench_2_accum_simple(a: Tensor[float32], nb_samples: int) =
     var
       accum1 = float32(-Inf)
     for i in countup(0, unroll_stop - 1, 2):
-      accum = max(accum, a.storage.raw_data[i])
-      accum1 = max(accum1, a.storage.raw_data[i+1])
+      accum = max(accum, a.storage.raw_buffer[i])
+      accum1 = max(accum1, a.storage.raw_buffer[i+1])
     for i in unroll_stop ..< size:
-      accum = max(accum, a.storage.raw_data[i])
+      accum = max(accum, a.storage.raw_buffer[i])
     accum = max(accum, accum1)
 
 proc mainBench_3_accum_simple(a: Tensor[float32], nb_samples: int) =
@@ -126,11 +126,11 @@ proc mainBench_3_accum_simple(a: Tensor[float32], nb_samples: int) =
       accum1 = float32(-Inf)
       accum2 = float32(-Inf)
     for i in countup(0, unroll_stop - 1, 3):
-      accum = max(accum, a.storage.raw_data[i])
-      accum1 = max(accum1, a.storage.raw_data[i+1])
-      accum2 = max(accum2, a.storage.raw_data[i+2])
+      accum = max(accum, a.storage.raw_buffer[i])
+      accum1 = max(accum1, a.storage.raw_buffer[i+1])
+      accum2 = max(accum2, a.storage.raw_buffer[i+2])
     for i in unroll_stop ..< size:
-      accum = max(accum, a.storage.raw_data[i])
+      accum = max(accum, a.storage.raw_buffer[i])
     accum = max(accum, max(accum1, accum2))
 
 proc mainBench_4_accum_simple(a: Tensor[float32], nb_samples: int) =
@@ -143,12 +143,12 @@ proc mainBench_4_accum_simple(a: Tensor[float32], nb_samples: int) =
       accum2 = float32(-Inf)
       accum3 = float32(-Inf)
     for i in countup(0, unroll_stop - 1, 4):
-      accum = max(accum, a.storage.raw_data[i])
-      accum1 = max(accum1, a.storage.raw_data[i+1])
-      accum2 = max(accum2, a.storage.raw_data[i+2])
-      accum3 = max(accum3, a.storage.raw_data[i+3])
+      accum = max(accum, a.storage.raw_buffer[i])
+      accum1 = max(accum1, a.storage.raw_buffer[i+1])
+      accum2 = max(accum2, a.storage.raw_buffer[i+2])
+      accum3 = max(accum3, a.storage.raw_buffer[i+3])
     for i in unroll_stop ..< size:
-      accum = max(accum, a.storage.raw_data[i])
+      accum = max(accum, a.storage.raw_buffer[i])
     accum = max(accum2, accum1)
     accum2 = max(accum2, accum3)
     accum = max(accum, accum2)
@@ -164,13 +164,13 @@ proc mainBench_5_accum_simple(a: Tensor[float32], nb_samples: int) =
       accum3 = float32(-Inf)
       accum4 = float32(-Inf)
     for i in countup(0, unroll_stop - 1, 5):
-      accum = max(accum, a.storage.raw_data[i])
-      accum1 = max(accum1, a.storage.raw_data[i+1])
-      accum2 = max(accum2, a.storage.raw_data[i+2])
-      accum3 = max(accum3, a.storage.raw_data[i+3])
-      accum4 = max(accum4, a.storage.raw_data[i+4])
+      accum = max(accum, a.storage.raw_buffer[i])
+      accum1 = max(accum1, a.storage.raw_buffer[i+1])
+      accum2 = max(accum2, a.storage.raw_buffer[i+2])
+      accum3 = max(accum3, a.storage.raw_buffer[i+3])
+      accum4 = max(accum4, a.storage.raw_buffer[i+4])
     for i in unroll_stop ..< size:
-      accum = max(accum, a.storage.raw_data[i])
+      accum = max(accum, a.storage.raw_buffer[i])
     accum2 = max(accum2, max(accum3, accum4))
     accum = max(accum, accum1)
     accum = max(accum, accum2)
@@ -178,7 +178,7 @@ proc mainBench_5_accum_simple(a: Tensor[float32], nb_samples: int) =
 proc mainBench_packed_sse_prod(a: Tensor[float32], nb_samples: int) =
   var accum = float32(-Inf)
   bench("Max reduction - prod impl", accum):
-    accum = max(accum, max_sse3(a.storage.raw_data, a.size))
+    accum = max(accum, reduce_max(a.storage.raw_buffer, a.size))
 
 when defined(fastmath):
   {.passC:"-ffast-math".}
@@ -345,4 +345,3 @@ when isMainModule:
 # +0x97	    addq                $32, %rcx
 # +0x9b	    addq                $2, %rdx
 # +0x9f	    jne                 "max_sse3_skqjc9ccvpz3qvNJidlNb9aw+0x70"
-

@@ -43,7 +43,7 @@ func getIndex[T](t: Tensor[T], idx: varargs[int]): int =
 
 func `[]`*[T](t: Tensor[T], idx: varargs[int]): T {.inline.}=
   ## Index tensor
-  t.storage.raw_data[t.getIndex(idx)]
+  t.storage.raw_buffer[t.getIndex(idx)]
 
 ################################################################
 
@@ -109,7 +109,7 @@ proc mainBench_4_packed_sse_accums(a: Tensor[float32], nb_samples: int) =
     var accums: m128
     var ptr_data = a.unsafe_raw_data()
     for i in countup(0, unroll_stop - 1, 4):
-      let data4 = a.storage.raw_data[i].unsafeaddr.mm_load_ps() # Can't use ptr_data, no address :/
+      let data4 = a.storage.raw_buffer[i].unsafeaddr.mm_load_ps() # Can't use ptr_data, no address :/
       accums = mm_add_ps(accums, data4)
     for i in unroll_stop ..< size:
       accum += ptr_data[i]
@@ -125,8 +125,8 @@ proc mainBench_8_packed_sse_accums(a: Tensor[float32], nb_samples: int) =
     for i in countup(0, unroll_stop - 1, 8):
       # Can't use ptr_data, no address :/
       let
-        data4_0 = a.storage.raw_data[i  ].unsafeaddr.mm_load_ps()
-        data4_1 = a.storage.raw_data[i+4].unsafeaddr.mm_load_ps()
+        data4_0 = a.storage.raw_buffer[i  ].unsafeaddr.mm_load_ps()
+        data4_1 = a.storage.raw_buffer[i+4].unsafeaddr.mm_load_ps()
       accums0 = mm_add_ps(accums0, data4_0)
       accums1 = mm_add_ps(accums1, data4_1)
     for i in unroll_stop ..< size:
@@ -139,7 +139,7 @@ proc mainBench_8_packed_sse_accums(a: Tensor[float32], nb_samples: int) =
 proc mainBench_packed_sse_prod(a: Tensor[float32], nb_samples: int) =
   var accum = 0'f32
   bench("Reduction - prod impl", accum):
-    accum += sum_kernel(a.storage.raw_data, a.size)
+    accum += reduce_sum(a.storage.raw_buffer, a.size)
 
 proc mainBench_8_packed_avx_accums(a: Tensor[float32], nb_samples: int) =
   var accum = 0'f32
@@ -150,7 +150,7 @@ proc mainBench_8_packed_avx_accums(a: Tensor[float32], nb_samples: int) =
     var ptr_data = a.unsafe_raw_data()
     for i in countup(0, unroll_stop - 1, 8):
       # Can't use ptr_data, no address :/
-      let data8_0 = a.storage.raw_data[i  ].unsafeaddr.mm256_load_ps()
+      let data8_0 = a.storage.raw_buffer[i  ].unsafeaddr.mm256_load_ps()
       accums0 = mm256_add_ps(accums0, data8_0)
     for i in unroll_stop ..< size:
       accum += ptr_data[i]
@@ -165,8 +165,8 @@ proc mainBench_16_packed_avx_accums(a: Tensor[float32], nb_samples: int) =
     var ptr_data = a.unsafe_raw_data()
     for i in countup(0, unroll_stop - 1, 16):
       # Can't use ptr_data, no address :/
-      let data8_0 = a.storage.raw_data[i  ].unsafeaddr.mm256_load_ps()
-      let data8_1 = a.storage.raw_data[i+8].unsafeaddr.mm256_load_ps()
+      let data8_0 = a.storage.raw_buffer[i  ].unsafeaddr.mm256_load_ps()
+      let data8_1 = a.storage.raw_buffer[i+8].unsafeaddr.mm256_load_ps()
       accums0 = mm256_add_ps(accums0, data8_0)
       accums1 = mm256_add_ps(accums1, data8_1)
     for i in unroll_stop ..< size:
