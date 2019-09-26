@@ -379,7 +379,7 @@ when isMainModule:
 # i9_9980XE Skylake-X 18 cores overclocked 4.1 GHz all-turbo, 4.0 GHz AVX turbo, 3.5 GHz AVX512 turbo
 # PyTorch Glow compiled with AVX2 as AVX512 is slower
 
-# Warmup: 0.9063 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# nim cpp -r -d:release -d:danger -d:openmp --outdir:build benchmarks/gemm/gemm_bench_float32.nim
 
 # A matrix shape: (M: 1920, N: 1920)
 # B matrix shape: (M: 1920, N: 1920)
@@ -391,75 +391,51 @@ when isMainModule:
 # Theoretical peak multi:         4032.000 GFLOP/s
 # Make sure to not bench Apple Accelerate or the default Linux BLAS.
 
-# Reference loop
-# Collected 10 samples in 10.352 seconds
-# Average time: 1034.621 ms
-# Stddev  time: 3.193 ms
-# Min     time: 1029.729 ms
-# Max     time: 1040.034 ms
-# Perf:         13.682 GFLOP/s
-
-# Simple Tiling
-# Collected 10 samples in 16.658 seconds
-# Average time: 1665.251 ms
-# Stddev  time: 488.574 ms
-# Min     time: 274.804 ms
-# Max     time: 1825.817 ms
-# Perf:         8.501 GFLOP/s
-
-# Arraymancer fallback BLAS
-# Collected 10 samples in 22.953 seconds
-# Average time: 2294.844 ms
-# Stddev  time: 1.488 ms
-# Min     time: 2293.406 ms
-# Max     time: 2297.158 ms
-# Perf:         6.169 GFLOP/s
-
 # OpenBLAS benchmark
-# Collected 10 samples in 0.090 seconds
-# Average time: 8.344 ms
-# Stddev  time: 5.493 ms
-# Min     time: 6.586 ms
-# Max     time: 23.977 ms
-# Perf:         1696.506 GFLOP/s
+# Collected 10 samples in 0.089 seconds
+# Average time: 8.172 ms
+# Stddev  time: 5.513 ms
+# Min     time: 6.410 ms
+# Max     time: 23.863 ms
+# Perf:         1732.227 GFLOP/s
 
 # Laser production implementation
-# Collected 10 samples in 0.089 seconds
-# Average time: 8.396 ms
-# Stddev  time: 3.306 ms
-# Min     time: 7.219 ms
-# Max     time: 17.793 ms
-# Perf:         1686.090 GFLOP/s
+# Collected 10 samples in 0.082 seconds
+# Average time: 7.553 ms
+# Stddev  time: 4.509 ms
+# Min     time: 5.866 ms
+# Max     time: 20.314 ms
+# Perf:         1874.073 GFLOP/s
 
 # PyTorch Glow: libjit matmul implementation (with AVX+FMA)
-# Collected 10 samples in 1.895 seconds
-# Average time: 189.521 ms
-# Stddev  time: 2.362 ms
-# Min     time: 188.692 ms
-# Max     time: 196.239 ms
-# Perf:         74.693 GFLOP/s
+# Collected 10 samples in 2.042 seconds
+# Average time: 204.186 ms
+# Stddev  time: 0.598 ms
+# Min     time: 203.783 ms
+# Max     time: 205.815 ms
+# Perf:         69.328 GFLOP/s
 
 # MKL-DNN reference GEMM benchmark
-# Collected 10 samples in 0.381 seconds
-# Average time: 37.376 ms
-# Stddev  time: 5.534 ms
-# Min     time: 34.748 ms
-# Max     time: 49.298 ms
-# Perf:         378.741 GFLOP/s
+# Collected 10 samples in 0.331 seconds
+# Average time: 32.286 ms
+# Stddev  time: 4.983 ms
+# Min     time: 30.018 ms
+# Max     time: 46.264 ms
+# Perf:         438.449 GFLOP/s
 
 # MKL-DNN JIT AVX benchmark
-# Collected 10 samples in 0.101 seconds
-# Average time: 9.385 ms
-# Stddev  time: 4.980 ms
-# Min     time: 7.717 ms
-# Max     time: 23.549 ms
-# Perf:         1508.331 GFLOP/s
+# Collected 10 samples in 0.105 seconds
+# Average time: 9.752 ms
+# Stddev  time: 5.647 ms
+# Min     time: 7.749 ms
+# Max     time: 25.768 ms
+# Perf:         1451.603 GFLOP/s
 
 # MKL-DNN JIT AVX512 benchmark
-# Collected 10 samples in 0.084 seconds
-# Average time: 7.798 ms
-# Stddev  time: 9.361 ms
-# Min     time: 4.685 ms
-# Max     time: 34.417 ms
-# Perf:         1815.302 GFLOP/s
+# Collected 10 samples in 0.088 seconds
+# Average time: 8.148 ms
+# Stddev  time: 10.751 ms
+# Min     time: 4.572 ms
+# Max     time: 38.731 ms
+# Perf:         1737.346 GFLOP/s
 # Mean Relative Error compared to vendor BLAS: 3.045843413929106e-06

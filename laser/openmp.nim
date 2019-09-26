@@ -119,8 +119,8 @@ template omp_parallel*(body: untyped): untyped =
   block: body
 
 template omp_parallel_if*(condition: bool, body: untyped) =
-  let predicate = condition # Make symbol valid and ensure it's lvalue
-  {.emit: "#pragma omp parallel if (`predicate`)".}
+  let predicate = condition # Make symbol valid and ensure it's a lvalue
+  {.emit: ["#pragma omp parallel if (",predicate,")"].}
   block: body
 
 template omp_for*(
