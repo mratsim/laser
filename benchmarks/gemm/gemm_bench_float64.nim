@@ -49,6 +49,8 @@ import
   ./arraymancer/blas_l3_gemm,
   ../../laser/primitives/matrix_multiplication/gemm
 
+import ../third_party/manu/manu/matrix as manu
+
 const
   M     = 8*6*20
   K     = 8*6*20
@@ -145,6 +147,22 @@ proc benchLaserGEMM(a, b: seq[float64], nb_samples: int) =
               b_ptr, N, 1,
       0'f64,  c_ptr, N, 1
     )
+
+proc benchManu(a, b: seq[float64], nb_samples: int) =
+  let Amat = manu.matrix(a, M)
+  let Bmat = manu.matrix(N, b)
+  var C: manu.Matrix
+  # let output = C.data.addr # data is not exposed :/
+  var output: array[1, float64] # The bench display the first item for sanity checks
+
+  bench("Manu implementation"):
+    # No initialization needed, Manu doesn't work in-place
+    discard
+  do:
+    # Main work
+    C = Amat * Bmat
+    output[0] = C[0, 0]
+
 # ###########################################
 
 when defined(fast_math):
@@ -170,6 +188,7 @@ when isMainModule:
   echo &"Theoretical peak single-core:  {CpuGhz * CpuFlopCycle:>9.3f} GFLOP/s"
   echo &"Theoretical peak multi:        {CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GFLOP/s"
   echo "Make sure to not bench Apple Accelerate or the default Linux BLAS."
+  echo "Due to strange OpenMP interferences, separate the run of code-sections using OpenMP, see https://github.com/numforge/laser/issues/40"
   block:
     let a = newSeqWith(M*K, float64 rand(1.0))
     let b = newSeqWith(K*N, float64 rand(1.0))
@@ -177,53 +196,18 @@ when isMainModule:
     # when not defined(openmp):
     #   benchSimpleTiling(a, b, NbSamples) # for some reason stalled with OpenMP
     # benchArraymancerFallback(a, b, NbSamples)
-    benchOpenBLAS(a, b, NbSamples)
+    # benchOpenBLAS(a, b, NbSamples)
     benchLaserGEMM(a, b, NbSamples)
+    benchManu(a, b, NbSamples)
 
 # Seems like my original Arraymancer BLAS has false sharing issue
-# FYI Apple accelerate is about 117~122GFLOP/s on my machine.
 
 ###############################
 # OpenMP
+# Due to strange OpenMP interferences, OpenMP code sections should be run independently
+# see https://github.com/numforge/laser/issues/40
 
-# Warmup: 1.1890 s, result 224 (displayed to avoid compiler optimizing warmup away)
-
-# A matrix shape: (M: 960, N: 960)
-# B matrix shape: (M: 960, N: 960)
-# Output shape: (M: 960, N: 960)
-# Required number of operations:  1769.472 millions
-# Required bytes:                   14.746 MB
-# Arithmetic intensity:            120.000 FLOP/byte
-# Theoretical peak single-core:     43.200 GFLOP/s
-# Theoretical peak multi:           86.400 GFLOP/s
-# Make sure to not bench Apple Accelerate or the default Linux BLAS.
-
-# OpenBLAS benchmark
-# Collected 10 samples in 0.315 seconds
-# Average time: 31.429 ms
-# Stddev  time: 2.503 ms
-# Min     time: 29.868 ms
-# Max     time: 37.536 ms
-# Perf:         56.300 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 232.3620566397699
-
-# Laser production implementation
-# Collected 10 samples in 0.327 seconds
-# Average time: 32.625 ms
-# Stddev  time: 3.080 ms
-# Min     time: 31.182 ms
-# Max     time: 41.327 ms
-# Perf:         54.236 GFLOP/s
-
-# Display output[0] to make sure it's not optimized away
-# 232.36205663977
-
-###############################
-# Serial
-
-# Warmup: 1.1948 s, result 224 (displayed to avoid compiler optimizing warmup away)
+# Run 1: OpenBLAS vs Manu
 
 # A matrix shape: (M: 960, N: 960)
 # B matrix shape: (M: 960, N: 960)
@@ -234,25 +218,59 @@ when isMainModule:
 # Theoretical peak single-core:     43.200 GFLOP/s
 # Theoretical peak multi:           86.400 GFLOP/s
 # Make sure to not bench Apple Accelerate or the default Linux BLAS.
-
+#
 # OpenBLAS benchmark
-# Collected 10 samples in 0.566 seconds
-# Average time: 56.528 ms
-# Stddev  time: 2.482 ms
-# Min     time: 55.359 ms
-# Max     time: 63.552 ms
-# Perf:         31.303 GFLOP/s
-
+# Collected 10 samples in 0.056 seconds
+# Average time: 5.589 ms
+# Stddev  time: 6.702 ms
+# Min     time: 3.004 ms
+# Max     time: 24.487 ms
+# Perf:         316.588 GFLOP/s
+#
 # Display output[0] to make sure it's not optimized away
 # 232.3620566397699
+#
+# Manu implementation
+# Collected 10 samples in 8.470 seconds
+# Average time: 846.977 ms
+# Stddev  time: 0.884 ms
+# Min     time: 845.685 ms
+# Max     time: 848.072 ms
+# Perf:         2.089 GFLOP/s
+#
+# Display output[0] to make sure it's not optimized away
+# 237.8399578000516
 
+# Run 2: Laser vs Manu
+
+# A matrix shape: (M: 960, N: 960)
+# B matrix shape: (M: 960, N: 960)
+# Output shape: (M: 960, N: 960)
+# Required number of operations:  1769.472 millions
+# Required bytes:                   14.746 MB
+# Arithmetic intensity:            120.000 FLOP/byte
+# Theoretical peak single-core:     43.200 GFLOP/s
+# Theoretical peak multi:           86.400 GFLOP/s
+# Make sure to not bench Apple Accelerate or the default Linux BLAS.
+#
 # Laser production implementation
-# Collected 10 samples in 0.531 seconds
-# Average time: 53.075 ms
-# Stddev  time: 1.592 ms
-# Min     time: 51.679 ms
-# Max     time: 55.885 ms
-# Perf:         33.339 GFLOP/s
-
+# Collected 10 samples in 0.053 seconds
+# Average time: 5.270 ms
+# Stddev  time: 9.205 ms
+# Min     time: 2.245 ms
+# Max     time: 31.464 ms
+# Perf:         335.751 GFLOP/s
+#
 # Display output[0] to make sure it's not optimized away
 # 232.36205663977
+#
+# Manu implementation
+# Collected 10 samples in 8.503 seconds
+# Average time: 850.315 ms
+# Stddev  time: 0.787 ms
+# Min     time: 848.843 ms
+# Max     time: 850.849 ms
+# Perf:         2.081 GFLOP/s
+#
+# Display output[0] to make sure it's not optimized away
+# 237.8399578000516

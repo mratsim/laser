@@ -335,6 +335,7 @@ when isMainModule:
   echo &"Theoretical peak single-core:  {TheoSerialPeak:>9.3f} GFLOP/s"
   echo &"Theoretical peak multi:        {TheoThreadedPeak:>9.3f} GFLOP/s"
   echo "Make sure to not bench Apple Accelerate or the default Linux BLAS."
+  echo "Due to strange OpenMP interferences, separate the run of code-sections using OpenMP, see https://github.com/numforge/laser/issues/40"
   block:
     let a = newSeqWith(M*K, float32 rand(-0.1..0.1))
     let b = newSeqWith(K*N, float32 rand(-0.1..0.1))
@@ -342,32 +343,32 @@ when isMainModule:
     # let reference = benchReference(a, b, NbSamples)
     # let simpleTiling = benchSimpleTiling(a, b, NbSamples)
     # let arraymancer = benchArraymancerFallback(a, b, NbSamples)
-    let vendorBlas = benchOpenBLAS(a, b, NbSamples)
     let laser = benchLaserGEMM(a, b, NbSamples)
-    let glow = benchPyTorchGlow(a, b, NbSamples)
-    let mkldnnref = benchMkldnnRef(a, b, NbSamples)
-    let mkldnnjitavx = benchMkldnnJitAVX(a, b, NbSamples)
-    let mkldnnjitavx512 = benchMkldnnJitAVX512(a, b, NbSamples)
+    # let vendorBlas = benchOpenBLAS(a, b, NbSamples)
+    # let glow = benchPyTorchGlow(a, b, NbSamples)
+    # let mkldnnref = benchMkldnnRef(a, b, NbSamples)
+    # let mkldnnjitavx = benchMkldnnJitAVX(a, b, NbSamples)
+    # let mkldnnjitavx512 = benchMkldnnJitAVX512(a, b, NbSamples)
 
-    block:
-      # var error = mean_relative_error(vendorBlas, reference)
-      # echo "Mean Relative Error of OpenBLAS vs reference: ", error
-      # doAssert error <= 1e-5'f32, $error
+    # block:
+    #   # var error = mean_relative_error(vendorBlas, reference)
+    #   # echo "Mean Relative Error of OpenBLAS vs reference: ", error
+    #   # doAssert error <= 1e-5'f32, $error
 
-      # error = mean_relative_error(challenger, reference)
-      # echo "Mean Relative Error compared to Reference: ", error
-      # doAssert error <= 1e-5'f32, $error
+    #   # error = mean_relative_error(challenger, reference)
+    #   # echo "Mean Relative Error compared to Reference: ", error
+    #   # doAssert error <= 1e-5'f32, $error
 
-      var error = mean_relative_error(vendorBlas, laser)
-      echo "Mean Relative Error compared to vendor BLAS: ", error
-      doAssert error <= 1e-5'f32, $error
+    #   var error = mean_relative_error(vendorBlas, laser)
+    #   echo "Mean Relative Error compared to vendor BLAS: ", error
+    #   doAssert error <= 1e-5'f32, $error
 
 # Seems like my original Arraymancer BLAS has false sharing issue
 # FYI Apple accelerate is about 117~122GFLOP/s on my machine.
 
 ###############################
 # Compilation command
-# $ nim cpp -r -d:release -d:openmp -o:build/bench_gemm benchmarks/gemm/gemm_bench_float32.nim
+# $ nim cpp -r -d:release -d:danger -d:openmp --outdir:build benchmarks/gemm/gemm_bench_float32.nim
 
 # Don't forget to add OpenBLAS in your path:
 # For example on Mac with OpenBLAS from Homebrew
@@ -378,8 +379,6 @@ when isMainModule:
 
 # i9_9980XE Skylake-X 18 cores overclocked 4.1 GHz all-turbo, 4.0 GHz AVX turbo, 3.5 GHz AVX512 turbo
 # PyTorch Glow compiled with AVX2 as AVX512 is slower
-
-# nim cpp -r -d:release -d:danger -d:openmp --outdir:build benchmarks/gemm/gemm_bench_float32.nim
 
 # A matrix shape: (M: 1920, N: 1920)
 # B matrix shape: (M: 1920, N: 1920)
