@@ -7,3 +7,6 @@
 [submodule "benchmarks/third_party/Flops"]
 	path = benchmarks/third_party/Flops
 	url = https://github.com/Mysticial/Flops
+[submodule "benchmarks/third_party/manu"]
+	path = benchmarks/third_party/manu
+	url = https://github.com/b3liever/manu
