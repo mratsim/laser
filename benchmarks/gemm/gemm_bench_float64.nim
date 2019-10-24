@@ -56,9 +56,14 @@ const
   K     = 8*6*20
   N     = 8*6*20
   NbSamples = 10    # This might stresss the allocator when packing if the matrices are big
-  CpuGhz = 2.7      # Assuming no turbo
-  NumCpuCores = 2
-  CpuFlopCycle = 16 # AVX2: 2xFMA/cycle = 2x4x2 - 2 x 4 float64 x (1 add + 1 mul)
+  CpuGhz = 3.5      # i9-9980XE OC All turbo 4.1GHz (AVX2 4.0GHz, AVX512 3.5GHz)
+  NumCpuCores = 18
+  VectorWidth = 8   # 4 float64 for AVX2, 8 for AVX512
+  InstrCycle = 2    # How many instructions per cycle, (2xFMAs or 1xFMA for example)
+  FlopInstr = 2     # How many FLOP per instr (FMAs = 1 add + 1 mul)
+
+  TheoSerialPeak = CpuGhz * VectorWidth * InstrCycle * FlopInstr
+  TheoThreadedPeak = TheoSerialPeak * NumCpuCores
 
 const
   ashape: MatrixShape = (M, K)
@@ -177,7 +182,7 @@ when defined(openmp):
 
 when isMainModule:
   randomize(42) # For reproducibility
-  warmup()
+  # warmup() # Not needed with ref implementation warmup
   echo ""
   echo "A matrix shape: " & $ashape
   echo "B matrix shape: " & $bshape
@@ -185,8 +190,8 @@ when isMainModule:
   echo &"Required number of operations: {req_ops.float / float(10^6):>9.3f} millions"
   echo &"Required bytes:                {req_bytes.float / float(10^6):>9.3f} MB"
   echo &"Arithmetic intensity:          {req_ops.float / req_bytes.float:>9.3f} FLOP/byte"
-  echo &"Theoretical peak single-core:  {CpuGhz * CpuFlopCycle:>9.3f} GFLOP/s"
-  echo &"Theoretical peak multi:        {CpuGhz * CpuFlopCycle * NumCpuCores:>9.3f} GFLOP/s"
+  echo &"Theoretical peak single-core:  {TheoSerialPeak:>9.3f} GFLOP/s"
+  echo &"Theoretical peak multi:        {TheoThreadedPeak:>9.3f} GFLOP/s"
   echo "Make sure to not bench Apple Accelerate or the default Linux BLAS."
   echo "Due to strange OpenMP interferences, separate the run of code-sections using OpenMP, see https://github.com/numforge/laser/issues/40"
   block:
@@ -209,68 +214,59 @@ when isMainModule:
 
 # Run 1: OpenBLAS vs Manu
 
-# A matrix shape: (M: 960, N: 960)
-# B matrix shape: (M: 960, N: 960)
-# Output shape: (M: 960, N: 960)
-# Required number of operations:  1769.472 millions
-# Required bytes:                   14.746 MB
-# Arithmetic intensity:            120.000 FLOP/byte
-# Theoretical peak single-core:     43.200 GFLOP/s
-# Theoretical peak multi:           86.400 GFLOP/s
-# Make sure to not bench Apple Accelerate or the default Linux BLAS.
-#
-# OpenBLAS benchmark
-# Collected 10 samples in 0.056 seconds
-# Average time: 5.589 ms
-# Stddev  time: 6.702 ms
-# Min     time: 3.004 ms
-# Max     time: 24.487 ms
-# Perf:         316.588 GFLOP/s
-#
-# Display output[0] to make sure it's not optimized away
-# 232.3620566397699
-#
-# Manu implementation
-# Collected 10 samples in 8.470 seconds
-# Average time: 846.977 ms
-# Stddev  time: 0.884 ms
-# Min     time: 845.685 ms
-# Max     time: 848.072 ms
-# Perf:         2.089 GFLOP/s
-#
-# Display output[0] to make sure it's not optimized away
-# 237.8399578000516
+A matrix shape: (M: 960, N: 960)
+B matrix shape: (M: 960, N: 960)
+Output shape: (M: 960, N: 960)
+Required number of operations:  1769.472 millions
+Required bytes:                   14.746 MB
+Arithmetic intensity:            120.000 FLOP/byte
+Theoretical peak single-core:    112.000 GFLOP/s
+Theoretical peak multi:         2016.000 GFLOP/s
+Make sure to not bench Apple Accelerate or the default Linux BLAS.
+Due to strange OpenMP interferences, separate the run of code-sections using OpenMP, see https://github.com/numforge/laser/issues/40
+
+OpenBLAS benchmark
+Collected 10 samples in 0.033 seconds
+Average time: 3.256 ms
+Stddev  time: 0.567 ms
+Min     time: 2.910 ms
+Max     time: 4.715 ms
+Perf:         543.396 GFLOP/s
+
+Display output[0] to make sure it's not optimized away
+232.3620566397699
+
+Manu implementation
+Collected 10 samples in 8.477 seconds
+Average time: 847.700 ms
+Stddev  time: 10.644 ms
+Min     time: 842.805 ms
+Max     time: 877.909 ms
+Perf:         2.087 GFLOP/s
+
+Display output[0] to make sure it's not optimized away
+237.8399578000516
 
 # Run 2: Laser vs Manu
 
-# A matrix shape: (M: 960, N: 960)
-# B matrix shape: (M: 960, N: 960)
-# Output shape: (M: 960, N: 960)
-# Required number of operations:  1769.472 millions
-# Required bytes:                   14.746 MB
-# Arithmetic intensity:            120.000 FLOP/byte
-# Theoretical peak single-core:     43.200 GFLOP/s
-# Theoretical peak multi:           86.400 GFLOP/s
-# Make sure to not bench Apple Accelerate or the default Linux BLAS.
-#
-# Laser production implementation
-# Collected 10 samples in 0.053 seconds
-# Average time: 5.270 ms
-# Stddev  time: 9.205 ms
-# Min     time: 2.245 ms
-# Max     time: 31.464 ms
-# Perf:         335.751 GFLOP/s
-#
-# Display output[0] to make sure it's not optimized away
-# 232.36205663977
-#
-# Manu implementation
-# Collected 10 samples in 8.503 seconds
-# Average time: 850.315 ms
-# Stddev  time: 0.787 ms
-# Min     time: 848.843 ms
-# Max     time: 850.849 ms
-# Perf:         2.081 GFLOP/s
-#
-# Display output[0] to make sure it's not optimized away
-# 237.8399578000516
+Laser production implementation
+Collected 10 samples in 0.041 seconds
+Average time: 4.008 ms
+Stddev  time: 5.121 ms
+Min     time: 2.232 ms
+Max     time: 18.579 ms
+Perf:         441.537 GFLOP/s
+
+Display output[0] to make sure it's not optimized away
+232.36205663977
+
+Manu implementation
+Collected 10 samples in 8.490 seconds
+Average time: 848.983 ms
+Stddev  time: 0.997 ms
+Min     time: 847.062 ms
+Max     time: 850.112 ms
+Perf:         2.084 GFLOP/s
+
+Display output[0] to make sure it's not optimized away
+237.8399578000516
