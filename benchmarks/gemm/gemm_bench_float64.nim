@@ -214,59 +214,59 @@ when isMainModule:
 
 # Run 1: OpenBLAS vs Manu
 
-A matrix shape: (M: 960, N: 960)
-B matrix shape: (M: 960, N: 960)
-Output shape: (M: 960, N: 960)
-Required number of operations:  1769.472 millions
-Required bytes:                   14.746 MB
-Arithmetic intensity:            120.000 FLOP/byte
-Theoretical peak single-core:    112.000 GFLOP/s
-Theoretical peak multi:         2016.000 GFLOP/s
-Make sure to not bench Apple Accelerate or the default Linux BLAS.
-Due to strange OpenMP interferences, separate the run of code-sections using OpenMP, see https://github.com/numforge/laser/issues/40
-
-OpenBLAS benchmark
-Collected 10 samples in 0.033 seconds
-Average time: 3.256 ms
-Stddev  time: 0.567 ms
-Min     time: 2.910 ms
-Max     time: 4.715 ms
-Perf:         543.396 GFLOP/s
-
-Display output[0] to make sure it's not optimized away
-232.3620566397699
-
-Manu implementation
-Collected 10 samples in 8.477 seconds
-Average time: 847.700 ms
-Stddev  time: 10.644 ms
-Min     time: 842.805 ms
-Max     time: 877.909 ms
-Perf:         2.087 GFLOP/s
-
-Display output[0] to make sure it's not optimized away
-237.8399578000516
+# A matrix shape: (M: 960, N: 960)
+# B matrix shape: (M: 960, N: 960)
+# Output shape: (M: 960, N: 960)
+# Required number of operations:  1769.472 millions
+# Required bytes:                   14.746 MB
+# Arithmetic intensity:            120.000 FLOP/byte
+# Theoretical peak single-core:    112.000 GFLOP/s
+# Theoretical peak multi:         2016.000 GFLOP/s
+# Make sure to not bench Apple Accelerate or the default Linux BLAS.
+# Due to strange OpenMP interferences, separate the run of code-sections using OpenMP, see https://github.com/numforge/laser/issues/40
+#
+# OpenBLAS benchmark
+# Collected 10 samples in 0.033 seconds
+# Average time: 3.256 ms
+# Stddev  time: 0.567 ms
+# Min     time: 2.910 ms
+# Max     time: 4.715 ms
+# Perf:         543.396 GFLOP/s
+#
+# Display output[0] to make sure it's not optimized away
+# 232.3620566397699
+#
+# Manu implementation
+# Collected 10 samples in 8.477 seconds
+# Average time: 847.700 ms
+# Stddev  time: 10.644 ms
+# Min     time: 842.805 ms
+# Max     time: 877.909 ms
+# Perf:         2.087 GFLOP/s
+#
+# Display output[0] to make sure it's not optimized away
+# 237.8399578000516
 
 # Run 2: Laser vs Manu
 
-Laser production implementation
-Collected 10 samples in 0.041 seconds
-Average time: 4.008 ms
-Stddev  time: 5.121 ms
-Min     time: 2.232 ms
-Max     time: 18.579 ms
-Perf:         441.537 GFLOP/s
-
-Display output[0] to make sure it's not optimized away
-232.36205663977
-
-Manu implementation
-Collected 10 samples in 8.490 seconds
-Average time: 848.983 ms
-Stddev  time: 0.997 ms
-Min     time: 847.062 ms
-Max     time: 850.112 ms
-Perf:         2.084 GFLOP/s
-
-Display output[0] to make sure it's not optimized away
-237.8399578000516
+# Laser production implementation
+# Collected 10 samples in 0.041 seconds
+# Average time: 4.008 ms
+# Stddev  time: 5.121 ms
+# Min     time: 2.232 ms
+# Max     time: 18.579 ms
+# Perf:         441.537 GFLOP/s
+#
+# Display output[0] to make sure it's not optimized away
+# 232.36205663977
+#
+# Manu implementation
+# Collected 10 samples in 8.490 seconds
+# Average time: 848.983 ms
+# Stddev  time: 0.997 ms
+# Min     time: 847.062 ms
+# Max     time: 850.112 ms
+# Perf:         2.084 GFLOP/s
+#
+# Display output[0] to make sure it's not optimized away
+# 237.8399578000516
