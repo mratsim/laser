@@ -36,9 +36,116 @@ and NUMA nodes on work from the directly connected memory.
 
   https://preshing.com/20120930/weak-vs-strong-memory-models/
 
-### Papers
+### Papers - Earliest Deadline First schedulers
+
+Those schedulers optimize for latency and are suitable for real-time system
+or latency constrained system (games)
+
+- Multi-core Real-Time Scheduling for Generalized Parallel Task Models
+
+  Saifullah et al
+
+  https://www.cse.wustl.edu/~lu/papers/rtss11.pdf
+
+- Scheduling Parallel Real-Time Tasks in
+  Multiprocessor Platforms (PhD Thesis)
+
+  https://repositorio-aberto.up.pt/bitstream/10216/117806/2/304244.pdf
+
+### Papers - Parallel Depth First schedulers
+
+Parallel Depth First Scheduler are alternatives to work-stealing schedulers.
+They also have optimal asymptotic behaviour provided enough parallelism is available.
+
+Some of the paper here compare WS and PDF, or present a hybrid approach
+
+- A Work-Efficient Algorithm for Parallel Unordered
+  Depth-First Search
+
+  Acar, Chargueraud, Rainey
+
+  https://www.chargueraud.org/research/2015/pdfs/pdfs_sc15.pdf
+
+- Work Stealing Technique and Scheduling on the Critical Path
+
+  Cerin
+
+  https://www6.inra.fr/mia-paris/content/download/3502/34821/version/1/file/workstealingonthecriticalpath.pdf
+
+- Scheduling Threads for Constructive Cache Sharing on CMPs
+
+  Chen et al
+
+  https://www.cs.cmu.edu/~guyb/papers/CGK07.pdf
+
+
+- Effectively Sharing a Cache among Threads
+
+  Blelloch, Gibbons
+
+  http://www.cs.cmu.edu/~blelloch/papers/BlGi04.pdf
+
+- (Slides) Parallel Scheduling
+  Theory and Practice
+
+  Blelloch
+
+  https://www.cs.cmu.edu/~blelloch/papers/IBM08.pdf
+
+- Low-Contention Depth-First Scheduling of Parallel Computations with Write-Once Synchronization Variables
+
+  Fatourou
+
+  http://www.cs.au.dk/~gerth/alcom-ft/TR/ALCOMFT-TR-01-77.ps.gz
+
+- Space Efficient Global Scheduler for Cilk
+
+  Hickey, Quentmeyer
+
+  Slides: https://ocw.mit.edu/courses/electrical-engineering-and-computer-science/6-895-theory-of-parallel-systems-sma-5509-fall-2003/projects/fp_hickey_tyeler.pdf
+
+  Paper: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.83.2857&rep=rep1&type=pdf
+
+- Space Efficient Scheduling of Nested Parallelism
+
+  Narlikar, Blelloch
+
+  http://www.cs.cmu.edu/afs/cs.cmu.edu/project/scandal/public/papers/toplas.pdf
+
+- Scheduling Threads for Low Space Requirement
+  and Good Locality
+
+  Narlikar
+
+  http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.43.4774&rep=rep1&type=pdf
+
+- Provably Efficient Scheduling for Language with
+  Fine Grained Parallelism
+
+  Blelloch, Gibbons, Matias
+
+  https://www.cs.cmu.edu/~guyb/papers/jacm99.pdf
+
+### Papers - Work-Stealing schedulers
+
+Work-stealing schedulers are the most well-known and implemented scheduler in the wild.
+They have optimal asymptotic behaviour provided enough parallelism is available.
 
 - Parallelism course: http://15418.courses.cs.cmu.edu/fall2016content/lectures/05_progperf1/05_progperf1_slides.pdf
+
+- Vyukhov, Go scheduler: https://assets.ctfassets.net/oxjq45e8ilak/48lwQdnyDJr2O64KUsUB5V/5d8343da0119045c4b26eb65a83e786f/100545_516729073_DMITRII_VIUKOV_Go_scheduler_Implementing_language_with_lightweight_concurrency.pdf
+
+- Proactive work stealing futures
+
+  Singer, Xu, Lee
+
+  https://www.cse.wustl.edu/~angelee/home_page/papers/ws-future.pdf
+
+- Well structured futures and cache locality
+
+  Herlihy, Liu
+
+  https://arxiv.org/abs/1309.5301
 
 - A Primer on Scheduling Fork-Join Parallelism with Work Stealing
 
@@ -48,6 +155,15 @@ and NUMA nodes on work from the directly connected memory.
 and the Cactus Stack (course)
 
   http://piazza-resources.s3.amazonaws.com/jc9tfyfh36s8f/jdmcwt1p7fn41n/09fullframe.pdf
+
+- Using Memory Mapping to Support Cactus Stacks in Work-Stealing Runtime Systems
+
+  Lee et al
+
+  https://pdos.csail.mit.edu/~sbw/papers/pact183a-lee.pdf
+
+  https://www.microsoft.com/en-us/research/video/memory-abstractions-for-parallel-programming/
+  (https://www.youtube.com/watch?v=WQzftnojaDc)
 
 - A Practical Solution to the Cactus Stack Problem
 
@@ -129,6 +245,8 @@ Work-Stealing Runtime Systems
 - Scheduling Parallel Programs by
 Work Stealing with Private Deques
 
+  Acar, Chargueraud, Rainey
+
   https://www.chargueraud.org/research/2013/ppopp/full.pdf
 
 - Dynamic Circular Work-Stealing Deque
@@ -153,6 +271,14 @@ Work Stealing with Private Deques
   http://supertech.csail.mit.edu/papers/steal.pdf
 
 ### Implementation: Shared memory parallelism and tasking
+
+- Julia / PARTR, Parallel Depth-First Scheduler
+
+  https://github.com/kpamnany/partr
+
+- Julia PARTR, technical presentation, Kiran Pamnany
+
+  https://www.youtube.com/watch?v=YdiZa0Y3F3c
 
 - Work Stealing CppCon 2015, Pablo Halpern
 
@@ -189,7 +315,10 @@ Work Stealing with Private Deques
 
     https://github.com/cdwfs/cds_job
 
-- Parallelizing the Naughty Dogs Engine using Fibers:
+- Parallelizing the Naughty Dogs Engine using Fibers.
+
+  This is a latency-optimized scheduler unlike work-stealing
+
   - https://gdcvault.com/play/1022186/Parallelizing-the-Naughty-Dog-Engine
 
     Slides: http://twvideo01.ubm-us.net/o1/vault/gdc2015/presentations/Gyrling_Christian_Parallelizing_The_Naughty.pdf
@@ -200,7 +329,7 @@ Work Stealing with Private Deques
 
 - OpenMP benchmarks with regards to grain size. showcasing the limits
   of static loop scheduling heuristics depending on hardware.
-  
+
   https://github.com/zy97140/omp-benchmark-for-pytorch
 
 - How Ubisoft Montreal develops Games for multicore
