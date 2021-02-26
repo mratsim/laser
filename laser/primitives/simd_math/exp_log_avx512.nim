@@ -35,11 +35,11 @@ func fast_clamp(x: m512, lo, hi: static float32): m512 {.inline, noInit.} =
   # This is faster
   # --------------------------
   const Lo32Mask = (not 0'i32) shr 1 # 2^31 - 1 - 0b0111...1111
-  
+
   let # We could skip those but min/max are slow and there is a carried dependency that limits throughput
     limit = mm512_and_si512(x.mm512_castps_si512, Lo32Mask.mm512_set1_epi32)
     over = laser_mm512_cmpgt_epi32(limit, mm512_set1_epi32(static(hi.uint32))).laser_mm512_movemask_epi8
-  
+
   if over != 0:
     result = mm512_min_ps(x, hi.mm512_set1_ps)
     result = mm512_max_ps(result, lo.mm512_set1_ps)

@@ -22,7 +22,7 @@ type
     storage*: CpuStorage[T]              # 8 bytes
 
   CpuStorage*{.shallow.}[T] = ref object # Total heap: 25 bytes = 1 cache-line
-    when supportsCopyMem(T):
+    when true: # supportsCopyMem(T):
       raw_buffer*: ptr UncheckedArray[T] # 8 bytes
       memalloc*: pointer                 # 8 bytes
       memowner*: bool                    # 1 byte

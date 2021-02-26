@@ -35,11 +35,11 @@ func fast_clamp(x: m256, lo, hi: static float32): m256 {.inline, noInit.} =
   # This is faster
   # --------------------------
   const Lo32Mask = (not 0'i32) shr 1 # 2^31 - 1 - 0b0111...1111
-  
+
   let # We could skip those but min/max are slow and there is a carried dependency that limits throughput
     limit = mm256_and_si256(x.mm256_castps_si256, Lo32Mask.mm256_set1_epi32)
     over = mm256_cmpgt_epi32(limit, mm256_set1_epi32(static(hi.uint32))).mm256_movemask_epi8
-  
+
   if over != 0:
     result = mm256_min_ps(x, hi.mm256_set1_ps)
     result = mm256_max_ps(result, lo.mm256_set1_ps)
@@ -75,4 +75,3 @@ when isMainModule:
   echo scalar
 
   echo exp(0.5'f32)
-
