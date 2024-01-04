@@ -44,8 +44,11 @@ template bench(name: string, initialisation, body: untyped) {.dirty.}=
 import
   ./gemm_common,
   ../third_party/blas,
-  ./arraymancer/blas_l3_gemm,
-  ../../laser/primitives/matrix_multiplication/gemm
+  # ./arraymancer/blas_l3_gemm,
+  ../../laser/primitives/matrix_multiplication/gemm,
+  ../../laser/compiler_optim_hints
+
+withCompilerOptimHints()
 
 const
   M     = 16*6*20
@@ -96,19 +99,19 @@ proc benchOpenBLAS(a, b: seq[float32], nb_samples: int): seq[float32] =
       0, result[0].addr, N
     )
 
-proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int): seq[float32] =
-  result = newSeq[float32](out_size)
-  bench("Arraymancer fallback BLAS"):
-    # Initialisation, not measured apart for the "Collected n samples in ... seconds"
-    zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
-  do:
-    # Main work
-    gemm_nn_fallback(
-      M, N, K,
-      1'f32,      a, 0, K, 1,       # offset, stride row, stride col
-                  b, 0, N, 1,
-      0'f32, result, 0, N, 1
-    )
+# proc benchArraymancerFallback(a, b: seq[float32], nb_samples: int): seq[float32] =
+#   result = newSeq[float32](out_size)
+#   bench("Arraymancer fallback BLAS"):
+#     # Initialisation, not measured apart for the "Collected n samples in ... seconds"
+#     zeroMem(result[0].addr, out_size * sizeof(float32)) # We zero memory between computation
+#   do:
+#     # Main work
+#     gemm_nn_fallback(
+#       M, N, K,
+#       1'f32,      a, 0, K, 1,       # offset, stride row, stride col
+#                   b, 0, N, 1,
+#       0'f32, result, 0, N, 1
+#     )
 
 proc benchReference(a, b: seq[float32], nb_samples: int): seq[float32] {.noinline.}=
   result = newSeq[float32](out_size)
