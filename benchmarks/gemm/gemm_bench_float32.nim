@@ -344,11 +344,11 @@ when isMainModule:
     # let simpleTiling = benchSimpleTiling(a, b, NbSamples)
     # let arraymancer = benchArraymancerFallback(a, b, NbSamples)
     let laser = benchLaserGEMM(a, b, NbSamples)
-    # let vendorBlas = benchOpenBLAS(a, b, NbSamples)
+    let vendorBlas = benchOpenBLAS(a, b, NbSamples)
     # let glow = benchPyTorchGlow(a, b, NbSamples)
     # let mkldnnref = benchMkldnnRef(a, b, NbSamples)
     # let mkldnnjitavx = benchMkldnnJitAVX(a, b, NbSamples)
-    # let mkldnnjitavx512 = benchMkldnnJitAVX512(a, b, NbSamples)
+    let mkldnnjitavx512 = benchMkldnnJitAVX512(a, b, NbSamples)
 
     # block:
     #   # var error = mean_relative_error(vendorBlas, reference)
